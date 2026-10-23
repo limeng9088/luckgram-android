@@ -1,4 +1,4 @@
-name: Build APK
+name: Build Luckgram APK
 
 on:
   workflow_dispatch:
@@ -61,9 +61,17 @@ jobs:
       - name: Build afat release APK
         run: ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace -Porg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
 
+      - name: Verify package name
+        run: |
+          APK=TMessagesProj_App/build/outputs/apk/afat/release/app.apk
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/36.0.0/aapt2)
+          "$AAPT" dump badging "$APK" | grep -E "^package:|application-label:"
+          "$AAPT" dump badging "$APK" | grep -q "package: name='com.luckgram.messenger'"
+          mkdir -p out && cp "$APK" "out/luckgram-$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)-${ABIS// /_}.apk"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: telegram-afat-release-${{ github.run_number }}
-          path: TMessagesProj_App/build/outputs/apk/**/*.apk
+          name: luckgram-android-${{ github.run_number }}
+          path: out/*.apk
           if-no-files-found: error
