@@ -73,6 +73,29 @@ jobs:
           PY
           ! grep -q '014b35b6184100b085b0d0572f9b5103' TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
 
+      # 用 secrets 中的 Luckgram 正式签名替换仓库自带的公开测试 keystore；缺失则失败
+      - name: Inject release signing key
+        env:
+          RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          for v in RELEASE_KEYSTORE_B64 RELEASE_KEY_ALIAS RELEASE_STORE_PASSWORD RELEASE_KEY_PASSWORD; do
+            [ -n "${!v}" ] || { echo "::error::secret $v missing"; exit 1; }
+          done
+          printf %s "$RELEASE_KEYSTORE_B64" | base64 -d > TMessagesProj/config/release.keystore
+          python3 - <<'PY'
+          import os, re
+          p = "gradle.properties"
+          s = open(p).read()
+          for k in ("RELEASE_KEY_ALIAS", "RELEASE_STORE_PASSWORD", "RELEASE_KEY_PASSWORD"):
+              s, n = re.subn(rf"^{k}=.*$", lambda m, k=k: f"{k}={os.environ[k]}", s, flags=re.M)
+              assert n == 1, k
+          open(p, "w").write(s)
+          print("signing config injected")
+          PY
+
       # 默认只编 arm64-v8a 以缩短原生编译时间；只改 CI 工作副本，不提交
       - name: Restrict ABIs
         run: |
@@ -82,6 +105,16 @@ jobs:
 
       - name: Build afat release APK
         run: ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace -Porg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+
+      - name: Verify signing certificate
+        env:
+          # Luckgram 正式签名证书 SHA-256（公开信息）
+          EXPECTED_CERT_SHA256: 8cfd617fa2843f778789cf9f1048f0f5e023dcd1b70c14430900a66a72492db1
+        run: |
+          APK=TMessagesProj_App/build/outputs/apk/afat/release/app.apk
+          OUT=$("$ANDROID_HOME"/build-tools/36.0.0/apksigner verify --print-certs "$APK")
+          echo "$OUT" | grep -E "certificate DN|SHA-256"
+          echo "$OUT" | grep -qi "SHA-256 digest: $EXPECTED_CERT_SHA256" || { echo "::error::APK not signed with Luckgram key"; exit 1; }
 
       - name: Verify package name
         run: |
