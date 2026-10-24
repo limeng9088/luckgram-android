@@ -15,6 +15,9 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -130,3 +133,14 @@ jobs:
           name: luckgram-android-${{ github.run_number }}
           path: out/*.apk
           if-no-files-found: error
+
+      - name: GitHub release
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)
+          gh release create "android-${VER}-${GITHUB_RUN_NUMBER}" out/*.apk \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Luckgram Android ${VER} (${GITHUB_RUN_NUMBER})" \
+            --notes "Signed release APK (${ABIS}) built from ${GITHUB_SHA}."
