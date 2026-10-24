@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public class Localization {
     private static SparseIntArray rawResBindings;
@@ -32,6 +33,35 @@ public class Localization {
     private Localization(Builder builder) {
         localizations = builder.localizations != null ?
             builder.localizations : new SparseArray<>();
+        for (int a = 0, N = localizations.size(); a < N; a++) {
+            final String value = localizations.valueAt(a);
+            final String rebranded = rebrand(value);
+            if (rebranded != value) {
+                localizations.setValueAt(a, rebranded);
+            }
+        }
+    }
+
+    // Luckgram: show the app's own name instead of "Telegram" in UI strings. Domains
+    // (telegram.org), handles (@telegram), links and Telegram's own products and company
+    // (Telegram Premium, Stars, Passport, FZ-LLC, ...) keep the original name.
+    private static final String REBRAND_KEEP =
+        "(?![\\w.-]*\\.(?:org|me|com)\\b)(?!\\s+(?:Premium|Stars|Passport|Business|Gateway|Desktop|Web|Support|FZ)\\b)";
+    private static final Pattern REBRAND_PATTERN = Pattern.compile("(?<![\\w./@#-])Telegram(?!\\w)" + REBRAND_KEEP);
+    private static final Pattern REBRAND_PATTERN_UPPER = Pattern.compile("(?<![\\w./@#-])TELEGRAM(?!\\w)" + REBRAND_KEEP);
+
+    static String rebrand(String value) {
+        if (value == null) {
+            return null;
+        }
+        String result = value;
+        if (result.contains("Telegram")) {
+            result = REBRAND_PATTERN.matcher(result).replaceAll("Luckgram");
+        }
+        if (result.contains("TELEGRAM")) {
+            result = REBRAND_PATTERN_UPPER.matcher(result).replaceAll("LUCKGRAM");
+        }
+        return result.equals(value) ? value : result;
     }
 
     public String getByResId(Context context, @StringRes int resId) {
