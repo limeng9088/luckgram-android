@@ -51,6 +51,28 @@ jobs:
           "$SDKM" "platforms;android-36" "build-tools;36.0.0" "ndk;${NDK_VERSION}" "cmake;3.22.1" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
+      # 从 Actions secrets 注入 Telegram api_id / api_hash；未配置则直接失败，避免回落到官方凭证
+      - name: Inject Telegram API credentials
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          api_id, api_hash = os.environ.get("TG_API_ID", ""), os.environ.get("TG_API_HASH", "")
+          if not re.fullmatch(r"[0-9]+", api_id) or not re.fullmatch(r"[0-9a-f]{32}", api_hash):
+              sys.exit("::error::TG_API_ID / TG_API_HASH secrets missing or malformed")
+          p = "TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java"
+          s = open(p).read()
+          s, n1 = re.subn(r"public static int APP_ID = \d+;", f"public static int APP_ID = {api_id};", s)
+          s, n2 = re.subn(r'public static String APP_HASH = "[0-9a-f]*";', f'public static String APP_HASH = "{api_hash}";', s)
+          if n1 != 1 or n2 != 1:
+              sys.exit("::error::BuildVars.java pattern not found")
+          open(p, "w").write(s)
+          print("api credentials injected")
+          PY
+          ! grep -q '014b35b6184100b085b0d0572f9b5103' TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
+
       # 默认只编 arm64-v8a 以缩短原生编译时间；只改 CI 工作副本，不提交
       - name: Restrict ABIs
         run: |
