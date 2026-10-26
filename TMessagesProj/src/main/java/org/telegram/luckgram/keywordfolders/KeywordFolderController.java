@@ -44,7 +44,7 @@ import java.util.Locale;
  */
 public class KeywordFolderController extends BaseController implements NotificationCenter.NotificationCenterDelegate {
 
-    /** Feature switch key, default on. Will be registered in LuckgramSettings once foundation (00) lands. */
+    /** Feature switch key, registered in {@link org.telegram.luckgram.LuckgramFeatures} (default on). */
     public static final String SETTING_KEY = "keyword_folders";
     public static final int MAX_FOLDERS = 10;
     public static final int MAX_KEYWORDS = 10;
@@ -54,8 +54,6 @@ public class KeywordFolderController extends BaseController implements Notificat
     public static final int JUMP_MESSAGES_LIMIT = 500;
     /** Cloud folder ids are 2..255; local keyword folders use ids from here up. */
     public static final int FILTER_ID_BASE = 1_000_000;
-
-    private static final String PREFS_GLOBAL = "luckgram_settings";
 
     private static final KeywordFolderController[] instances = new KeywordFolderController[UserConfig.MAX_ACCOUNT_COUNT];
 
@@ -74,17 +72,14 @@ public class KeywordFolderController extends BaseController implements Notificat
 
     // region feature switch
 
+    /** Local switch AND remote config (S4), via LuckgramSettings (#43, #54). */
     public static boolean isEnabled() {
-        return ApplicationLoader.applicationContext.getSharedPreferences(PREFS_GLOBAL, Context.MODE_PRIVATE).getBoolean(SETTING_KEY, true);
+        return org.telegram.luckgram.LuckgramSettings.isEnabled(SETTING_KEY);
     }
 
     public static void setEnabled(boolean enabled) {
-        ApplicationLoader.applicationContext.getSharedPreferences(PREFS_GLOBAL, Context.MODE_PRIVATE).edit().putBoolean(SETTING_KEY, enabled).apply();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (instances[a] != null) {
-                instances[a].reapplyFilters();
-            }
-        }
+        // LuckgramSettings posts luckgramSettingsChanged; every account reapplies its filters then.
+        org.telegram.luckgram.LuckgramSettings.setEnabled(SETTING_KEY, enabled);
     }
 
     // endregion
@@ -110,6 +105,7 @@ public class KeywordFolderController extends BaseController implements Notificat
     /** folder id -> dialog ids whose recent cached messages matched. UI thread only. */
     private final HashMap<Integer, HashSet<Long>> matches = new HashMap<>();
     private boolean loaded;
+    private boolean lastAppliedEnabled = isEnabled();
     private boolean scanned;
     private int scanToken;
 
@@ -120,6 +116,8 @@ public class KeywordFolderController extends BaseController implements Notificat
             // Edits and deletions can add or remove a hit (#51).
             getNotificationCenter().addObserver(this, NotificationCenter.replaceMessagesObjects);
             getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
+            // Local switch on the settings page or remote config update (S4).
+            NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.luckgramSettingsChanged);
         });
     }
 
@@ -493,6 +491,19 @@ public class KeywordFolderController extends BaseController implements Notificat
     @Override
     @SuppressWarnings("unchecked")
     public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.luckgramSettingsChanged) {
+            Object key = args.length > 0 ? args[0] : null;
+            if (key == null || SETTING_KEY.equals(key)) {
+                if (isEnabled() != lastAppliedEnabled) {
+                    lastAppliedEnabled = !lastAppliedEnabled;
+                    reapplyFilters();
+                    if (lastAppliedEnabled) {
+                        rescan();
+                    }
+                }
+            }
+            return;
+        }
         if (!isEnabled() || !loaded || folders.isEmpty()) {
             return;
         }
