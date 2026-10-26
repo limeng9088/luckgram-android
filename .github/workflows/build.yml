@@ -134,7 +134,7 @@ jobs:
           grep -q "QA_BUILD = $QA;" "$F" || { echo "::error::QA_BUILD does not match QA=$QA"; exit 1; }
 
       # 从最终 APK 的 dex 里读 BuildConfig（luckgram-qa/ci/apk-buildconfig.py，w-1014）：
-      # 正式包 QA_BUILD 必须为 False、API 是正式地址；QA 包 QA_BUILD 必须为 True。
+      # 正式包 QA_BUILD 必须为 False、API 是正式地址；QA 包 QA_BUILD 必须为 True、API 必须是 api-dev（字段不存在时跳过 API 检查）。
       - name: Checkout luckgram-qa (APK checks)
         uses: actions/checkout@v4
         with:
@@ -159,7 +159,8 @@ jobs:
               if not qa and url != "https://api.luckgram.cc":
                   sys.exit(f"::error::release APK points to {url}, expected https://api.luckgram.cc")
               if qa and url != "https://api-dev.luckgram.cc":
-                  print(f"::warning::QA APK points to {url}; QA builds should use https://api-dev.luckgram.cc")
+                  # QA 规则：不碰 prod。QA 包跑 AI 自检会打到这个地址
+                  sys.exit(f"::error::QA APK points to {url}; QA builds must use https://api-dev.luckgram.cc")
           print("BuildConfig OK")
           PY
 
