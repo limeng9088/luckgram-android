@@ -68,6 +68,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
+import org.telegram.messenger.AutoDeleteMediaTask;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
@@ -119,6 +120,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
 
+import org.telegram.luckgram.cache.LuckgramCacheStrings;
+import org.telegram.luckgram.cache.LuckgramChatKeepMedia;
+
 public class CacheControlActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
     private static final int VIEW_TYPE_TEXT_SETTINGS = 0;
@@ -138,6 +142,33 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
     public static final int VIEW_TYPE_MAX_CACHE_SIZE = 14;
 
     public static final int KEEP_MEDIA_TYPE_USER = 0;
+    // Luckgram 08 (cache)
+    private long openDialogId;
+
+    public CacheControlActivity() {
+        super();
+    }
+
+    /** Luckgram 08: opens the storage page and then the per-chat sheet of {@code dialogId}. */
+    public static CacheControlActivity forDialog(long dialogId) {
+        CacheControlActivity activity = new CacheControlActivity();
+        activity.openDialogId = dialogId;
+        return activity;
+    }
+
+    /** Maps limits stored by older versions (e.g. 16 / 32 GB) to the nearest larger option. */
+    private static int normalizeCacheLimit() {
+        int current = SharedConfig.getPreferences().getInt("cache_limit", Integer.MAX_VALUE);
+        for (int option : LuckgramChatKeepMedia.CACHE_LIMIT_OPTIONS) {
+            if (option >= current) {
+                if (option != current) {
+                    SharedConfig.getPreferences().edit().putInt("cache_limit", option).apply();
+                }
+                return option;
+            }
+        }
+        return Integer.MAX_VALUE;
+    }
     public static final int KEEP_MEDIA_TYPE_GROUP = 1;
     public static final int KEEP_MEDIA_TYPE_CHANNEL = 2;
     public static final int KEEP_MEDIA_TYPE_STORIES = 3;
@@ -528,6 +559,7 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
                         setCacheModel(cacheModel);
                         updateRows();
                         updateChart();
+                        openPendingDialog(entities);
                         if (cacheChartHeader != null && !calculating && System.currentTimeMillis() - fragmentCreateTime > 120) {
                             cacheChartHeader.setData(
                                     totalSize > 0,
@@ -539,6 +571,23 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
                 });
             });
         });
+    }
+
+    private void openPendingDialog(ArrayList<DialogFileEntities> entities) {
+        if (openDialogId == 0 || getParentActivity() == null) {
+            return;
+        }
+        long dialogId = openDialogId;
+        openDialogId = 0;
+        for (int i = 0; i < entities.size(); i++) {
+            DialogFileEntities dialogEntities = entities.get(i);
+            if (dialogEntities.dialogId == dialogId && dialogEntities.totalSize > 0) {
+                showDialogCacheSheet(dialogEntities);
+                return;
+            }
+        }
+        // Nothing cached for this chat yet: still allow choosing its keep-media period.
+        LuckgramChatKeepMedia.showPicker(this, dialogId, 0, null);
     }
 
     private void sort(ArrayList<DialogFileEntities> entities) {
@@ -763,7 +812,7 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
         if (totalDeviceSize > 0) {
             itemInners.add(new ItemInner(VIEW_TYPE_HEADER, LocaleController.getString(R.string.MaxCacheSize), null));
             itemInners.add(new ItemInner(VIEW_TYPE_MAX_CACHE_SIZE));
-            itemInners.add(ItemInner.asInfo(LocaleController.getString(R.string.MaxCacheSizeInfo)));
+            itemInners.add(ItemInner.asInfo(LuckgramCacheStrings.cacheLimitInfo()));
         }
 
         if (hasCache && cacheModel != null && !cacheModel.isEmpty()) {
@@ -1336,6 +1385,8 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
 //                    return;
 //                }
                 showClearCacheDialog(item.entities);
+            } else if (item.viewType == VIEW_TYPE_MAX_CACHE_SIZE) {
+                LuckgramChatKeepMedia.showCacheLimitPicker(this, normalizeCacheLimit(), () -> AndroidUtilities.updateVisibleRows(listView));
             } else if (item.keepMediaType >= 0) {
                 KeepMediaPopupView windowLayout = new KeepMediaPopupView(this, view.getContext());
                 ActionBarPopupWindow popupWindow = AlertsCreator.createSimplePopup(CacheControlActivity.this, windowLayout, view, x, y);
@@ -1371,8 +1422,8 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
             return;
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-        builder.setTitle(LocaleController.getString(R.string.ClearCache));
-        builder.setMessage(LocaleController.getString(R.string.ClearCacheForChats));
+        builder.setTitle(LocaleController.getString(R.string.ClearCache) + " (" + AndroidUtilities.formatFileSize(cacheModel.getSelectedFilesSize()) + ")");
+        builder.setMessage(LocaleController.getString(R.string.ClearCacheForChats) + "\n\n" + LuckgramCacheStrings.willFree(AndroidUtilities.formatFileSize(cacheModel.getSelectedFilesSize())));
         builder.setPositiveButton(LocaleController.getString(R.string.Clear), (di, which) -> {
             DialogFileEntities mergedEntities = cacheModel.removeSelectedFiles();
             if (mergedEntities.totalSize > 0) {
@@ -1420,6 +1471,13 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
 
     private void showClearCacheDialog(DialogFileEntities entities) {
         if (totalSize <= 0 || getParentActivity() == null) {
+            return;
+        }
+        showDialogCacheSheet(entities);
+    }
+
+    private void showDialogCacheSheet(DialogFileEntities entities) {
+        if (getParentActivity() == null) {
             return;
         }
 
@@ -1944,7 +2002,7 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
             button.setOnClickListener(e -> {
                 AlertDialog dialog =  new AlertDialog.Builder(getContext())
                     .setTitle(LocaleController.getString(R.string.ClearCache) + (TextUtils.isEmpty(valueTextView.getText()) ? "" : " (" + valueTextView.getText() + ")"))
-                    .setMessage(LocaleController.getString(R.string.StorageUsageInfo))
+                    .setMessage(TextUtils.isEmpty(valueTextView.getText()) ? LocaleController.getString(R.string.StorageUsageInfo) : LocaleController.getString(R.string.StorageUsageInfo) + "\n\n" + LuckgramCacheStrings.willFree(valueTextView.getText().toString()))
                     .setPositiveButton(textView.getText(), (di, v) -> doClearCache())
                     .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
                     .create();
@@ -2283,7 +2341,7 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
-            return position == migrateOldFolderRow || (holder.getItemViewType() == VIEW_TYPE_STORAGE && (totalSize > 0) && !calculating) || holder.getItemViewType() == VIEW_TYPE_CHAT || holder.getItemViewType() == VIEW_TYPE_KEEP_MEDIA_CELL || holder.getItemViewType() == VIEW_TYPE_SECTION;
+            return position == migrateOldFolderRow || (holder.getItemViewType() == VIEW_TYPE_STORAGE && (totalSize > 0) && !calculating) || holder.getItemViewType() == VIEW_TYPE_CHAT || holder.getItemViewType() == VIEW_TYPE_KEEP_MEDIA_CELL || holder.getItemViewType() == VIEW_TYPE_SECTION || holder.getItemViewType() == VIEW_TYPE_MAX_CACHE_SIZE;
         }
 
         @Override
@@ -2472,46 +2530,11 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
                     view = clearCacheButton = new ClearCacheButtonInternal(mContext);
                     break;
                 case VIEW_TYPE_MAX_CACHE_SIZE:
-                    SlideChooseView slideChooseView2 = new SlideChooseView(mContext);
-                    view = slideChooseView2;
-
-                    float totalSizeInGb = (int) (totalDeviceSize / 1024L / 1024L) / 1000.0f;
-                    ArrayList<Integer> options = new ArrayList<>();
-//                    if (BuildVars.DEBUG_PRIVATE_VERSION) {
-//                        options.add(1);
-//                    }
-                    if (totalSizeInGb <= 17) {
-                        options.add(2);
-                    }
-                    if (totalSizeInGb > 5) {
-                        options.add(5);
-                    }
-                    if (totalSizeInGb > 16) {
-                        options.add(16);
-                    }
-                    if (totalSizeInGb > 32) {
-                        options.add(32);
-                    }
-                    options.add(Integer.MAX_VALUE);
-                    String[] values = new String[options.size()];
-                    for (int i = 0; i < options.size(); i++) {
-                        if (options.get(i) == 1) {
-                            values[i] = String.format("300 MB");
-                        } else if (options.get(i) == Integer.MAX_VALUE) {
-                            values[i] = LocaleController.getString(R.string.NoLimit);
-                        } else {
-                            values[i] = String.format("%d GB", options.get(i));
-                        }
-                    }
-                    slideChooseView2.setCallback(i -> {
-                        SharedConfig.getPreferences().edit().putInt("cache_limit", options.get(i)).apply();
-                    });
-                    int currentLimit = SharedConfig.getPreferences().getInt("cache_limit", Integer.MAX_VALUE);
-                    int i = options.indexOf(currentLimit);
-                    if (i < 0) {
-                        i = options.size() - 1;
-                    }
-                    slideChooseView2.setOptions(i, values);
+                    // Luckgram 08 (cache): a value row + chooser (1 / 2 / 5 / 10 / 20 / 50 GB / no limit);
+                    // seven labels do not fit on the slider without overlapping.
+                    TextSettingsCell cacheLimitCell = new TextSettingsCell(mContext);
+                    cacheLimitCell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    view = cacheLimitCell;
                     break;
             }
             return new RecyclerListView.Holder(view);
@@ -2585,6 +2608,9 @@ public class CacheControlActivity extends BaseFragment implements NotificationCe
                     if (position == migrateOldFolderRow) {
                         textCell.setTextAndValue(LocaleController.getString(R.string.MigrateOldFolder), null, false);
                     }
+                    break;
+                case VIEW_TYPE_MAX_CACHE_SIZE:
+                    ((TextSettingsCell) holder.itemView).setTextAndValue(LuckgramCacheStrings.cacheLimitTitle(), LuckgramChatKeepMedia.cacheLimitLabel(normalizeCacheLimit()), false);
                     break;
                 case VIEW_TYPE_INFO:
                     TextInfoPrivacyCell privacyCell = (TextInfoPrivacyCell) holder.itemView;

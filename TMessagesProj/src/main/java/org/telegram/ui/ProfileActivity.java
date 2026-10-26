@@ -602,6 +602,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private final static int enable_no_forwards = 46;
     private final static int disable_no_forwards = 47;
     private final static int send_money = 48;
+    private final static int luckgram_chat_storage = 1080; // Luckgram 08 (cache)
 
     private Rect rect = new Rect();
 
@@ -2726,6 +2727,18 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     presentFragment(fragment);
                 } else if (id == share) {
                     onShareClicked();
+                } else if (id == luckgram_chat_storage) {
+                    long did;
+                    if (currentEncryptedChat != null) {
+                        did = DialogObject.makeEncryptedDialogId(currentEncryptedChat.id);
+                    } else if (userId != 0) {
+                        did = userId;
+                    } else if (chatId != 0) {
+                        did = -chatId;
+                    } else {
+                        return;
+                    }
+                    presentFragment(CacheControlActivity.forDialog(did));
                 } else if (id == add_shortcut) {
                     try {
                         long did;
@@ -12324,6 +12337,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 otherItem.addSubItem(leave_group, R.drawable.msg_leave, LocaleController.getString(R.string.DeleteAndExit));
                 leaveAction = true;
             }
+        }
+
+        // Luckgram 08 (cache): per-chat storage / keep-media settings
+        if (!myProfile && topicId == 0 && (userId != 0 ? !UserObject.isUserSelf(getMessagesController().getUser(userId)) : chatId != 0)) {
+            otherItem.addSubItem(luckgram_chat_storage, R.drawable.menu_clear_cache, org.telegram.luckgram.cache.LuckgramCacheStrings.profileMenuStorage());
         }
 
         if (imageUpdater != null) {
