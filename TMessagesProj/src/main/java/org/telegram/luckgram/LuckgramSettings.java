@@ -6,7 +6,6 @@ import android.content.SharedPreferences;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildConfig;
-import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.NotificationCenter;
 
 import org.json.JSONObject;
@@ -34,7 +33,6 @@ public final class LuckgramSettings {
     }
 
     private static final String PREFS = "luckgram_settings";
-    private static final String KEY_DEBUG_TOOLS = "_debug_tools_unlocked";
 
     private static SharedPreferences prefs;
 
@@ -190,13 +188,9 @@ public final class LuckgramSettings {
 
     // ---------------------------------------------------------------- debug tools
 
-    /** Debug builds, or release builds after tapping the footer of the Luckgram page 7 times. */
+    /** Debug builds only (spec 00: debug_demo 仅调试构建可见). QA uses the qa build, never a release build. */
     public static boolean isDebugToolsVisible() {
-        return BuildConfig.DEBUG || BuildVars.DEBUG_PRIVATE_VERSION || getBool(KEY_DEBUG_TOOLS, false);
-    }
-
-    public static void toggleDebugToolsUnlocked() {
-        setBool(KEY_DEBUG_TOOLS, !getBool(KEY_DEBUG_TOOLS, false));
+        return BuildConfig.DEBUG;
     }
 
     // ---------------------------------------------------------------- logout cleanup

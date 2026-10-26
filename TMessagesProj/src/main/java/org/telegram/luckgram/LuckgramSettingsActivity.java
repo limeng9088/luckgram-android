@@ -42,8 +42,6 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
     private static final int ID_DEBUG_CONSENT_CHECK = 33;
 
     private TextView footerView;
-    private int footerTaps;
-    private long lastFooterTap;
 
     @Override
     public boolean onFragmentCreate() {
@@ -72,7 +70,6 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
         footerView.setGravity(Gravity.CENTER);
         footerView.setPadding(dp(21), dp(14), dp(21), dp(24));
         footerView.setText(LuckgramStrings.footer(versionString()));
-        footerView.setOnClickListener(v -> onFooterTap());
         return super.createView(context);
     }
 
@@ -195,17 +192,6 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
     @Override
     protected boolean onLongClick(UItem item, View view, int position, float x, float y) {
         return false;
-    }
-
-    private void onFooterTap() {
-        long now = System.currentTimeMillis();
-        footerTaps = now - lastFooterTap < 800 ? footerTaps + 1 : 1;
-        lastFooterTap = now;
-        if (footerTaps >= 7) {
-            footerTaps = 0;
-            LuckgramSettings.toggleDebugToolsUnlocked();
-            toast(LuckgramSettings.isDebugToolsVisible() ? "Debug tools: on" : "Debug tools: off");
-        }
     }
 
     private void toast(String text) {

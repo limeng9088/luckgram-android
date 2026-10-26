@@ -7,24 +7,34 @@ import org.telegram.messenger.LocaleController;
 import java.util.Locale;
 
 /**
- * Luckgram UI strings. Telegram ships no Chinese language pack in the APK, so Luckgram strings
- * carry both languages and pick Chinese when the system language or the Telegram language is Chinese.
+ * Luckgram UI strings in Chinese and English.
+ *
+ * <p><b>The one language rule for every Luckgram feature</b> (same on iOS, issue #42): Chinese when the
+ * Telegram UI language is a Chinese pack <b>or</b> the system language is Chinese; English otherwise.
+ * Features must use {@link #isChinese()} / {@link #get(String, String)} instead of their own check.
  */
 public final class LuckgramStrings {
 
     private LuckgramStrings() {
     }
 
+    /** True for "zh", "zh-hans", "zh-hant-beta", "zhcncc", "classic-zh-cn", … */
+    static boolean isChineseCode(String code) {
+        if (code == null || code.isEmpty()) return false;
+        code = code.toLowerCase(Locale.ROOT).replace('_', '-');
+        return code.startsWith("zh") || code.contains("-zh");
+    }
+
     public static boolean isChinese() {
         try {
             LocaleController.LocaleInfo info = LocaleController.getInstance().getCurrentLocaleInfo();
-            if (info != null && info.getLangCode() != null && info.getLangCode().toLowerCase(Locale.ROOT).startsWith("zh")) {
+            if (info != null && (isChineseCode(info.getLangCode()) || isChineseCode(info.getBaseLangCode()))) {
                 return true;
             }
         } catch (Throwable ignore) {
         }
         Locale system = Resources.getSystem().getConfiguration().locale;
-        return system != null && "zh".equals(system.getLanguage());
+        return system != null && isChineseCode(system.getLanguage());
     }
 
     public static String get(String zh, String en) {
@@ -67,11 +77,11 @@ public final class LuckgramStrings {
     }
 
     public static String aiConsentGranted() {
-        return get("已同意，点按撤回", "Allowed. Tap to revoke");
+        return get("已同意，点按可撤回。撤回后下次使用 AI 功能时会重新询问。", "Allowed. Tap to revoke; you'll be asked again the next time you use an AI feature.");
     }
 
     public static String aiConsentNotGranted() {
-        return get("未同意，首次使用 AI 功能时会询问", "Not allowed. You'll be asked the first time you use an AI feature");
+        return get("未同意，首次使用 AI 功能时会询问。", "Not allowed. You'll be asked the first time you use an AI feature.");
     }
 
     public static String aiRevokeTitle() {
