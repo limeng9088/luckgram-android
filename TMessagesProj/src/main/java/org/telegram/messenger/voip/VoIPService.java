@@ -4128,6 +4128,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 		if (BuildVars.LOGS_ENABLED) {
 			FileLog.d("=============== VoIPService STOPPING ===============");
 		}
+		org.telegram.luckgram.callrec.CallRecorder.onCallServiceDestroyed(); // Luckgram: save the call recording
 		stopForeground(true);
 		stopRinging();
 		if (currentAccount >= 0) {
@@ -4808,6 +4809,7 @@ public class VoIPService extends Service implements SensorEventListener, AudioMa
 			StateListener l = stateListeners.get(a);
 			l.onStateChanged(state);
 		}
+		org.telegram.luckgram.callrec.CallRecorder.onCallStateChanged(this, state); // Luckgram: call recording
 	}
 
 	private void updateTrafficStats(NativeInstance instance, Instance.TrafficStats trafficStats) {

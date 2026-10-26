@@ -1948,3 +1948,50 @@ JNIEXPORT void Java_org_telegram_utils_recorder_audio_AudioNoiseSuppressor_nDest
             (AudioNoiseSuppressorContext *) (intptr_t) handle
     );
 }
+
+// Luckgram: call recording (feature 04). A thin wrapper over the per-instance Ogg/Opus recorder
+// above, with an explicit bitrate so an hour-long call stays well under the 25 MB transcription
+// limit (the voice-message recorder uses OPUS_BITRATE_MAX).
+JNIEXPORT jlong Java_org_telegram_luckgram_callrec_CallRecOpusEncoder_nCreate(
+        JNIEnv *env,
+        jclass clazz,
+        jstring path,
+        jint sampleRate,
+        jint bitrateBps
+) {
+    jlong handle = Java_org_telegram_utils_recorder_audio_AudioRecorderNative_nCreate(env, clazz, path, sampleRate, NULL);
+    AudioRecorderContext *recorder = (AudioRecorderContext *) (intptr_t) handle;
+    if (recorder && bitrateBps > 0) {
+        int result = opus_encoder_ctl(recorder->encoder, OPUS_SET_BITRATE(bitrateBps));
+        if (result != OPUS_OK) {
+            LOGE("call recording: OPUS_SET_BITRATE returned: %s", opus_strerror(result));
+        }
+    }
+    return handle;
+}
+
+JNIEXPORT jint Java_org_telegram_luckgram_callrec_CallRecOpusEncoder_nWriteFrame(
+        JNIEnv *env,
+        jclass clazz,
+        jlong handle,
+        jobject frame,
+        jint length
+) {
+    return Java_org_telegram_utils_recorder_audio_AudioRecorderNative_nWriteFrame(env, clazz, handle, frame, length);
+}
+
+JNIEXPORT jboolean Java_org_telegram_luckgram_callrec_CallRecOpusEncoder_nFinish(
+        JNIEnv *env,
+        jclass clazz,
+        jlong handle
+) {
+    return Java_org_telegram_utils_recorder_audio_AudioRecorderNative_nFinish(env, clazz, handle);
+}
+
+JNIEXPORT void Java_org_telegram_luckgram_callrec_CallRecOpusEncoder_nDestroy(
+        JNIEnv *env,
+        jclass clazz,
+        jlong handle
+) {
+    Java_org_telegram_utils_recorder_audio_AudioRecorderNative_nDestroy(env, clazz, handle);
+}

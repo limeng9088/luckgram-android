@@ -112,6 +112,21 @@ public class WebRtcAudioTrack {
     void onWebRtcAudioTrackError(String errorMessage);
   }
 
+  /**
+   * Luckgram (call recording): receives a copy of every 10 ms block of decoded far-end audio
+   * (PCM16, interleaved, native byte order) right before it is written to the AudioTrack.
+   * Null unless a recording is running.
+   */
+  public interface PlayoutSamplesCallback {
+    void onPlayoutSamples(byte[] data, int length, int sampleRate, int channels);
+  }
+
+  private static volatile @Nullable PlayoutSamplesCallback playoutSamplesCallback;
+
+  public static void setPlayoutSamplesCallback(@Nullable PlayoutSamplesCallback callback) {
+    playoutSamplesCallback = callback;
+  }
+
   private static @Nullable WebRtcAudioTrackErrorCallback errorCallbackOld;
   private static @Nullable ErrorCallback errorCallback;
 
@@ -173,6 +188,14 @@ public class WebRtcAudioTrack {
         // Upon return, the buffer position will have been advanced to reflect
         // the amount of data that was successfully written to the AudioTrack.
         assertTrue(sizeInBytes <= byteBuffer.remaining());
+        final PlayoutSamplesCallback playoutCallback = playoutSamplesCallback;
+        if (playoutCallback != null) {
+          final byte[] copy = new byte[sizeInBytes];
+          final ByteBuffer view = byteBuffer.duplicate();
+          view.position(0);
+          view.get(copy, 0, sizeInBytes);
+          playoutCallback.onPlayoutSamples(copy, sizeInBytes, sampleRate, bytesPerFrame / (BITS_PER_SAMPLE / 8));
+        }
         if (speakerMute) {
           byteBuffer.clear();
           byteBuffer.put(emptyBytes);
