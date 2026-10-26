@@ -3573,7 +3573,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             filterTabsView.setDelegate(new FilterTabsView.FilterTabsViewDelegate() {
 
                 private void showDeleteAlert(MessagesController.DialogFilter dialogFilter) {
-                    if (dialogFilter.isChatlist()) {
+                    if (dialogFilter.isKeywordFolder()) {
+                        org.telegram.luckgram.keywordfolders.KeywordFolderUi.showDeleteAlert(DialogsActivity.this, dialogFilter.keywordFolder, null);
+                    } else if (dialogFilter.isChatlist()) {
                         FolderBottomSheet.showForDeletion(DialogsActivity.this, dialogFilter.id, null);
                     } else {
                         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
@@ -3725,7 +3727,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                                     i--;
                                 }
                             }
-                            hasShare = filter.isChatlist() || filter.neverShow.isEmpty() && (filter.flags & ~(MessagesController.DIALOG_FILTER_FLAG_CHATLIST | MessagesController.DIALOG_FILTER_FLAG_CHATLIST_ADMIN)) == 0;
+                            hasShare = !filter.isKeywordFolder() && (filter.isChatlist() || filter.neverShow.isEmpty() && (filter.flags & ~(MessagesController.DIALOG_FILTER_FLAG_CHATLIST | MessagesController.DIALOG_FILTER_FLAG_CHATLIST_ADMIN)) == 0);
                             if (hasShare) {
                                 for (int i = 0; i < filter.alwaysShow.size(); ++i) {
                                     long did = filter.alwaysShow.get(i);
@@ -3798,7 +3800,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                                 showDoneItem(true);
                             })
                             .add(R.drawable.msg_edit, defaultTab ? LocaleController.getString(R.string.FilterEditAll) : LocaleController.getString(R.string.FilterEdit), () -> {
-                                presentFragment(defaultTab ? new FiltersSetupActivity() : new FilterCreateActivity(dialogFilter));
+                                if (dialogFilter != null && dialogFilter.isKeywordFolder()) {
+                                    presentFragment(new org.telegram.luckgram.keywordfolders.KeywordFolderEditActivity(dialogFilter.keywordFolder.id));
+                                } else {
+                                    presentFragment(defaultTab ? new FiltersSetupActivity() : new FilterCreateActivity(dialogFilter));
+                                }
                             })
                             .addIf(dialogFilter != null && !dialogs.isEmpty(), muteAll ? R.drawable.msg_mute : R.drawable.msg_unmute, muteAll ? LocaleController.getString(R.string.FilterMuteAll) : LocaleController.getString(R.string.FilterUnmuteAll), () -> {
                                 int count = 0;
@@ -6849,6 +6855,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
     }
 
+    private View.OnClickListener luckgramAddFolderListener;
+
     private void updateFilterTabs(boolean force, boolean animated) {
         if (filterTabsView == null || inPreviewMode || searchIsShowed || (rightSlidingDialogContainer != null && rightSlidingDialogContainer.hasFragment())) {
             return;
@@ -6904,6 +6912,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         viewPages[a].selectedType = filters.size() - 1;
                     }
                     viewPages[a].listView.setScrollingTouchSlop(RecyclerView.TOUCH_SLOP_PAGING);
+                }
+                if (initialDialogsType == DIALOGS_TYPE_DEFAULT && org.telegram.luckgram.keywordfolders.KeywordFolderController.isEnabled()) {
+                    if (luckgramAddFolderListener == null) {
+                        luckgramAddFolderListener = v -> org.telegram.luckgram.keywordfolders.KeywordFolderUi.showAddMenu(DialogsActivity.this, v);
+                    }
+                    filterTabsView.setAddButtonListener(luckgramAddFolderListener);
+                } else {
+                    filterTabsView.setAddButtonListener(null);
                 }
                 filterTabsView.finishAddingTabs(animatedUpdateItems);
                 if (updateCurrentTab) {
@@ -9929,6 +9945,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         if (removeFromFolderItem != null) {
             boolean cantRemoveFromFolder = filterTabsView == null || filterTabsView.getVisibility() != View.VISIBLE || filterTabsView.currentTabIsDefault();
+            if (!cantRemoveFromFolder && (viewPages[0].dialogsType == 7 || viewPages[0].dialogsType == 8)
+                    && org.telegram.luckgram.keywordfolders.KeywordFolderController.isKeywordFilter(getMessagesController().selectedDialogFilter[viewPages[0].dialogsType == 8 ? 1 : 0])) {
+                cantRemoveFromFolder = true; // Luckgram: keyword folder content is computed, not hand-picked
+            }
             if (!cantRemoveFromFolder) {
                 try {
                     final int dialogsCount = getDialogsArray(currentAccount, viewPages[0].dialogsAdapter.getDialogsType(), folderId, dialogsListFrozen).size();

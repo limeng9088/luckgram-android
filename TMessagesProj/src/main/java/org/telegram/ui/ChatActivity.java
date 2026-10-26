@@ -509,6 +509,7 @@ public class ChatActivity extends BaseFragment implements
     private ChatNotificationsPopupWrapper chatNotificationsPopupWrapper;
     // private ChatActivitySideControlsButtonsLayout topButtonsLayout;
     private ChatActivitySideControlsButtonsLayout sideControlsButtonsLayout;
+    private org.telegram.luckgram.keywordfolders.KeywordJumpButton luckgramKeywordJump;
     private boolean pagedownButtonShowedByScroll;
     private int reactionsMentionCount;
     private int pollVotesMentionCount;
@@ -7206,6 +7207,7 @@ public class ChatActivity extends BaseFragment implements
             final int indexToAdd = chatActivityFadeView != null ? contentView.indexOfChild(chatActivityFadeView) : -1;
             contentView.addView(sideControlsButtonsLayout, indexToAdd, LayoutHelper.createFrame(57, 300, Gravity.RIGHT | Gravity.BOTTOM));
         }
+        luckgramKeywordJump = org.telegram.luckgram.keywordfolders.KeywordJumpButton.attach(this, contentView, dialogFilterId);
 
         updateMessageListAccessibilityVisibility();
         mentionContainer = new MentionsContainerView(context, dialog_id, threadMessageId, ChatActivity.this, themeDelegate) {
@@ -10984,6 +10986,9 @@ public class ChatActivity extends BaseFragment implements
                 - getTopicTabsSideSize(TopicsTabsView.Position.BOTTOM)
                 - dp(ChatInputViewsContainer.INPUT_BUBBLE_BOTTOM + 4);
             sideControlsButtonsLayout.setTranslationY(baseTranslationY2);
+            if (luckgramKeywordJump != null) {
+                luckgramKeywordJump.setTranslationY(baseTranslationY2 - dp(6));
+            }
         }
 
         if (suggestEmojiPanel != null) {
