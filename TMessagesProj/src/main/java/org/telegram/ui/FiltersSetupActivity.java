@@ -568,8 +568,10 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
 
         ArrayList<TLRPC.TL_dialogFilterSuggested> suggestedFilters = getMessagesController().suggestedFilters;
         ArrayList<MessagesController.DialogFilter> dialogFilters = getMessagesController().getDialogFilters();
+        // Luckgram: local keyword folders don't take Telegram folder slots (#52); +1 for "All chats".
+        final boolean canCreateCloudFolder = org.telegram.luckgram.keywordfolders.KeywordFolderUi.cloudFolderCount(getMessagesController()) + 1 < getMessagesController().dialogFiltersLimitPremium;
         items.add(ItemInner.asHint());
-        if (!suggestedFilters.isEmpty() && dialogFilters.size() < 10) {
+        if (!suggestedFilters.isEmpty() && org.telegram.luckgram.keywordfolders.KeywordFolderUi.cloudFolderCount(getMessagesController()) + 1 < 10) {
             int start = items.size();
             items.add(ItemInner.asHeader(LocaleController.getString(R.string.FilterRecommended)));
             for (int i = 0; i < suggestedFilters.size(); ++i) {
@@ -590,11 +592,11 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
             }
             filtersSectionEnd = items.size();
 
-            if (listView != null) listView.forcedSections.add(AndroidUtilities.pack(filtersSectionStart, filtersSectionEnd - 1 + (dialogFilters.size() < getMessagesController().dialogFiltersLimitPremium ? 1 : 0)));
+            if (listView != null) listView.forcedSections.add(AndroidUtilities.pack(filtersSectionStart, filtersSectionEnd - 1 + (canCreateCloudFolder ? 1 : 0)));
         } else {
             filtersSectionStart = filtersSectionEnd = -1;
         }
-        if (dialogFilters.size() < getMessagesController().dialogFiltersLimitPremium) {
+        if (canCreateCloudFolder) {
             items.add(ItemInner.asButton(LocaleController.getString(R.string.CreateNewFilter)));
         }
         if (org.telegram.luckgram.keywordfolders.KeywordFolderController.isEnabled() && org.telegram.luckgram.keywordfolders.KeywordFolderController.getInstance(currentAccount).canCreate()) {
