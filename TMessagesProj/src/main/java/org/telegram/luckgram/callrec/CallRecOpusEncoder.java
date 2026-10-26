@@ -16,7 +16,7 @@ final class CallRecOpusEncoder {
 
     static final int SAMPLE_RATE = CallRecMixer.RATE;
     static final int FRAME_SAMPLES = CallRecMixer.FRAME;
-    /** ~14 MB per hour, comfortably inside the 25 MB transcription limit for normal calls. */
+    /** ~14 MB per hour; small uploads, and fewer segments when 00 splits it for transcription. */
     static final int BITRATE_BPS = 32_000;
 
     private long handle;

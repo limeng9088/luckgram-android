@@ -154,8 +154,9 @@ public final class CallRecStrings {
         return s("（没有识别到说话内容）", "(No speech detected)");
     }
 
-    public static String tooLongForTranscript() {
-        return s("录音超过 25 MB，未生成文字稿。", "The recording is larger than 25 MB, so no transcript was made.");
+    /** Appended when only the first part of a long call was transcribed. */
+    public static String transcriptPartial(String reason) {
+        return isChinese() ? "（后面的部分未转写：" + reason + "）" : "(The rest wasn't transcribed: " + reason + ")";
     }
 
     public static String transcriptFailed(String reason) {

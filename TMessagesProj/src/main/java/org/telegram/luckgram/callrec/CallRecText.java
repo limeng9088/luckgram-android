@@ -11,6 +11,26 @@ final class CallRecText {
     }
 
     /**
+     * Cuts {@code text} to at most {@code maxChars} characters (at a line end or space in the
+     * last fifth when possible) so it fits the summary input limit. {@code maxChars <= 0} = no limit.
+     */
+    static String limit(String text, int maxChars) {
+        if (maxChars <= 0 || text.length() <= maxChars) {
+            return text;
+        }
+        int end = maxChars;
+        int floor = maxChars - maxChars / 5;
+        int nl = text.lastIndexOf('\n', end);
+        int sp = text.lastIndexOf(' ', end);
+        if (nl >= floor) {
+            end = nl;
+        } else if (sp >= floor) {
+            end = sp;
+        }
+        return text.substring(0, end).trim();
+    }
+
+    /**
      * Splits {@code text} into parts of at most {@code maxChunk} characters (before the prefix),
      * preferring a line end, then a space, in the second half of each chunk. Every part after the
      * first starts with {@code continuedPrefix} and a line break. Blank parts are dropped.
