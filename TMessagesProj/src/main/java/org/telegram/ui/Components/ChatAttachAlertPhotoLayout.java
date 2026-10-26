@@ -240,11 +240,13 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
     public final static int preview = 7;
     public final static int caption = 8;
     public final static int stars = 9;
+    public final static int luckgram_round_video = 1003;
 
     private ActionBarMenuSubItem spoilerItem;
     private ActionBarMenuSubItem compressItem;
     private ActionBarMenuSubItem qualityItem;
     private ActionBarMenuSubItem starsItem;
+    private ActionBarMenuSubItem roundVideoItem;
     protected ActionBarMenuSubItem previewItem;
     public MessagePreviewView.ToggleButton captionItem;
 
@@ -784,6 +786,8 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         parentAlert.selectedMenuItem.addSubItem(open_in, R.drawable.msg_openin, LocaleController.getString(R.string.OpenInExternalApp));
         compressItem = parentAlert.selectedMenuItem.addSubItem(compress, R.drawable.msg_filehq, LocaleController.getString(R.string.SendWithoutCompression));
         parentAlert.selectedMenuItem.addSubItem(group, R.drawable.msg_ungroup, LocaleController.getString(R.string.SendWithoutGrouping));
+        roundVideoItem = parentAlert.selectedMenuItem.addSubItem(luckgram_round_video, R.drawable.input_video, org.telegram.luckgram.roundvideo.RoundVideoFeature.getString(org.telegram.luckgram.roundvideo.RoundVideoFeature.STR_SEND_AS_ROUND));
+        parentAlert.selectedMenuItem.hideSubItem(luckgram_round_video);
         parentAlert.selectedMenuItem.addColoredGap(media_gap);
         spoilerItem = parentAlert.selectedMenuItem.addSubItem(spoiler, R.drawable.msg_spoiler, LocaleController.getString(R.string.EnablePhotoSpoiler));
         qualityItem = parentAlert.selectedMenuItem.addSubItem(quality, R.drawable.menu_quality_hd, getString(R.string.SendInHighQuality));
@@ -3226,8 +3230,37 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         return 1;
     }
 
+    /** Luckgram: the single selected video that can be sent as a round video, or null. */
+    public MediaController.PhotoEntry getRoundVideoCandidate() {
+        if (parentAlert == null || !(parentAlert.baseFragment instanceof ChatActivity) || selectedPhotos.size() != 1) {
+            return null;
+        }
+        Object o = selectedPhotos.values().iterator().next();
+        if (!(o instanceof MediaController.PhotoEntry)) {
+            return null;
+        }
+        MediaController.PhotoEntry entry = (MediaController.PhotoEntry) o;
+        if (!org.telegram.luckgram.roundvideo.RoundVideoFeature.canOffer((ChatActivity) parentAlert.baseFragment, entry, selectedPhotos.size(), parentAlert.editingMessageObject != null, getStarsPrice())) {
+            return null;
+        }
+        return entry;
+    }
+
+    /** Luckgram: opens the round video crop screen for the selected video. */
+    public void openRoundVideoEditor() {
+        MediaController.PhotoEntry entry = getRoundVideoCandidate();
+        if (entry == null) {
+            return;
+        }
+        org.telegram.luckgram.roundvideo.RoundVideoFeature.open((ChatActivity) parentAlert.baseFragment, entry, () -> parentAlert.dismiss(true));
+    }
+
     @Override
     public void onMenuItemClick(int id) {
+        if (id == luckgram_round_video) {
+            openRoundVideoEditor();
+            return;
+        }
         if (id == caption) {
             parentAlert.setCaptionAbove(!parentAlert.captionAbove);
             captionItem.setState(!parentAlert.captionAbove, true);
@@ -3547,6 +3580,13 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
             parentAlert.selectedMenuItem.showSubItem(stars);
         } else {
             parentAlert.selectedMenuItem.hideSubItem(stars);
+        }
+        if (roundVideoItem != null) {
+            if (getRoundVideoCandidate() != null) {
+                parentAlert.selectedMenuItem.showSubItem(luckgram_round_video);
+            } else {
+                parentAlert.selectedMenuItem.hideSubItem(luckgram_round_video);
+            }
         }
     }
 
