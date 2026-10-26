@@ -72,6 +72,9 @@ public final class LuckgramFeatures {
         add(toggle(org.telegram.luckgram.savedirect.SaveToSaved.SETTING_KEY, MESSAGES_LANGUAGE, true,
             "一键收藏", "Save in one tap",
             "消息菜单里一点就存到收藏夹", "Save a message to Saved Messages straight from its menu"));
+        add(toggle("translate_out", MESSAGES_LANGUAGE, true,
+            "发送前翻译", "Translate before sending",
+            "在输入框里先翻译成对方的语言再发送", "Translate your message into the other person's language before sending"));
 
         // ---- 媒体、通话与存储 / Media, Calls & Storage
         add(toggle(org.telegram.luckgram.callrec.CallRecSettings.KEY_ENABLED, MEDIA_CALLS_STORAGE, false,
