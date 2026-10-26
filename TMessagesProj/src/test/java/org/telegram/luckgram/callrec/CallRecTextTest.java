@@ -49,4 +49,28 @@ public class CallRecTextTest {
         assertEquals(4000, parts.get(0).length());
         assertEquals(9000, parts.get(0).length() + parts.get(1).length() - 2 + parts.get(2).length() - 2);
     }
+
+    @Test
+    public void limitKeepsShortTextAndNoLimit() {
+        assertEquals("abc", CallRecText.limit("abc", 10));
+        assertEquals("abcdef", CallRecText.limit("abcdef", 0));
+    }
+
+    @Test
+    public void limitCutsAtLineEndNearTheLimit() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 100; i++) {
+            sb.append("sentence number ").append(i).append('\n');
+        }
+        String cut = CallRecText.limit(sb.toString(), 500);
+        assertTrue(cut.length() <= 500);
+        assertTrue(cut.length() >= 400);
+        assertTrue("ends with a whole line", sb.toString().startsWith(cut + "\n"));
+    }
+
+    @Test
+    public void limitCutsHardWithoutBreaks() {
+        String text = new String(new char[1000]).replace('\0', 'x');
+        assertEquals(300, CallRecText.limit(text, 300).length());
+    }
 }

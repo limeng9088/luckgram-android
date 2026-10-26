@@ -199,26 +199,28 @@ final class CallRecUploader implements NotificationCenter.NotificationCenterDele
             aiDone = true;
             return;
         }
-        if (file.length() > CallRecAi.MAX_TRANSCRIBE_BYTES) {
-            finishAi(CallRecStrings.tooLongForTranscript());
-            return;
-        }
         ai.transcribe(file, (text, error) -> {
-            if (error != null || text == null) {
-                finishAi(CallRecStrings.transcriptFailed(error != null ? error : "?"));
-                return;
-            }
-            final String transcript = text.trim();
+            final String transcript = text == null ? "" : text.trim();
             if (transcript.isEmpty()) {
-                finishAi(CallRecStrings.transcriptHeader() + "\n" + CallRecStrings.transcriptEmpty());
+                if (error != null) {
+                    finishAi(CallRecStrings.transcriptFailed(error));
+                } else {
+                    finishAi(CallRecStrings.transcriptHeader() + "\n" + CallRecStrings.transcriptEmpty());
+                }
                 return;
             }
-            ai.summarize(transcript, (summary, summaryError) -> {
+            // A partial transcript (later segments failed, e.g. daily quota) is kept with a note.
+            final String note = error != null ? CallRecStrings.transcriptPartial(error) : null;
+            final String summaryInput = CallRecText.limit(transcript, ai.maxSummaryInputChars());
+            ai.summarize(summaryInput, (summary, summaryError) -> {
                 final StringBuilder sb = new StringBuilder();
-                if (summaryError == null && summary != null && !summary.trim().isEmpty()) {
+                if (summary != null && !summary.trim().isEmpty()) {
                     sb.append(CallRecStrings.summaryHeader()).append('\n').append(summary.trim()).append("\n\n");
                 }
                 sb.append(CallRecStrings.transcriptHeader()).append('\n').append(transcript);
+                if (note != null) {
+                    sb.append("\n\n").append(note);
+                }
                 finishAi(sb.toString());
             });
         });
