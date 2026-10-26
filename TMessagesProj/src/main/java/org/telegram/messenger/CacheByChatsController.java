@@ -158,6 +158,7 @@ public class CacheByChatsController {
                 if (savedMessages) {
                     file.keepMedia = KEEP_MEDIA_FOREVER;
                     file.isStory = false;
+                    file.isProtected = true;
                 } else if (exception != null) {
                     file.keepMedia = exception.keepMedia;
                 }
@@ -266,6 +267,8 @@ public class CacheByChatsController {
         int keepMedia = -1;
         int dialogType = KEEP_MEDIA_TYPE_CHANNEL;
         boolean isStory;
+        // Luckgram 08: Saved Messages media, kept by both the keep-media and the size-limit cleanup
+        boolean isProtected;
 
         public KeepMediaFile(File file) {
             this.file = file;

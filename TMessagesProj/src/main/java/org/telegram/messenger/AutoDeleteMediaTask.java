@@ -222,7 +222,10 @@ public class AutoDeleteMediaTask {
                     });
 
                     for (int i = 0; i < allFiles.size(); i++) {
-                        if (allFiles.get(i).keepMedia == CacheByChatsController.KEEP_MEDIA_FOREVER) {
+                        // Luckgram 08 (cache): the size limit applies to every chat, including ones kept
+                        // "forever" (that setting only controls time-based cleanup). Only Saved Messages
+                        // and in-progress downloads (filtered out in fillFilesRecursive) are kept.
+                        if (allFiles.get(i).isProtected) {
                             continue;
                         }
                         if (allFiles.get(i).lastUsageDate <= 0) {
