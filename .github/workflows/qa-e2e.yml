@@ -1,0 +1,117 @@
+name: QA E2E (Android emulator + Maestro)
+
+# QA 测试包（qa=true：登录页带「Test Backend」，abis=x86_64）在 GitHub ubuntu 上编译，
+# 再到 QA 专用 Windows 机器 xs-master（self-hosted, qa-android）上起 Android 模拟器跑
+# limeng9088/luckgram-qa 里的 Maestro 用例。用例和账号池见 luckgram-qa README。
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: '已有 QA 包的 run id（产物 luckgram-android-qa-*，abis 含 x86_64）；留空则先在本分支编一个（约 40 分钟）'
+        required: false
+        default: ''
+      flows:
+        description: 'luckgram-qa 里的用例路径（空格分隔），例如 maestro/android/smoke 或 maestro/android/features/06-keyword-folders'
+        required: false
+        default: 'maestro/android/smoke'
+      account:
+        description: 'luckgram-qa/accounts.md 里的账号组 ID'
+        required: false
+        default: 'A1'
+      qa_ref:
+        description: 'luckgram-qa 的分支 / commit'
+        required: false
+        default: 'master'
+      maestro_args:
+        description: '额外的 maestro test 参数，例如 --exclude-tags=needs-peer'
+        required: false
+        default: ''
+  schedule:
+    # master 每晚回归：北京时间 02:00
+    - cron: '0 18 * * *'
+
+# 同一分支只保留最新一次 E2E；xs-master 只有一个 runner，同一时间只会跑一个模拟器
+concurrency:
+  group: qa-e2e-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # 复用 build.yml 需要；QA 包不会发 release
+  actions: read     # 下载其他 run 的产物
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_dispatch' || inputs.build_run_id == ''
+    uses: ./.github/workflows/build.yml
+    with:
+      abis: x86_64
+      qa: true
+    secrets: inherit
+
+  e2e:
+    needs: build
+    if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    runs-on: [self-hosted, qa-android]
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: powershell   # xs-master has Windows PowerShell 5.1 only
+    env:
+      FLOWS: ${{ github.event_name == 'schedule' && 'maestro/android/smoke maestro/android/regression' || inputs.flows || 'maestro/android/smoke' }}
+      ACCOUNT: ${{ github.event_name == 'schedule' && 'RA' || inputs.account || 'A1' }}
+      MAESTRO_ARGS: ${{ inputs.maestro_args }}
+      OUT: ${{ github.workspace }}\qa-out
+    steps:
+      - name: Clean workspace
+        run: Remove-Item -Recurse -Force qa, apk, qa-out -ErrorAction SilentlyContinue
+
+      - name: Checkout luckgram-qa
+        uses: actions/checkout@v4
+        with:
+          repository: limeng9088/luckgram-qa
+          ref: ${{ inputs.qa_ref || 'master' }}
+          ssh-key: ${{ secrets.QA_REPO_DEPLOY_KEY }}
+          path: qa
+
+      - name: Download QA APK
+        uses: actions/download-artifact@v4
+        with:
+          pattern: luckgram-android-qa-*
+          merge-multiple: true
+          path: apk
+          run-id: ${{ inputs.build_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Check APK
+        run: |
+          $apk = Get-ChildItem apk -Filter *-qa.apk | Select-Object -First 1
+          if (-not $apk) { Write-Host "::error::no *-qa.apk (needs a qa=true build)"; exit 1 }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead($apk.FullName)
+          $x86 = $zip.Entries | Where-Object FullName -like 'lib/x86_64/*' | Select-Object -First 1
+          $zip.Dispose()
+          if (-not $x86) { Write-Host "::error::$($apk.Name) has no x86_64 libs; rebuild with abis=x86_64"; exit 1 }
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "APK=$($apk.FullName)`n", (New-Object System.Text.UTF8Encoding($false)))
+          $apk | Format-List Name, Length
+
+      - name: Run Maestro on emulator
+        # 每个 flow 最多 10 分钟，整步最多 30 分钟（脚本内预算 27 分钟，超时前停下来，保证后面能上传产物）
+        timeout-minutes: 30
+        run: |
+          $flows = $env:FLOWS.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+          & ./qa/ci/android-run.ps1 -Apk $env:APK -Account $env:ACCOUNT -Flows $flows -Out $env:OUT -FlowTimeoutMin 10 -BudgetMin 27
+
+      - name: Stop emulator (safety net)
+        if: always()
+        run: |
+          # Kill only our emulator by serial. NEVER kill qemu-system-x86_64 by name (host runs a Debian VM).
+          $adb = Join-Path $env:ANDROID_HOME 'platform-tools\adb.exe'
+          if ((& $adb devices) -match '^emulator-5554\s') { & $adb -s emulator-5554 emu kill }
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-report-android-${{ github.run_number }}-${{ github.run_attempt }}
+          path: qa-out
+          if-no-files-found: warn

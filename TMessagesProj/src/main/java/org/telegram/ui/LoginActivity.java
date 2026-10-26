@@ -224,7 +224,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     public final static boolean ENABLE_PASTED_TEXT_PROCESSING = false;
     private final static int SHOW_DELAY = SharedConfig.getDevicePerformanceClass() <= SharedConfig.PERFORMANCE_CLASS_AVERAGE ? 150 : 100;
 
-    public static final boolean TEST_BACKEND_IN_STORE = false;
+    // Luckgram: only QA builds (-PLUCKGRAM_QA=true) expose the test backend switch on the login screen
+    public static final boolean TEST_BACKEND_IN_STORE = BuildConfig.QA_BUILD;
 
     public final static int AUTH_TYPE_MESSAGE = 1,
             AUTH_TYPE_SMS = 2,

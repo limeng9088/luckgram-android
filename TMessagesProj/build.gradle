@@ -138,6 +138,10 @@ android {
         minSdkVersion 23
         targetSdkVersion 36
 
+        // QA 测试包（./gradlew -PLUCKGRAM_QA=true ...）：登录页显示「Test Backend」，可登录 Telegram 测试服务器。
+        // 正式包不传该属性，开关不出现。
+        buildConfigField "boolean", "QA_BUILD", (project.findProperty("LUCKGRAM_QA") == "true") ? "true" : "false"
+
         vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
         multiDexEnabled true
