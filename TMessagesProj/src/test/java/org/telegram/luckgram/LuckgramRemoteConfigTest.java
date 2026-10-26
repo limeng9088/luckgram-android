@@ -67,6 +67,15 @@ public class LuckgramRemoteConfigTest {
     }
 
     @Test
+    public void notModifiedRestartsTtlAndKeepsData() throws Exception {
+        LuckgramRemoteConfig c = LuckgramRemoteConfig.fromResponse(new JSONObject(DEV_RESPONSE), 1000);
+        LuckgramRemoteConfig t = c.withFetchedAt(1000 + 4000_000L);
+        assertFalse(t.isExpired(1000 + 4000_000L + 3599_000L));
+        assertFalse(t.isAllowed("round_video_from_gallery"));
+        assertEquals("7", t.version);
+    }
+
+    @Test
     public void garbageIsEmpty() {
         assertTrue(LuckgramRemoteConfig.deserialize("not json").isAllowed("a"));
         assertTrue(LuckgramRemoteConfig.deserialize(null).isExpired(1));

@@ -158,6 +158,16 @@ public final class LuckgramSettings {
         return remoteConfig;
     }
 
+    /** HTTP 304 for /v1/config: keep the cached values, restart its TTL. */
+    public static void touchRemoteConfig() {
+        LuckgramRemoteConfig touched;
+        synchronized (LuckgramSettings.class) {
+            touched = remoteConfig().withFetchedAt(System.currentTimeMillis());
+            remoteConfig = touched;
+        }
+        prefs().edit().putString(KEY_REMOTE_CONFIG, touched.serialize()).apply();
+    }
+
     /** {@code version} of the cached /v1/config, for {@code If-None-Match}; null if none. */
     public static String remoteConfigVersion() {
         return remoteConfig().version;

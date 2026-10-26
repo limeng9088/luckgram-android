@@ -14,6 +14,9 @@ import java.util.Iterator;
  * {@code features} is the per-device result computed by the server (enabled, rollout_percent and
  * min_app_version already applied) and wins over {@code values}. Uses only org.json, so it can be
  * unit-tested on a plain JVM.
+ *
+ * <p>This is the data model only (task 00). Fetching, {@code If-None-Match} with {@link #version},
+ * 304 handling ({@link LuckgramSettings#touchRemoteConfig()}) and TTL refresh belong to the S4 client.
  */
 public final class LuckgramRemoteConfig {
 
@@ -71,6 +74,11 @@ public final class LuckgramRemoteConfig {
     public boolean getBool(String key, boolean def) {
         Object v = values.opt(key);
         return v instanceof Boolean ? (Boolean) v : def;
+    }
+
+    /** Same data, received again at {@code now} (HTTP 304 Not Modified). */
+    public LuckgramRemoteConfig withFetchedAt(long now) {
+        return new LuckgramRemoteConfig(version, ttlSeconds, now, values, features);
     }
 
     public boolean isExpired(long now) {
