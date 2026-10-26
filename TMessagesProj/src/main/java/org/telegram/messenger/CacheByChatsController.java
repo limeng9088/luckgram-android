@@ -18,6 +18,9 @@ public class CacheByChatsController {
     public static int KEEP_MEDIA_ONE_WEEK = 0;
     public static int KEEP_MEDIA_ONE_MONTH = 1;
     public static int KEEP_MEDIA_TWO_DAY = 6;
+    // Luckgram 08 (cache): finer keep-media options
+    public static int KEEP_MEDIA_ONE_HOUR = 7;
+    public static int KEEP_MEDIA_THREE_DAY = 8;
     //TEST VALUE
     public static int KEEP_MEDIA_ONE_MINUTE = 5;
 
@@ -49,18 +52,7 @@ public class CacheByChatsController {
     }
 
     public static String getKeepMediaString(int keepMedia) {
-        if (keepMedia == KEEP_MEDIA_ONE_MINUTE) {
-            return LocaleController.formatPluralString("Minutes", 1);
-        } else if (keepMedia == KEEP_MEDIA_ONE_DAY) {
-            return LocaleController.formatPluralString("Days", 1);
-        } else if (keepMedia == KEEP_MEDIA_TWO_DAY) {
-            return LocaleController.formatPluralString("Days", 2);
-        } else if (keepMedia == KEEP_MEDIA_ONE_WEEK) {
-            return LocaleController.formatPluralString("Weeks", 1);
-        } else if (keepMedia == KEEP_MEDIA_ONE_MONTH) {
-            return LocaleController.formatPluralString("Months", 1);
-        }
-        return LocaleController.getString(R.string.AutoDeleteMediaNever);
+        return org.telegram.luckgram.cache.LuckgramCacheStrings.keepMedia(keepMedia);
     }
 
     public static long getDaysInSeconds(int keepMedia) {
@@ -73,7 +65,11 @@ public class CacheByChatsController {
             seconds = 60L * 60L * 24L;
         } else if (keepMedia == CacheByChatsController.KEEP_MEDIA_TWO_DAY) {
             seconds = 60L * 60L * 24L * 2;
-        }else if (keepMedia == CacheByChatsController.KEEP_MEDIA_ONE_MINUTE && BuildVars.DEBUG_PRIVATE_VERSION) { //one min
+        } else if (keepMedia == CacheByChatsController.KEEP_MEDIA_THREE_DAY) {
+            seconds = 60L * 60L * 24L * 3;
+        } else if (keepMedia == CacheByChatsController.KEEP_MEDIA_ONE_HOUR) {
+            seconds = 60L * 60L;
+        } else if (keepMedia == CacheByChatsController.KEEP_MEDIA_ONE_MINUTE && BuildVars.DEBUG_PRIVATE_VERSION) { //one min
             seconds = 60L;
         } else {
             seconds = Long.MAX_VALUE;
@@ -146,32 +142,23 @@ public class CacheByChatsController {
     public void lookupFiles(ArrayList<? extends KeepMediaFile> keepMediaFiles) {
         LongSparseArray<ArrayList<KeepMediaFile>> filesByDialogId = FileLoader.getInstance(currentAccount).getFileDatabase().lookupFiles(keepMediaFiles);
         LongSparseArray<KeepMediaException> exceptionsByType = getKeepMediaExceptionsByDialogs();
+        final long selfId = UserConfig.getInstance(currentAccount).getClientUserId();
         for (int i = 0; i < filesByDialogId.size(); i++) {
             long dialogId = filesByDialogId.keyAt(i);
             ArrayList<? extends KeepMediaFile> files = filesByDialogId.valueAt(i);
-            int type;
-            if (dialogId >= 0) {
-                type = KEEP_MEDIA_TYPE_USER;
-            } else {
-                TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialogId);
-                if (chat == null) {
-                    chat = MessagesStorage.getInstance(currentAccount).getChatSync(-dialogId);
-                }
-                if (chat == null) {
-                    type = -1;
-                } else if (ChatObject.isChannel(chat)) {
-                    type = KEEP_MEDIA_TYPE_CHANNEL;
-                } else {
-                    type = KEEP_MEDIA_TYPE_GROUP;
-                }
-            }
+            int type = getDialogKeepMediaType(dialogId, true);
             KeepMediaException exception = exceptionsByType.get(dialogId);
+            // Luckgram 08: media in Saved Messages is never removed automatically.
+            final boolean savedMessages = selfId != 0 && dialogId == selfId;
             for (int k = 0; k < files.size(); k++) {
                 KeepMediaFile file = files.get(k);
                 if (type >= 0) {
                     file.dialogType = type;
                 }
-                if (exception != null) {
+                if (savedMessages) {
+                    file.keepMedia = KEEP_MEDIA_FOREVER;
+                    file.isStory = false;
+                } else if (exception != null) {
                     file.keepMedia = exception.keepMedia;
                 }
             }
@@ -189,6 +176,79 @@ public class CacheByChatsController {
             }
         }
         return sparseArray;
+    }
+
+    /**
+     * Luckgram 08: keep-media category of a dialog. Supergroups count as groups (Telegram used to
+     * file them under channels); encrypted chats count as private chats. Returns -1 if unknown.
+     */
+    public int getDialogKeepMediaType(long dialogId, boolean allowStorageLookup) {
+        if (DialogObject.isEncryptedDialog(dialogId) || dialogId >= 0) {
+            return KEEP_MEDIA_TYPE_USER;
+        }
+        TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(-dialogId);
+        if (chat == null && allowStorageLookup) {
+            chat = MessagesStorage.getInstance(currentAccount).getChatSync(-dialogId);
+        }
+        if (chat == null) {
+            return -1;
+        } else if (ChatObject.isChannel(chat) && !chat.megagroup) {
+            return KEEP_MEDIA_TYPE_CHANNEL;
+        } else {
+            return KEEP_MEDIA_TYPE_GROUP;
+        }
+    }
+
+    /** Luckgram 08: the per-chat override, or null if the chat follows its category. */
+    public KeepMediaException getDialogKeepMediaException(long dialogId) {
+        for (int i = 0; i < 3; i++) {
+            ArrayList<KeepMediaException> exceptions = getKeepMediaExceptions(i);
+            for (int k = 0; k < exceptions.size(); k++) {
+                if (exceptions.get(k).dialogId == dialogId) {
+                    return exceptions.get(k);
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Luckgram 08: effective keep-media value for a dialog (override, else category). */
+    public int getDialogKeepMedia(long dialogId) {
+        KeepMediaException exception = getDialogKeepMediaException(dialogId);
+        if (exception != null) {
+            return exception.keepMedia;
+        }
+        int type = getDialogKeepMediaType(dialogId, false);
+        return getKeepMedia(type < 0 ? KEEP_MEDIA_TYPE_GROUP : type);
+    }
+
+    /**
+     * Luckgram 08: sets (keepMedia >= 0) or removes (keepMedia < 0 or KEEP_MEDIA_DELETE) the
+     * per-chat override. The override is stored in the list of the chat's own category.
+     */
+    public void setDialogKeepMedia(long dialogId, int keepMedia) {
+        int type = getDialogKeepMediaType(dialogId, false);
+        if (type < 0) {
+            type = KEEP_MEDIA_TYPE_GROUP;
+        }
+        for (int i = 0; i < 3; i++) {
+            ArrayList<KeepMediaException> exceptions = getKeepMediaExceptions(i);
+            boolean changed = false;
+            for (int k = 0; k < exceptions.size(); k++) {
+                if (exceptions.get(k).dialogId == dialogId) {
+                    exceptions.remove(k);
+                    k--;
+                    changed = true;
+                }
+            }
+            if (i == type && keepMedia >= 0 && keepMedia != KEEP_MEDIA_DELETE) {
+                exceptions.add(new KeepMediaException(dialogId, keepMedia));
+                changed = true;
+            }
+            if (changed) {
+                saveKeepMediaExceptions(i, exceptions);
+            }
+        }
     }
 
     public static class KeepMediaException {
