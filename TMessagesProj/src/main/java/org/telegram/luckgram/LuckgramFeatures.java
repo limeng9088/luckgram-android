@@ -46,6 +46,10 @@ public final class LuckgramFeatures {
         // ---- 账号与隐私 / Accounts & Privacy
 
         // ---- 消息与语言 / Messages & Language
+        add(toggle("quick_replies", MESSAGES_LANGUAGE, true,
+            "快捷回复", "Quick replies",
+            "把常用回复存成模板，输入框里一点就填入", "Save frequent replies as templates and insert them with one tap")
+            .subpage(org.telegram.luckgram.quickreplies.QuickRepliesManageActivity::new));
 
         // ---- 媒体、通话与存储 / Media, Calls & Storage
 
