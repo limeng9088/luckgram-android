@@ -92,6 +92,6 @@ public final class QuickRepliesStrings {
 
     public static String manageInfo() {
         return s("模板只保存在本机当前账号，不会上传。拖动右侧手柄排序，点按编辑。每条最多 " + QuickRepliesStore.MAX_LENGTH + " 字，最多 " + QuickRepliesStore.MAX_COUNT + " 条。",
-            "Templates are stored on this device for the current account only and never uploaded. Drag the handle to reorder, tap to edit. Up to " + QuickRepliesStore.MAX_LENGTH + " characters each, " + QuickRepliesStore.MAX_COUNT + " in total.");
+            "Templates are stored only on this device, for the current account, and are never uploaded. Drag the handle to reorder, tap to edit. Up to " + QuickRepliesStore.MAX_LENGTH + " characters each, " + QuickRepliesStore.MAX_COUNT + " in total.");
     }
 }
