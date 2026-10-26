@@ -3990,7 +3990,6 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                     photoLayout.openRoundVideoEditor();
                 });
             }
-            final boolean self = UserObject.isUserSelf(user);
             if (editingMessageObject == null && (chatActivity == null || !ChatObject.isMonoForum(chatActivity.getCurrentChat())) && ((chatActivity != null && chatActivity.canScheduleMessage()) || currentAttachLayout.canScheduleMessages())) {
                 final long finalDialogId = dialogId;
                 options.add(R.drawable.msg_calendar2, getString(self ? R.string.SetReminder : R.string.ScheduleMessage), () -> {
