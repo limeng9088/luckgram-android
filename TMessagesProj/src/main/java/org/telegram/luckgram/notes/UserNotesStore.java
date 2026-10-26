@@ -26,9 +26,8 @@ import java.util.Map;
  */
 public final class UserNotesStore {
 
-    /** Feature switch key, registered in the Luckgram settings registry (spec 00). */
+    /** Feature switch key, registered in {@link org.telegram.luckgram.LuckgramFeatures} (default on). */
     public static final String FEATURE_KEY = "user_notes";
-    public static final boolean FEATURE_DEFAULT = true;
 
     public static final int MAX_LENGTH = UserNotesText.MAX_LENGTH;
 
@@ -43,13 +42,11 @@ public final class UserNotesStore {
     // ------------------------------------------------------------------ feature switch
 
     /**
-     * Whether the private notes feature is enabled. Device-wide setting, default on.
-     * Reads the shared Luckgram settings store used by the foundation registry.
+     * Whether the private notes feature is enabled: always through {@link org.telegram.luckgram.LuckgramSettings}
+     * so the local switch, the registry default and the remote config (S4) all apply.
      */
     public static boolean isEnabled() {
-        return ApplicationLoader.applicationContext
-                .getSharedPreferences("luckgram_settings", Context.MODE_PRIVATE)
-                .getBoolean(FEATURE_KEY, FEATURE_DEFAULT);
+        return org.telegram.luckgram.LuckgramSettings.isEnabled(FEATURE_KEY);
     }
 
     // ------------------------------------------------------------------ notes

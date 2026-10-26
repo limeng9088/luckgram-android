@@ -50,6 +50,10 @@ public final class LuckgramFeatures {
         // ---- 媒体、通话与存储 / Media, Calls & Storage
 
         // ---- 资料与整理 / Profiles & Organization
+        add(toggle(org.telegram.luckgram.notes.UserNotesStore.FEATURE_KEY, PROFILE_ORGANIZE, true,
+            "私人备注", "Private notes",
+            "给联系人、群组和频道写只有自己能看到的备注", "Notes about contacts, groups and channels that only you can see")
+            .subpage(org.telegram.luckgram.notes.UserNotesListActivity::new));
 
         // ---- AI
 
