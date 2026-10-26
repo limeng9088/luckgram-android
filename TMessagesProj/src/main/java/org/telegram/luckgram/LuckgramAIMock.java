@@ -104,8 +104,9 @@ public final class LuckgramAIMock implements LuckgramAI.Transport {
                     if (body.length > LuckgramSettings.remoteLong("ai.transcribe_max_mb", 4) * 1024 * 1024) return error(413, "input_too_large");
                     int n = transcribeCalls.incrementAndGet();
                     String lang = query.startsWith("language=") ? query.substring(9) : "zh";
+                    if (!lang.matches("[a-z]{2}")) return error(400, "invalid_request");
                     String text = (LuckgramStrings.isChinese() ? "第" + n + "段（" + body.length + " 字节）。" : "Segment " + n + " (" + body.length + " bytes).");
-                    return json(200, new JSONObject().put("text", text).put("language", lang).put("duration", body.length / 32000.0));
+                    return json(200, new JSONObject().put("text", text).put("language", lang).put("duration_seconds", body.length / 32000.0).put("model", "mock"));
                 }
                 case "/v1/me":
                     return json(200, new JSONObject().put("plan", "free").put("quota", new JSONObject()

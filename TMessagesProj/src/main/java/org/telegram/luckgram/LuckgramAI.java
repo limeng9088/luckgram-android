@@ -444,7 +444,7 @@ public final class LuckgramAI {
      * FLAC) fail with {@code input_too_large} when over the limit.
      *
      * @param mimeType e.g. {@code audio/ogg}, {@code audio/mpeg}, {@code audio/mp4}, {@code audio/wav}
-     * @param language optional ISO-639-1 hint, or null
+     * @param language optional ISO-639-1 (2-letter) hint, or null; other values are ignored
      */
     public Request transcribe(Context context, byte[] audio, String mimeType, String language, Callback<Transcription> callback) {
         Request req = new Request();
@@ -459,7 +459,8 @@ public final class LuckgramAI {
             return req;
         }
         String path = "/v1/ai/transcribe";
-        if (language != null && language.matches("[a-z]{2,3}")) {
+        // The server accepts ISO-639-1 (2 letters) only; anything else -> let it auto-detect (#49).
+        if (language != null && language.matches("[a-z]{2}")) {
             path += "?language=" + language;
         }
         final String finalPath = path;
@@ -476,7 +477,7 @@ public final class LuckgramAI {
                     if (t.language == null) {
                         t.language = optString(j, "language");
                     }
-                    t.durationSeconds += j.optDouble("duration", 0);
+                    t.durationSeconds += j.optDouble("duration_seconds", j.optDouble("duration", 0));
                 }
             }
             t.text = text.toString();
@@ -611,7 +612,7 @@ public final class LuckgramAI {
             JSONObject reg = new JSONObject()
                 .put("platform", "android")
                 .put("app_version", BuildConfig.BUILD_VERSION_STRING)
-                .put("locale", Locale.getDefault().toLanguageTag());
+                .put("locale", registrationLocale());
             Map<String, String> headers = new LinkedHashMap<>();
             headers.put("Content-Type", "application/json");
             headers.put("Accept", "application/json");
@@ -631,6 +632,20 @@ public final class LuckgramAI {
                 }
                 return t;
             }
+        }
+    }
+
+    /**
+     * "language[-Script][-REGION]" only, e.g. "zh-Hans-CN" (same as iOS). Unicode extensions such as
+     * "-u-mu-celsius" (Android 14 regional preferences) are dropped; the server rejects them (#48).
+     */
+    static String registrationLocale() {
+        Locale l = Locale.getDefault();
+        try {
+            return new Locale.Builder().setLanguage(l.getLanguage()).setScript(l.getScript()).setRegion(l.getCountry()).build().toLanguageTag();
+        } catch (Exception e) {
+            String lang = l.getLanguage();
+            return lang == null || lang.isEmpty() ? "und" : lang;
         }
     }
 
