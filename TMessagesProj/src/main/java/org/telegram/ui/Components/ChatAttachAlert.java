@@ -3980,6 +3980,16 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
                 }
             }
             final boolean self = UserObject.isUserSelf(user);
+            if ((currentAttachLayout == photoLayout || currentAttachLayout == photoPreviewLayout) && photoLayout != null && photoLayout.getRoundVideoCandidate() != null) {
+                // Luckgram: send the selected gallery video as a round video message
+                options.add(R.drawable.input_video, org.telegram.luckgram.roundvideo.RoundVideoFeature.getString(org.telegram.luckgram.roundvideo.RoundVideoFeature.STR_SEND_AS_ROUND), () -> {
+                    if (messageSendPreview != null) {
+                        messageSendPreview.dismiss(false);
+                        messageSendPreview = null;
+                    }
+                    photoLayout.openRoundVideoEditor();
+                });
+            }
             if (editingMessageObject == null && (chatActivity == null || !ChatObject.isMonoForum(chatActivity.getCurrentChat())) && ((chatActivity != null && chatActivity.canScheduleMessage()) || currentAttachLayout.canScheduleMessages())) {
                 final long finalDialogId = dialogId;
                 options.add(R.drawable.msg_calendar2, getString(self ? R.string.SetReminder : R.string.ScheduleMessage), () -> {

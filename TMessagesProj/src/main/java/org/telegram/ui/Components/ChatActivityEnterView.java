@@ -143,6 +143,9 @@ import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
+import org.telegram.luckgram.translateout.TranslateOutController;
+import org.telegram.luckgram.translateout.TranslateOutLanguageSheet;
+import org.telegram.luckgram.translateout.TranslateOutStrings;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SharedPrefsHelper;
@@ -2928,6 +2931,8 @@ public class ChatActivityEnterView extends FrameLayout implements
         richButton.setAlpha(0.0f);
         richButton.setScaleX(0.6f);
         richButton.setScaleY(0.6f);
+
+        createTranslateOutButton(context);
 
         if (audioToSend != null) {
             createRecordAudioPanel();
@@ -6057,6 +6062,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 showAiButton(lineCount > 2 && editable != null && !TextUtils.isEmpty(editable.toString().trim()));
                 checkIsEphemeralMessage(true);
                 showRichButton(lineCount > 2 && editable != null && !TextUtils.isEmpty(editable.toString().trim()));
+                updateTranslateOutButton();
             }
         });
         messageEditText.addTextChangedListener(new EditTextSuggestionsFix());
@@ -6073,6 +6079,162 @@ public class ChatActivityEnterView extends FrameLayout implements
             parentFragment.applyDraftMaybe(false);
         }
         updateFieldRight(lastAttachVisible);
+    }
+
+    // ------------------------------------------------------------ Luckgram: translate before sending (feature 01)
+
+    private ImageView translateOutButton;
+    private boolean translateOutShown;
+    private boolean translateOutBusy;
+    private CharSequence translateOutOriginal;
+    private String translateOutResult;
+    private Bulletin translateOutBulletin;
+
+    private void createTranslateOutButton(Context context) {
+        if (parentFragment == null || messageEditTextContainer == null) {
+            return;
+        }
+        translateOutButton = new ImageView(context);
+        translateOutButton.setImageResource(R.drawable.msg_translate);
+        translateOutButton.setScaleType(ImageView.ScaleType.CENTER);
+        translateOutButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+        translateOutButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_CIRCLE_20DP, dp(16)));
+        translateOutButton.setContentDescription(TranslateOutStrings.button());
+        translateOutButton.setVisibility(View.GONE);
+        translateOutButton.setAlpha(0.0f);
+        translateOutButton.setScaleX(0.6f);
+        translateOutButton.setScaleY(0.6f);
+        messageEditTextContainer.addView(translateOutButton, LayoutHelper.createFrame(DEFAULT_HEIGHT, DEFAULT_HEIGHT, Gravity.BOTTOM | Gravity.RIGHT, 0, 0, DEFAULT_HEIGHT, 0));
+        translateOutButton.setOnClickListener(v -> translateOut(null));
+        translateOutButton.setOnLongClickListener(v -> {
+            showTranslateOutLanguages();
+            return true;
+        });
+    }
+
+    private boolean shouldShowTranslateOut() {
+        return translateOutButton != null && parentFragment != null && !isStories && !parentFragment.isSecretChat()
+            && editingMessageObject == null && TranslateOutController.isEnabled()
+            && messageEditText != null && messageEditText.getText() != null
+            && !TextUtils.isEmpty(AndroidUtilities.getTrimmedString(messageEditText.getText()));
+    }
+
+    private void updateTranslateOutButton() {
+        if (translateOutButton == null) {
+            return;
+        }
+        final boolean show = shouldShowTranslateOut();
+        if (show == translateOutShown) {
+            return;
+        }
+        translateOutShown = show;
+        translateOutButton.animate().cancel();
+        translateOutButton.setVisibility(View.VISIBLE);
+        translateOutButton.setEnabled(show && !translateOutBusy);
+        translateOutButton.animate()
+            .alpha(show ? (translateOutBusy ? 0.5f : 1.0f) : 0.0f)
+            .scaleX(show ? 1.0f : 0.6f)
+            .scaleY(show ? 1.0f : 0.6f)
+            .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT)
+            .setDuration(320)
+            .withEndAction(() -> {
+                if (!translateOutShown) {
+                    translateOutButton.setVisibility(View.GONE);
+                }
+            })
+            .start();
+        updateFieldRight(lastAttachVisible);
+    }
+
+    private void setTranslateOutBusy(boolean busy) {
+        translateOutBusy = busy;
+        if (translateOutButton != null && translateOutShown) {
+            translateOutButton.setEnabled(!busy);
+            translateOutButton.animate().alpha(busy ? 0.5f : 1.0f).setDuration(150).start();
+        }
+    }
+
+    private void translateOut(String lang) {
+        if (translateOutBusy || messageEditText == null || parentFragment == null || messageEditText.getText() == null) {
+            return;
+        }
+        final CharSequence source = new SpannableStringBuilder(messageEditText.getText());
+        if (TextUtils.isEmpty(AndroidUtilities.getTrimmedString(source))) {
+            return;
+        }
+        if (lang != null) {
+            doTranslateOut(source, lang);
+            return;
+        }
+        setTranslateOutBusy(true);
+        TranslateOutController.resolveLanguage(currentAccount, dialog_id, parentFragment.messages, resolved -> {
+            setTranslateOutBusy(false);
+            doTranslateOut(source, resolved);
+        });
+    }
+
+    private void doTranslateOut(CharSequence source, String lang) {
+        if (messageEditText == null) {
+            return;
+        }
+        setTranslateOutBusy(true);
+        TranslateOutController.translate(currentAccount, source, lang, messageEditText.getPaint().getFontMetricsInt(), result -> {
+            setTranslateOutBusy(false);
+            if (messageEditText == null || parentFragment == null) {
+                return;
+            }
+            if (result == null) {
+                hideTranslateOutBulletin();
+                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.error, TranslateOutStrings.failed()).show();
+                return;
+            }
+            if (messageEditText.getText() == null || !TextUtils.equals(source.toString(), messageEditText.getText().toString())) {
+                return; // the user kept typing meanwhile: don't overwrite
+            }
+            translateOutOriginal = source;
+            setFieldText(result);
+            translateOutResult = messageEditText.getText() == null ? null : messageEditText.getText().toString();
+            hideTranslateOutBulletin();
+            translateOutBulletin = BulletinFactory.of(parentFragment).createSimpleBulletin(
+                R.raw.msg_translate,
+                TranslateOutStrings.translatedTo(TranslateOutController.languageName(lang)),
+                TranslateOutStrings.undo(),
+                Bulletin.DURATION_PROLONG,
+                this::undoTranslateOut
+            ).show();
+        });
+    }
+
+    private void undoTranslateOut() {
+        if (messageEditText == null || translateOutOriginal == null) {
+            return;
+        }
+        final CharSequence original = translateOutOriginal;
+        final boolean unchanged = messageEditText.getText() != null && TextUtils.equals(translateOutResult, messageEditText.getText().toString());
+        translateOutOriginal = null;
+        translateOutResult = null;
+        if (unchanged) {
+            setFieldText(original);
+        }
+    }
+
+    private void hideTranslateOutBulletin() {
+        if (translateOutBulletin != null) {
+            translateOutBulletin.hide();
+            translateOutBulletin = null;
+        }
+    }
+
+    private void showTranslateOutLanguages() {
+        if (parentFragment == null || parentFragment.getParentActivity() == null) {
+            return;
+        }
+        final String current = TranslateOutController.getSavedLanguage(currentAccount, dialog_id);
+        final long dialogId = dialog_id;
+        new TranslateOutLanguageSheet(parentFragment.getParentActivity(), currentAccount, current, resourcesProvider, code -> {
+            TranslateOutController.saveLanguage(currentAccount, dialogId, code);
+            translateOut(code);
+        }).show();
     }
 
     private boolean shownAiButton;
@@ -8789,6 +8951,12 @@ public class ChatActivityEnterView extends FrameLayout implements
                 layoutParams.rightMargin = dp(2);
             }
         }
+        if (translateOutShown && !(isStories && isLiveComment)) {
+            // Luckgram: the translate button sits left of the send button (and left of the scheduled button, if any)
+            final boolean scheduledVisible = scheduledButton != null && scheduledButton.getTag() != null && scheduledButton.getVisibility() == VISIBLE;
+            translateOutButton.setTranslationX(scheduledVisible ? -dp(DEFAULT_HEIGHT) : 0);
+            layoutParams.rightMargin = Math.max(layoutParams.rightMargin, dp(scheduledVisible ? 98 : 50));
+        }
         layoutParams.rightMargin = Math.max(layoutParams.rightMargin, Math.max(0, sendButton.width() - dp(DEFAULT_HEIGHT)));
         if (doneButton != null && doneButton.getVisibility() == VISIBLE) {
             layoutParams.rightMargin = Math.max(layoutParams.rightMargin, Math.max(0, doneButton.width() - dp(DEFAULT_HEIGHT)));
@@ -10193,6 +10361,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         updateSendAsButton(true);
         updateButtons();
         updateRichDraftPreview();
+        updateTranslateOutButton();
     }
 
     @Nullable
@@ -10371,6 +10540,9 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     @Override
     public void updateColors() {
+        if (translateOutButton != null) {
+            translateOutButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+        }
         if (messageSendPreview != null) {
             messageSendPreview.updateColors();
         }
