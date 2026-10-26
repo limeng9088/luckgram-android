@@ -169,7 +169,16 @@ public class QuickRepliesManageActivity extends BaseFragment {
         editText.setLineColors(Theme.getColor(Theme.key_dialogInputField, getResourceProvider()), Theme.getColor(Theme.key_dialogInputFieldActivated, getResourceProvider()), Theme.getColor(Theme.key_text_RedBold, getResourceProvider()));
         editText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         editText.setMaxLines(6);
-        editText.setFilters(new InputFilter[]{new InputFilter.LengthFilter(QuickRepliesStore.MAX_LENGTH)});
+        editText.setFilters(new InputFilter[]{(source, start, end, dest, dstart, dend) -> {
+            // limit in grapheme clusters (an emoji counts as 1), same as iOS
+            final CharSequence inserted = source.subSequence(start, end);
+            final String result = dest.subSequence(0, dstart).toString() + inserted + dest.subSequence(dend, dest.length());
+            if (QuickRepliesLogic.graphemeCount(result) <= QuickRepliesStore.MAX_LENGTH) {
+                return null;
+            }
+            final int keep = QuickRepliesLogic.fittingPrefix(inserted, dest, dstart, dend, QuickRepliesStore.MAX_LENGTH);
+            return keep <= 0 ? "" : inserted.subSequence(0, keep);
+        }});
         editText.setPadding(0, dp(6), 0, dp(6));
         if (index >= 0) {
             editText.setText(items.get(index));
