@@ -18,12 +18,21 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class LuckgramAIMock implements LuckgramAI.Transport {
 
+    /** Host used for absolute URLs (temporary image files) served by the mock. */
+    public static final String HOST = "luckgram-mock.invalid";
+
     private static final String TINY_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
     private final AtomicInteger requests = new AtomicInteger();
     private final AtomicInteger chats = new AtomicInteger();
     private volatile String forcedError;
     private volatile int chatLimit = 50;
+    private final AtomicInteger transcribeCalls = new AtomicInteger();
+
+    /** Number of /v1/ai/transcribe requests so far (one per uploaded segment). */
+    public int transcribeCount() {
+        return transcribeCalls.get();
+    }
 
     public int requestCount() {
         return requests.get();
@@ -42,6 +51,19 @@ public final class LuckgramAIMock implements LuckgramAI.Transport {
     @Override
     public LuckgramAI.HttpResponse execute(String method, String path, Map<String, String> headers, byte[] body) throws IOException {
         requests.incrementAndGet();
+        String query = "";
+        if (path.startsWith("https://" + HOST)) {
+            path = path.substring(("https://" + HOST).length());
+        }
+        int q = path.indexOf('?');
+        if (q >= 0) {
+            query = path.substring(q + 1);
+            path = path.substring(0, q);
+        }
+        // CloudFront OAC: a request with a body and no / a wrong payload hash is rejected with 403.
+        if (body != null && !LuckgramAI.sha256Hex(body).equals(headers.get("x-amz-content-sha256"))) {
+            return new LuckgramAI.HttpResponse(403, "application/json", new ByteArrayInputStream("{\"message\":\"Forbidden\"}".getBytes(StandardCharsets.UTF_8)), null);
+        }
         try {
             if ("POST".equals(method) && "/v1/devices".equals(path)) {
                 JSONObject req = new JSONObject(new String(body, StandardCharsets.UTF_8));
@@ -70,11 +92,20 @@ public final class LuckgramAIMock implements LuckgramAI.Transport {
                     return sse(reply);
                 }
                 case "/v1/ai/image":
-                    return json(200, new JSONObject().put("image", new JSONObject().put("b64", TINY_PNG).put("mime", "image/png")));
+                    return json(200, new JSONObject()
+                        .put("url", "https://" + HOST + "/v1/ai/image/files/mock.png")
+                        .put("mime", "image/png")
+                        .put("expires_at", "2099-01-01T00:00:00Z"));
+                case "/v1/ai/image/files/mock.png":
+                    return new LuckgramAI.HttpResponse(200, "image/png", new ByteArrayInputStream(android.util.Base64.decode(TINY_PNG, android.util.Base64.DEFAULT)), null);
                 case "/v1/ai/transcribe": {
-                    String head = new String(body, 0, Math.min(body.length, 512), StandardCharsets.ISO_8859_1);
-                    if (!head.contains("name=\"file\"")) return error(400, "invalid_request");
-                    return json(200, new JSONObject().put("text", LuckgramStrings.isChinese() ? "这是一段 mock 转写结果。" : "This is a mock transcription.").put("language", "zh").put("duration", 1.0));
+                    String ctype = headers.get("Content-Type");
+                    if (ctype == null || !ctype.startsWith("audio/") || body == null || body.length == 0) return error(400, "invalid_request");
+                    if (body.length > LuckgramSettings.remoteLong("ai.transcribe_max_mb", 4) * 1024 * 1024) return error(413, "input_too_large");
+                    int n = transcribeCalls.incrementAndGet();
+                    String lang = query.startsWith("language=") ? query.substring(9) : "zh";
+                    String text = (LuckgramStrings.isChinese() ? "第" + n + "段（" + body.length + " 字节）。" : "Segment " + n + " (" + body.length + " bytes).");
+                    return json(200, new JSONObject().put("text", text).put("language", lang).put("duration", body.length / 32000.0));
                 }
                 case "/v1/me":
                     return json(200, new JSONObject().put("plan", "free").put("quota", new JSONObject()

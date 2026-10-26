@@ -269,10 +269,46 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
 
     private void step2() {
         line("2. transcribe (1 s test tone, WAV) …");
-        LuckgramAI.getInstance().transcribe(getParentActivity(), LuckgramAI.testToneWav(), "audio/wav", null, new LuckgramAI.Callback<LuckgramAI.Transcription>() {
+        LuckgramAI.getInstance().transcribe(getParentActivity(), LuckgramAI.testToneWav(1), "audio/wav", null, new LuckgramAI.Callback<LuckgramAI.Transcription>() {
             @Override
             public void onResult(LuckgramAI.Transcription t) {
                 line("   ✓ text=\"" + t.text + "\" language=" + t.language);
+                step2b();
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                line("   ✗ " + error.code + " — " + error.getLocalizedMessage());
+                step2b();
+            }
+        });
+    }
+
+    /** A 150 s WAV (≈ 4.8 MB) is over ai.transcribe_max_mb = 4 and must be split into 2 segments. */
+    private void step2b() {
+        byte[] wav = LuckgramAI.testToneWav(150);
+        line("2b. transcribe long file (" + wav.length / 1024 + " KB, split) …");
+        LuckgramAI.getInstance().transcribe(getParentActivity(), wav, "audio/wav", "zh", new LuckgramAI.Callback<LuckgramAI.Transcription>() {
+            @Override
+            public void onResult(LuckgramAI.Transcription t) {
+                line("   " + (t.segments > 1 ? "✓ " : "✗ ") + t.segments + " segments: \"" + t.text + "\"");
+                step2c();
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                line("   ✗ " + error.code + " — " + error.getLocalizedMessage());
+                step2c();
+            }
+        });
+    }
+
+    private void step2c() {
+        line("2c. image (url + download with Bearer) …");
+        LuckgramAI.getInstance().image(getParentActivity(), "a small blue paper plane, flat icon", new LuckgramAI.Callback<LuckgramAI.Image>() {
+            @Override
+            public void onResult(LuckgramAI.Image img) {
+                line("   ✓ " + img.mimeType + ", " + (img.data == null ? 0 : img.data.length) + " bytes, expires " + img.expiresAt);
                 step3();
             }
 

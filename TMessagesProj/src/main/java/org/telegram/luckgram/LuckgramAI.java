@@ -24,6 +24,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -106,12 +107,16 @@ public final class LuckgramAI {
         /** Image bytes, if the server returned them inline. */
         public byte[] data;
         public String mimeType;
+        /** When the temporary link expires (ISO 8601, from the server), or null. */
+        public String expiresAt;
     }
 
     public static final class Transcription {
         public String text;
         public String language;
         public double durationSeconds;
+        /** Number of uploaded segments (1 unless the file was over ai.transcribe_max_mb). */
+        public int segments = 1;
     }
 
     /** Handle returned by every call. */
@@ -171,7 +176,8 @@ public final class LuckgramAI {
     private static final class HttpTransport implements Transport {
         @Override
         public HttpResponse execute(String method, String path, Map<String, String> headers, byte[] body) throws IOException {
-            HttpURLConnection c = (HttpURLConnection) new URL(apiBaseUrl() + path).openConnection();
+            // path is relative to the API server, or an absolute https URL (temporary files).
+            HttpURLConnection c = (HttpURLConnection) new URL(path.startsWith("https://") ? path : apiBaseUrl() + path).openConnection();
             c.setRequestMethod(method);
             c.setConnectTimeout(15_000);
             c.setReadTimeout(120_000);
@@ -364,70 +370,137 @@ public final class LuckgramAI {
             return req;
         }
         withConsent(context, req, callback::onError, () -> {
+            Image out = new Image();
             try (HttpResponse res = authorized(req, "POST", "/v1/ai/image", "application/json", payload, "application/json")) {
                 if (res.status >= 300) {
                     throw new ApiException(errorFrom(res));
                 }
+                // docs/api-server.md §3.1: {"url","mime","expires_at"}
                 JSONObject j = new JSONObject(readString(res.body));
                 JSONObject img = j.optJSONObject("image") != null ? j.optJSONObject("image") : j;
-                Image out = new Image();
                 out.url = optString(img, "url");
+                out.mimeType = img.optString("mime", "image/png");
+                out.expiresAt = optString(img, "expires_at");
                 String b64 = optString(img, "b64");
                 if (b64 != null) {
                     out.data = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
                 }
-                out.mimeType = img.optString("mime", "image/png");
-                if (out.url == null && out.data == null) {
-                    throw new ApiException(new LuckgramAIError(LuckgramAIError.UPSTREAM_UNAVAILABLE, res.status));
-                }
-                AndroidUtilities.runOnUIThread(() -> callback.onResult(out));
             }
+            if (out.data == null && out.url != null) {
+                out.data = download(req, out.url);
+            }
+            if (out.data == null) {
+                throw new ApiException(new LuckgramAIError(LuckgramAIError.UPSTREAM_UNAVAILABLE, 0));
+            }
+            AndroidUtilities.runOnUIThread(() -> callback.onResult(out));
         });
         return req;
     }
 
     /**
-     * @param mimeType e.g. {@code audio/ogg}, {@code audio/mp4}, {@code audio/wav}
+     * Downloads a temporary file returned by the API server. The device token is sent only to the
+     * API server's own host (§3.1: "带同样的 Bearer 头"), never to a third-party host.
+     */
+    private byte[] download(Request req, String url) throws Exception {
+        boolean ownHost = isApiHost(url);
+        HttpResponse res;
+        if (ownHost) {
+            res = authorized(req, "GET", url, null, null, "*/*");
+        } else {
+            Map<String, String> headers = new LinkedHashMap<>();
+            headers.put("Accept", "*/*");
+            res = send(req, "GET", url, headers, null);
+        }
+        try {
+            if (res.status >= 300) {
+                throw new ApiException(errorFrom(res));
+            }
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[16384];
+            int n;
+            while ((n = res.body.read(buf)) > 0) {
+                bos.write(buf, 0, n);
+            }
+            return bos.toByteArray();
+        } finally {
+            res.close();
+        }
+    }
+
+    private boolean isApiHost(String url) {
+        try {
+            String host = new URL(url).getHost();
+            String apiHost = isUsingMock() ? LuckgramAIMock.HOST : new URL(apiBaseUrl()).getHost();
+            return host != null && host.equalsIgnoreCase(apiHost);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Transcribes an audio file. The request body is the audio itself (§3.1 item 5). Files larger
+     * than {@code ai.transcribe_max_mb} are split by {@link LuckgramAudioSplitter}, uploaded one
+     * after another and their texts joined in order. Formats that can't be split (MP4/M4A, WebM,
+     * FLAC) fail with {@code input_too_large} when over the limit.
+     *
+     * @param mimeType e.g. {@code audio/ogg}, {@code audio/mpeg}, {@code audio/mp4}, {@code audio/wav}
      * @param language optional ISO-639-1 hint, or null
      */
     public Request transcribe(Context context, byte[] audio, String mimeType, String language, Callback<Transcription> callback) {
         Request req = new Request();
-        long maxBytes = LuckgramSettings.remoteLong("ai.transcribe_max_mb", 25) * 1024 * 1024;
-        if (audio == null || audio.length == 0 || audio.length > maxBytes) {
-            deliverError(callback::onError, new LuckgramAIError(audio == null || audio.length == 0 ? LuckgramAIError.INVALID_REQUEST : LuckgramAIError.INPUT_TOO_LARGE, 0));
-            return req;
-        }
-        String boundary = "luckgram" + Long.toHexString(Utilities.random.nextLong());
-        byte[] payload;
-        try {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream(audio.length + 512);
-            String ext = extensionFor(mimeType);
-            bos.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio." + ext + "\"\r\nContent-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-            bos.write(audio);
-            bos.write("\r\n".getBytes(StandardCharsets.UTF_8));
-            if (!TextUtils.isEmpty(language)) {
-                bos.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"language\"\r\n\r\n" + language + "\r\n").getBytes(StandardCharsets.UTF_8));
-            }
-            bos.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
-            payload = bos.toByteArray();
-        } catch (IOException e) {
+        if (audio == null || audio.length == 0 || mimeType == null || !mimeType.startsWith("audio/")) {
             deliverError(callback::onError, new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));
             return req;
         }
+        int maxBytes = (int) Math.min(Integer.MAX_VALUE, LuckgramSettings.remoteLong("ai.transcribe_max_mb", 4) * 1024 * 1024);
+        List<byte[]> segments = LuckgramAudioSplitter.split(audio, mimeType, maxBytes);
+        if (segments == null || segments.isEmpty()) {
+            deliverError(callback::onError, new LuckgramAIError(LuckgramAIError.INPUT_TOO_LARGE, 0));
+            return req;
+        }
+        String path = "/v1/ai/transcribe";
+        if (language != null && language.matches("[a-z]{2,3}")) {
+            path += "?language=" + language;
+        }
+        final String finalPath = path;
         withConsent(context, req, callback::onError, () -> {
-            try (HttpResponse res = authorized(req, "POST", "/v1/ai/transcribe", "multipart/form-data; boundary=" + boundary, payload, "application/json")) {
-                if (res.status >= 300) {
-                    throw new ApiException(errorFrom(res));
+            Transcription t = new Transcription();
+            StringBuilder text = new StringBuilder();
+            for (byte[] segment : segments) {
+                try (HttpResponse res = authorized(req, "POST", finalPath, mimeType, segment, "application/json")) {
+                    if (res.status >= 300) {
+                        throw new ApiException(errorFrom(res));
+                    }
+                    JSONObject j = new JSONObject(readString(res.body));
+                    appendTranscript(text, j.optString("text", ""));
+                    if (t.language == null) {
+                        t.language = optString(j, "language");
+                    }
+                    t.durationSeconds += j.optDouble("duration", 0);
                 }
-                JSONObject j = new JSONObject(readString(res.body));
-                Transcription t = new Transcription();
-                t.text = j.optString("text", "");
-                t.language = optString(j, "language");
-                t.durationSeconds = j.optDouble("duration", 0);
-                AndroidUtilities.runOnUIThread(() -> callback.onResult(t));
             }
+            t.text = text.toString();
+            t.segments = segments.size();
+            AndroidUtilities.runOnUIThread(() -> callback.onResult(t));
         });
         return req;
+    }
+
+    /** Joins segment texts; no space between CJK characters. */
+    static void appendTranscript(StringBuilder out, String piece) {
+        piece = piece.trim();
+        if (piece.isEmpty()) return;
+        if (out.length() > 0 && !isCjk(out.charAt(out.length() - 1)) && !isCjk(piece.charAt(0))) {
+            out.append(' ');
+        }
+        out.append(piece);
+    }
+
+    private static boolean isCjk(char c) {
+        Character.UnicodeBlock b = Character.UnicodeBlock.of(c);
+        return b == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS || b == Character.UnicodeBlock.CJK_SYMBOLS_AND_PUNCTUATION
+            || b == Character.UnicodeBlock.HALFWIDTH_AND_FULLWIDTH_FORMS || b == Character.UnicodeBlock.HIRAGANA
+            || b == Character.UnicodeBlock.KATAKANA || b == Character.UnicodeBlock.HANGUL_SYLLABLES;
     }
 
     /** {@code GET /v1/me}: quota usage and limits, returned as the raw JSON object. */
@@ -518,6 +591,10 @@ public final class LuckgramAI {
     private HttpResponse send(Request req, String method, String path, Map<String, String> headers, byte[] body) throws Exception {
         if (req.cancelled) {
             throw new ApiException(new LuckgramAIError(LuckgramAIError.CANCELLED, 0));
+        }
+        if (body != null) {
+            // CloudFront OAC -> Lambda Function URL requires the payload hash (docs/api-server.md §3.1 item 1).
+            headers.put("x-amz-content-sha256", sha256Hex(body));
         }
         HttpResponse res = transport().execute(method, path, headers, body);
         req.connection = res;
@@ -667,6 +744,19 @@ public final class LuckgramAI {
         return TextUtils.isEmpty(v) ? null : v;
     }
 
+    static String sha256Hex(byte[] data) {
+        try {
+            byte[] d = MessageDigest.getInstance("SHA-256").digest(data);
+            StringBuilder sb = new StringBuilder(64);
+            for (byte b : d) {
+                sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     static String readString(InputStream in) throws IOException {
         if (in == null) return "";
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -678,29 +768,9 @@ public final class LuckgramAI {
         return new String(bos.toByteArray(), StandardCharsets.UTF_8);
     }
 
-    private static String extensionFor(String mime) {
-        if (mime == null) return "ogg";
-        switch (mime) {
-            case "audio/mpeg":
-            case "audio/mp3":
-                return "mp3";
-            case "audio/mp4":
-            case "audio/m4a":
-            case "audio/aac":
-                return "m4a";
-            case "audio/wav":
-            case "audio/x-wav":
-                return "wav";
-            case "audio/webm":
-                return "webm";
-            default:
-                return "ogg";
-        }
-    }
-
-    /** Mono 16-bit PCM WAV with a 1 s 440 Hz tone; used by the debug self-test. */
-    public static byte[] testToneWav() {
-        int rate = 16000, samples = rate;
+    /** Mono 16-bit 16 kHz PCM WAV with a 440 Hz tone; used by the debug self-test. */
+    public static byte[] testToneWav(int seconds) {
+        int rate = 16000, samples = rate * seconds;
         ByteArrayOutputStream b = new ByteArrayOutputStream(44 + samples * 2);
         int dataLen = samples * 2;
         writeAscii(b, "RIFF");
