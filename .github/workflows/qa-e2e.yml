@@ -25,6 +25,8 @@ on:
         description: '模拟器 Android API level'
         required: false
         default: '34'
+  push:  # TEMP: 验证用，开 PR 前删除
+    branches: [ci/qa-test-backend]
   schedule:
     # master 每晚回归：北京时间 02:00
     - cron: '0 18 * * *'
