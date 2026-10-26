@@ -163,6 +163,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "0"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL_DEV + "\""
         }
 
         HA_private {
@@ -176,6 +177,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "1"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL_DEV + "\""
         }
 
         HA_public {
@@ -189,6 +191,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "4"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL + "\""
         }
 
         HA_hardcore {
@@ -202,6 +205,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "5"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL_DEV + "\""
         }
 
         standalone {
@@ -215,6 +219,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "6"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL + "\""
         }
 
         release {
@@ -228,6 +233,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "7"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL + "\""
         }
     }
 

@@ -385,6 +385,8 @@ public class NotificationCenter {
     public static final int webBrowserSettingsUpdate = totalEvents++;
     public static final int communityPendingRequestsUpdate = totalEvents++;
     public static final int communitySwitchedCollapsed = totalEvents++;
+    // Luckgram: a LuckgramSettings value changed (global instance; arg 0 = key, or null for many)
+    public static final int luckgramSettingsChanged = totalEvents++;
 
     public static boolean alreadyLogged;
 
