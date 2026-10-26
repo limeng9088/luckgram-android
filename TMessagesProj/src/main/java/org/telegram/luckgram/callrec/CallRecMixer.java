@@ -15,8 +15,9 @@ final class CallRecMixer {
         void onFrame(short[] frame);
     }
 
-    static final int RATE = CallRecOpusEncoder.SAMPLE_RATE;
-    static final int FRAME = CallRecOpusEncoder.FRAME_SAMPLES;
+    static final int RATE = 48_000;
+    /** Samples per Opus frame (20 ms at 48 kHz); must match frame_size in jni/audio.c. */
+    static final int FRAME = 960;
     /**
      * When one side has stopped delivering (e.g. playout paused, mic restarting after a route
      * change), the other side is not held back for longer than this; the missing side is mixed

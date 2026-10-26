@@ -31,7 +31,6 @@ import org.telegram.tgnet.TLRPC;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
@@ -240,35 +239,12 @@ final class CallRecUploader implements NotificationCenter.NotificationCenterDele
         //noinspection ResultOfMethodCallIgnored
         file.delete();
         if (aiReply != null && sentAudio != null) {
-            for (String chunk : splitText(aiReply)) {
+            for (String chunk : CallRecText.split(aiReply, MAX_TEXT_CHUNK, CallRecStrings.transcriptContinued())) {
                 final SendMessagesHelper.SendMessageParams params = SendMessagesHelper.SendMessageParams.of(
                         chunk, dialogId, sentAudio, null, null, false, null, null, null, true, 0, 0, null, false);
                 AccountInstance.getInstance(account).getSendMessagesHelper().sendMessage(params);
             }
         }
-    }
-
-    static ArrayList<String> splitText(String text) {
-        final ArrayList<String> out = new ArrayList<>();
-        int start = 0;
-        while (start < text.length()) {
-            int end = Math.min(text.length(), start + MAX_TEXT_CHUNK);
-            if (end < text.length()) {
-                // Prefer breaking at a line end, then at a space.
-                int nl = text.lastIndexOf('\n', end);
-                int sp = text.lastIndexOf(' ', end);
-                int brk = nl > start + MAX_TEXT_CHUNK / 2 ? nl : (sp > start + MAX_TEXT_CHUNK / 2 ? sp : -1);
-                if (brk > start) {
-                    end = brk;
-                }
-            }
-            String part = text.substring(start, end).trim();
-            if (!part.isEmpty()) {
-                out.add(out.isEmpty() ? part : CallRecStrings.transcriptContinued() + "\n" + part);
-            }
-            start = end;
-        }
-        return out;
     }
 
     private static void toast(String text) {

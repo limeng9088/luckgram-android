@@ -14,9 +14,8 @@ import java.nio.ByteOrder;
 @Keep
 final class CallRecOpusEncoder {
 
-    static final int SAMPLE_RATE = 48_000;
-    /** Samples per Opus frame (20 ms at 48 kHz); must match frame_size in audio.c. */
-    static final int FRAME_SAMPLES = 960;
+    static final int SAMPLE_RATE = CallRecMixer.RATE;
+    static final int FRAME_SAMPLES = CallRecMixer.FRAME;
     /** ~14 MB per hour, comfortably inside the 25 MB transcription limit for normal calls. */
     static final int BITRATE_BPS = 32_000;
 
