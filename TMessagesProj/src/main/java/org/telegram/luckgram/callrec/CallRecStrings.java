@@ -126,10 +126,6 @@ public final class CallRecStrings {
         return s("无法开始录音", "Couldn't start recording");
     }
 
-    public static String enableFirst() {
-        return s("请先在设置中开启通话录音", "Turn on Call Recording in Settings first");
-    }
-
     // --- Saved message ---
 
     /** File name without extension, e.g. "通话 张三 2026-10-26 15.04". */
