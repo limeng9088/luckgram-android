@@ -31,8 +31,6 @@ import org.telegram.ui.Components.URLSpanUserMention;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public final class TranslateOutController {
 
@@ -53,8 +51,6 @@ public final class TranslateOutController {
     private static final String KEY_CHAT_LANG_PREFIX = "lang_";
     private static final String KEY_RECENT = "recent";
 
-    private static final Pattern MENTION_PATTERN = Pattern.compile("(?<![\\w@])@[A-Za-z0-9_]{3,32}");
-    private static final Pattern URL_PATTERN = Pattern.compile("(?i)\\b(?:https?://|www\\.|t\\.me/)[^\\s]+");
 
     private TranslateOutController() {
     }
@@ -91,29 +87,15 @@ public final class TranslateOutController {
             return;
         }
         final SharedPreferences p = prefs(account);
-        final ArrayList<String> recent = getRecentLanguages(account);
-        recent.remove(lang);
-        recent.add(0, lang);
-        while (recent.size() > 5) {
-            recent.remove(recent.size() - 1);
-        }
+        final ArrayList<String> recent = TranslateOutLogic.updateRecent(getRecentLanguages(account), lang);
         p.edit()
             .putString(KEY_CHAT_LANG_PREFIX + dialogId, lang)
-            .putString(KEY_RECENT, TextUtils.join(",", recent))
+            .putString(KEY_RECENT, TranslateOutLogic.joinRecent(recent))
             .apply();
     }
 
     public static ArrayList<String> getRecentLanguages(int account) {
-        final ArrayList<String> result = new ArrayList<>();
-        final String s = prefs(account).getString(KEY_RECENT, null);
-        if (!TextUtils.isEmpty(s)) {
-            for (String code : s.split(",")) {
-                if (!TextUtils.isEmpty(code) && !result.contains(code)) {
-                    result.add(code);
-                }
-            }
-        }
-        return result;
+        return TranslateOutLogic.parseRecent(prefs(account).getString(KEY_RECENT, null));
     }
 
     /** Wipes everything this feature stored for the account (called on logout). */
@@ -187,15 +169,7 @@ public final class TranslateOutController {
     }
 
     private static String normalize(String lng) {
-        if (TextUtils.isEmpty(lng) || TranslateController.UNKNOWN_LANGUAGE.equals(lng)) {
-            return null;
-        }
-        lng = lng.toLowerCase(Locale.ROOT).replace('_', '-');
-        if (lng.startsWith("zh")) {
-            return "zh";
-        }
-        final int dash = lng.indexOf('-');
-        return dash > 0 ? lng.substring(0, dash) : lng;
+        return TranslateOutLogic.normalizeLanguage(lng);
     }
 
     // ---------------------------------------------------------------- translation
@@ -286,45 +260,27 @@ public final class TranslateOutController {
                 result.add(e);
             }
         }
-        addPatternEntities(text, MENTION_PATTERN, result, false);
-        addPatternEntities(text, URL_PATTERN, result, true);
+        // plain @usernames / links not covered by a non-style entity (style entities may wrap them)
+        final ArrayList<int[]> occupied = new ArrayList<>();
+        for (TLRPC.MessageEntity e : result) {
+            if (!isStyleEntity(e)) {
+                occupied.add(new int[]{e.offset, e.offset + e.length});
+            }
+        }
+        for (TranslateOutLogic.ProtectedRange r : TranslateOutLogic.protectedRanges(text, occupied)) {
+            final TLRPC.MessageEntity e = r.url ? new TLRPC.TL_messageEntityUrl() : new TLRPC.TL_messageEntityMention();
+            e.offset = r.start;
+            e.length = r.end - r.start;
+            result.add(e);
+        }
         MediaDataController.sortEntities(result);
         return result;
     }
 
-    private static void addPatternEntities(String text, Pattern pattern, ArrayList<TLRPC.MessageEntity> into, boolean url) {
-        final Matcher m = pattern.matcher(text);
-        while (m.find()) {
-            final int start = m.start();
-            int end = m.end();
-            if (url) {
-                // don't swallow trailing punctuation
-                while (end > start && ".,;:!?)]}\"'".indexOf(text.charAt(end - 1)) >= 0) {
-                    end--;
-                }
-            }
-            if (end <= start || overlaps(into, start, end)) {
-                continue;
-            }
-            final TLRPC.MessageEntity e = url ? new TLRPC.TL_messageEntityUrl() : new TLRPC.TL_messageEntityMention();
-            e.offset = start;
-            e.length = end - start;
-            into.add(e);
-        }
-    }
-
-    private static boolean overlaps(ArrayList<TLRPC.MessageEntity> entities, int start, int end) {
-        for (TLRPC.MessageEntity e : entities) {
-            if (e instanceof TLRPC.TL_messageEntityBold || e instanceof TLRPC.TL_messageEntityItalic
-                || e instanceof TLRPC.TL_messageEntityUnderline || e instanceof TLRPC.TL_messageEntityStrike
-                || e instanceof TLRPC.TL_messageEntitySpoiler || e instanceof TLRPC.TL_messageEntityBlockquote) {
-                continue; // style entities may wrap a mention/link
-            }
-            if (start < e.offset + e.length && e.offset < end) {
-                return true;
-            }
-        }
-        return false;
+    private static boolean isStyleEntity(TLRPC.MessageEntity e) {
+        return e instanceof TLRPC.TL_messageEntityBold || e instanceof TLRPC.TL_messageEntityItalic
+            || e instanceof TLRPC.TL_messageEntityUnderline || e instanceof TLRPC.TL_messageEntityStrike
+            || e instanceof TLRPC.TL_messageEntitySpoiler || e instanceof TLRPC.TL_messageEntityBlockquote;
     }
 
     /** Server text + entities -> spannable for the input field (same spans as drafts use). */
