@@ -4,7 +4,9 @@ import android.content.Context;
 import android.graphics.drawable.ColorDrawable;
 import android.view.Gravity;
 import android.view.View;
+import android.util.TypedValue;
 import android.view.ViewGroup;
+import android.widget.TextView;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 
@@ -21,6 +23,7 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.CheckBoxCell;
+import org.telegram.ui.Cells.HeaderCell;
 import org.telegram.ui.Cells.TextSettingsCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Components.BottomSheetWithRecyclerListView;
@@ -137,15 +140,23 @@ public class DialogCacheBottomSheet extends BottomSheetWithRecyclerListView {
 
         // Luckgram 08 (cache): per-chat keep-media override (not for Saved Messages, which is always kept)
         if (entities != null && entities.dialogId != CacheControlActivity.UNKNOWN_CHATS_DIALOG_ID && entities.dialogId != baseFragment.getUserConfig().getClientUserId()) {
+            HeaderCell keepMediaHeader = new HeaderCell(context);
+            keepMediaHeader.setText(LuckgramCacheStrings.chatKeepMedia());
+            linearLayout.addView(keepMediaHeader, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
             TextSettingsCell keepMediaCell = new TextSettingsCell(context);
             keepMediaCell.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
             keepMediaCell.setTextValueColor(Theme.getColor(Theme.key_dialogTextBlue));
             keepMediaCell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
             CacheByChatsController controller = baseFragment.getMessagesController().getCacheByChatsController();
-            keepMediaCell.setTextAndValue(LuckgramCacheStrings.chatKeepMedia(), LuckgramChatKeepMedia.valueFor(controller, entities.dialogId), true);
+            keepMediaCell.setTextAndValue(LuckgramCacheStrings.chatKeepMediaRow(), LuckgramChatKeepMedia.valueFor(controller, entities.dialogId), true);
             keepMediaCell.setOnClickListener(v -> LuckgramChatKeepMedia.showPicker(baseFragment, entities.dialogId, entities.totalSize, () ->
-                    keepMediaCell.setTextAndValue(LuckgramCacheStrings.chatKeepMedia(), LuckgramChatKeepMedia.valueFor(controller, entities.dialogId), true, true)));
+                    keepMediaCell.setTextAndValue(LuckgramCacheStrings.chatKeepMediaRow(), LuckgramChatKeepMedia.valueFor(controller, entities.dialogId), true, true)));
             linearLayout.addView(keepMediaCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            TextView keepMediaInfo = new TextView(context);
+            keepMediaInfo.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+            keepMediaInfo.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText4));
+            keepMediaInfo.setText(LuckgramCacheStrings.chatKeepMediaInfo(AndroidUtilities.formatFileSize(entities.totalSize)));
+            linearLayout.addView(keepMediaInfo, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 21, 4, 21, 12));
         }
         CheckBoxCell lastCreatedCheckbox = null;
         for (int a = 0; a < 8; a++) {

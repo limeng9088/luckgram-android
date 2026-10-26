@@ -78,7 +78,7 @@ public final class LuckgramChatKeepMedia {
         TextView info = new TextView(activity);
         info.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         info.setTextColor(Theme.getColor(Theme.key_dialogTextGray3));
-        info.setText(LuckgramCacheStrings.chatUsesSpace(AndroidUtilities.formatFileSize(Math.max(0, sizeBytes))) + "\n" + LuckgramCacheStrings.chatKeepMediaInfo());
+        info.setText(LuckgramCacheStrings.chatKeepMediaInfo(AndroidUtilities.formatFileSize(Math.max(0, sizeBytes))));
         linearLayout.addView(info, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 24, 0, 24, 8));
 
         for (int a = 0; a < options.length; a++) {

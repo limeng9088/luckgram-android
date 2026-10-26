@@ -73,9 +73,14 @@ public final class LuckgramCacheStrings {
         return gigabytes + " GB";
     }
 
-    /** Row title in the per-chat storage sheet. */
+    /** Section header / chooser title of the per-chat keep-media setting (same text on iOS). */
     public static String chatKeepMedia() {
         return t("本聊天媒体保留时间", "Keep media for this chat");
+    }
+
+    /** Row title of the per-chat keep-media setting (same text on iOS). */
+    public static String chatKeepMediaRow() {
+        return t("保留时间", "Keep media");
     }
 
     /** Value shown when the chat follows its category default. */
@@ -88,13 +93,11 @@ public final class LuckgramCacheStrings {
         return isChinese() ? "使用分类默认值（" + categoryValue + "）" : "Use default (" + categoryValue + ")";
     }
 
-    public static String chatUsesSpace(String size) {
-        return isChinese() ? "该聊天在本机占用 " + size : "This chat uses " + size + " on this device";
-    }
-
-    public static String chatKeepMediaInfo() {
-        return t("覆盖私聊 / 群组 / 频道的分类设置。收藏夹里的媒体和正在下载的文件不会被自动清理。",
-                "Overrides the private chats / groups / channels setting. Media in Saved Messages and files being downloaded are never removed automatically.");
+    /** Description under the per-chat keep-media setting (same text on iOS). */
+    public static String chatKeepMediaInfo(String size) {
+        return isChinese()
+                ? "该聊天在本机占用 " + size + "。这里的设置会覆盖私聊 / 群组 / 频道的分类设置。收藏夹里的媒体和正在下载的文件不会被自动清理。"
+                : "This chat uses " + size + " on this device. This setting overrides the private chats / groups / channels setting. Media in Saved Messages and files being downloaded are never removed automatically.";
     }
 
     /** Profile "…" menu entry. */
