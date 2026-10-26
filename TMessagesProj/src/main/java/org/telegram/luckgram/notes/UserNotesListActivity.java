@@ -33,7 +33,6 @@ import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.ProfileActivity;
 
 import java.util.ArrayList;
-import java.util.Locale;
 
 /** "All notes": every private note of the current account, searchable by note text and name. */
 public class UserNotesListActivity extends BaseFragment {
@@ -170,11 +169,8 @@ public class UserNotesListActivity extends BaseFragment {
     private void applyQuery(String q) {
         query = q == null ? "" : q.trim();
         shownItems.clear();
-        String needle = query.toLowerCase(Locale.getDefault());
         for (Item item : allItems) {
-            if (needle.isEmpty()
-                    || item.note.toLowerCase(Locale.getDefault()).contains(needle)
-                    || item.name.toLowerCase(Locale.getDefault()).contains(needle)) {
+            if (UserNotesText.matches(query, item.note, item.name)) {
                 shownItems.add(item);
             }
         }
@@ -188,15 +184,7 @@ public class UserNotesListActivity extends BaseFragment {
 
     /** Text shown under the name: the line of the note that matches the query, else the first line. */
     private String snippet(Item item) {
-        if (!query.isEmpty()) {
-            String needle = query.toLowerCase(Locale.getDefault());
-            for (String line : item.note.split("\n")) {
-                if (line.toLowerCase(Locale.getDefault()).contains(needle)) {
-                    return line.trim();
-                }
-            }
-        }
-        return UserNotesStore.firstLine(item.note);
+        return UserNotesText.snippet(item.note, query);
     }
 
     private class ListAdapter extends RecyclerListView.SelectionAdapter {

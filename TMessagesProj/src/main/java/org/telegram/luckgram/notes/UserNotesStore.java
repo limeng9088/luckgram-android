@@ -30,7 +30,7 @@ public final class UserNotesStore {
     public static final String FEATURE_KEY = "user_notes";
     public static final boolean FEATURE_DEFAULT = true;
 
-    public static final int MAX_LENGTH = 2000;
+    public static final int MAX_LENGTH = UserNotesText.MAX_LENGTH;
 
     private static final String PREFS_PREFIX = "luckgram_notes_";
     private static final String KEY_NOTE = "n_";
@@ -89,10 +89,7 @@ public final class UserNotesStore {
         if (p == null || peerId == 0) {
             return;
         }
-        String value = note == null ? "" : note.trim();
-        if (value.codePointCount(0, value.length()) > MAX_LENGTH) {
-            value = value.substring(0, value.offsetByCodePoints(0, MAX_LENGTH));
-        }
+        String value = UserNotesText.normalize(note);
         SharedPreferences.Editor e = p.edit();
         if (value.isEmpty()) {
             e.remove(KEY_NOTE + peerId).remove(KEY_TIME + peerId).remove(KEY_EXPANDED + peerId);
@@ -159,16 +156,7 @@ public final class UserNotesStore {
 
     /** First non-empty line of a note. */
     public static String firstLine(String note) {
-        if (note == null) {
-            return "";
-        }
-        for (String line : note.split("\n")) {
-            String s = line.trim();
-            if (!s.isEmpty()) {
-                return s;
-            }
-        }
-        return "";
+        return UserNotesText.firstLine(note);
     }
 
     /** Removes every note of the given account. Called on logout and account deletion. */
