@@ -16134,6 +16134,7 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         getUserConfig().clearConfig();
         SharedPrefsHelper.cleanupAccount(currentAccount);
+        org.telegram.luckgram.translateout.TranslateOutController.clearAccount(currentAccount); // Luckgram: translate-out per-chat languages
 
         boolean shouldHandle = true;
         ArrayList<NotificationCenter.NotificationCenterDelegate> observers = getNotificationCenter().getObservers(NotificationCenter.appDidLogout);
