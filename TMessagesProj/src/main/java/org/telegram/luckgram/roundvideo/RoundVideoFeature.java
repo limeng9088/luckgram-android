@@ -31,7 +31,7 @@ public final class RoundVideoFeature {
     public static final boolean DEFAULT_VALUE = true;
 
     /** Longest round video Telegram accepts, ms. */
-    public static final long MAX_DURATION_MS = 60_000L;
+    public static final long MAX_DURATION_MS = RoundVideoGeometry.MAX_DURATION_MS;
 
     private RoundVideoFeature() {
     }
@@ -57,17 +57,13 @@ public final class RoundVideoFeature {
      * Only a single, real video (no live photo, no paid media) in a normal chat qualifies.
      */
     public static boolean canOffer(ChatActivity chatActivity, MediaController.PhotoEntry entry, int selectedCount, boolean editing, long starsPrice) {
-        if (!isEnabled() || editing || chatActivity == null || entry == null || selectedCount != 1 || starsPrice > 0) {
-            return false;
-        }
-        if (!entry.isVideo || entry.isLivePhoto() || entry.path == null || !new File(entry.path).exists()) {
-            return false;
-        }
-        if (chatActivity.isInScheduleMode() || chatActivity.getParentActivity() == null) {
+        if (chatActivity == null || entry == null || chatActivity.getParentActivity() == null) {
             return false;
         }
         TLRPC.Chat chat = chatActivity.getCurrentChat();
-        return chat == null || ChatObject.canSendRoundVideo(chat);
+        return RoundVideoGeometry.canOffer(isEnabled(), editing, selectedCount, entry.isVideo, entry.isLivePhoto(),
+                entry.path != null && new File(entry.path).exists(), starsPrice, chatActivity.isInScheduleMode(),
+                chat == null || ChatObject.canSendRoundVideo(chat));
     }
 
     /** Opens the crop screen; {@code onSent} runs after the round video was handed to the chat. */
