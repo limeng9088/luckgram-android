@@ -153,7 +153,11 @@ jobs:
           TOKEN_PROD: ${{ secrets.LUCKGRAM_RELEASE_TOKEN_PROD }}
         run: |
           VER=$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)
-          CODE=$(grep APP_VERSION_CODE gradle.properties | cut -d= -f2)
+          # build = CI run number: APP_VERSION_CODE stays the same across
+          # releases of one versionName (run 6 and run 36 are both 7183), and the
+          # installed versionCode is APP_VERSION_CODE*10+abi. The app reports the
+          # same run number (BuildConfig.LUCKGRAM_BUILD, S5 app part).
+          CODE=$GITHUB_RUN_NUMBER
           TAG="android-${VER}-${GITHUB_RUN_NUMBER}"
           APK=$(basename out/*.apk)
           BODY=$(printf '{"platform":"%s","version":"%s","build":%s,"url":"%s","source":"%s"}' \
