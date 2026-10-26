@@ -1,9 +1,8 @@
 /*
  * Luckgram: the AI calls call recording needs (spec 04 §4: /v1/transcribe, then /v1/chat task=summary).
  *
- * All AI traffic must go through the shared LuckgramAI client of feature 00 (gateway, device token,
- * consent dialog, error mapping). That client registers an implementation here; until it does,
- * {@link #get()} returns null and recordings are saved as audio only.
+ * All AI traffic goes through the shared LuckgramAI client of feature 00 (gateway, device token,
+ * consent dialog, error mapping, segmenting); see {@link CallRecLuckgramAi}.
  */
 package org.telegram.luckgram.callrec;
 
@@ -50,19 +49,8 @@ public interface CallRecAi {
     /** POST /v1/chat, task=summary; result is 3–6 bullet points summarising the transcript. */
     void summarize(@NonNull String transcript, @NonNull Callback callback);
 
-    final class Registry {
-        private static volatile CallRecAi instance;
-
-        private Registry() {
-        }
-
-        /** Called once by the LuckgramAI client (feature 00). */
-        public static void register(@Nullable CallRecAi ai) {
-            instance = ai;
-        }
-    }
-
-    static @Nullable CallRecAi get() {
-        return Registry.instance;
+    /** The LuckgramAI-backed implementation (feature 00). */
+    static @NonNull CallRecAi get() {
+        return CallRecLuckgramAi.INSTANCE;
     }
 }
