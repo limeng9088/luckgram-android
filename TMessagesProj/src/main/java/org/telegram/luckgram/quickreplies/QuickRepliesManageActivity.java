@@ -153,7 +153,7 @@ public class QuickRepliesManageActivity extends BaseFragment {
         if (getParentActivity() == null) {
             return;
         }
-        if (index < 0 && items.size() >= QuickRepliesStore.MAX_COUNT) {
+        if (index < 0 && !QuickRepliesLogic.canAdd(items.size())) {
             BulletinFactory.of(this).createErrorBulletin(QuickRepliesStrings.limitReached()).show();
             return;
         }
@@ -187,7 +187,7 @@ public class QuickRepliesManageActivity extends BaseFragment {
                 return;
             }
             if (index < 0) {
-                if (items.size() >= QuickRepliesStore.MAX_COUNT) {
+                if (!QuickRepliesLogic.canAdd(items.size())) {
                     BulletinFactory.of(this).createErrorBulletin(QuickRepliesStrings.limitReached()).show();
                     return;
                 }

@@ -16,7 +16,6 @@ import org.telegram.messenger.FileLog;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public final class QuickRepliesStore {
 
@@ -24,8 +23,8 @@ public final class QuickRepliesStore {
     public static final String FEATURE_KEY = "quick_replies";
     public static final boolean FEATURE_DEFAULT = true;
 
-    public static final int MAX_COUNT = 100;
-    public static final int MAX_LENGTH = 1000;
+    public static final int MAX_COUNT = QuickRepliesLogic.MAX_COUNT;
+    public static final int MAX_LENGTH = QuickRepliesLogic.MAX_LENGTH;
 
     private static final String DEVICE_PREFS = "luckgram_settings";
     private static final String ACCOUNT_PREFS_PREFIX = "luckgram_quick_replies_";
@@ -93,17 +92,7 @@ public final class QuickRepliesStore {
 
     /** Normalizes user input; returns null if it is empty after trimming. */
     public static String normalize(CharSequence text) {
-        if (text == null) {
-            return null;
-        }
-        String s = text.toString().trim();
-        if (s.isEmpty()) {
-            return null;
-        }
-        if (s.length() > MAX_LENGTH) {
-            s = s.substring(0, MAX_LENGTH);
-        }
-        return s;
+        return QuickRepliesLogic.normalize(text);
     }
 
     /** Templates starting with {@code query} (case insensitive), for the "/" suggestions. */
@@ -112,12 +101,7 @@ public final class QuickRepliesStore {
         if (!isEnabled()) {
             return result;
         }
-        final String q = query == null ? "" : query.toLowerCase(Locale.ROOT);
-        for (String s : get(account)) {
-            if (s.toLowerCase(Locale.ROOT).startsWith(q)) {
-                result.add(s);
-            }
-        }
+        result.addAll(QuickRepliesLogic.matching(get(account), query));
         return result;
     }
 
