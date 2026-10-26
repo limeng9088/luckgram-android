@@ -1,12 +1,13 @@
 name: QA E2E (Android emulator + Maestro)
 
-# 在 GitHub ubuntu 机器上起 Android 模拟器（KVM），装 QA 测试包（登录页带「Test Backend」），
-# 跑 limeng9088/luckgram-qa 里的 Maestro 用例。用例和账号池都在 luckgram-qa，见其 README。
+# QA 测试包（qa=true：登录页带「Test Backend」，abis=x86_64）在 GitHub ubuntu 上编译，
+# 再到 QA 专用 Windows 机器 xs-master（self-hosted, qa-android）上起 Android 模拟器跑
+# limeng9088/luckgram-qa 里的 Maestro 用例。用例和账号池见 luckgram-qa README。
 on:
   workflow_dispatch:
     inputs:
       build_run_id:
-        description: '已有 QA 包的 run id（Build Luckgram APK，qa=true，abis 含 x86_64）；留空则先在本分支编一个（约 40 分钟）'
+        description: '已有 QA 包的 run id（产物 luckgram-android-qa-*，abis 含 x86_64）；留空则先在本分支编一个（约 40 分钟）'
         required: false
         default: ''
       flows:
@@ -21,19 +22,18 @@ on:
         description: 'luckgram-qa 的分支 / commit'
         required: false
         default: 'master'
-      api_level:
-        description: '模拟器 Android API level'
+      maestro_args:
+        description: '额外的 maestro test 参数，例如 --exclude-tags=needs-peer'
         required: false
-        default: '34'
-  push:  # TEMP: 验证用，开 PR 前删除
-    branches: [ci/qa-test-backend]
+        default: ''
   schedule:
     # master 每晚回归：北京时间 02:00
     - cron: '0 18 * * *'
 
+# 同一分支只保留最新一次 E2E；xs-master 只有一个 runner，同一时间只会跑一个模拟器
 concurrency:
-  group: qa-e2e-${{ github.ref }}
-  cancel-in-progress: false
+  group: qa-e2e-android-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write   # 复用 build.yml 需要；QA 包不会发 release
@@ -51,14 +51,20 @@ jobs:
   e2e:
     needs: build
     if: ${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    runs-on: [self-hosted, qa-android]
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
     env:
       FLOWS: ${{ github.event_name == 'schedule' && 'maestro/android/smoke maestro/android/regression' || inputs.flows || 'maestro/android/smoke' }}
       ACCOUNT: ${{ github.event_name == 'schedule' && 'RA' || inputs.account || 'A1' }}
-      API_LEVEL: ${{ inputs.api_level || '34' }}
-      OUT: ${{ github.workspace }}/qa-out
+      MAESTRO_ARGS: ${{ inputs.maestro_args }}
+      OUT: ${{ github.workspace }}\qa-out
     steps:
+      - name: Clean workspace
+        run: Remove-Item -Recurse -Force qa, apk, qa-out -ErrorAction SilentlyContinue
+
       - name: Checkout luckgram-qa
         uses: actions/checkout@v4
         with:
@@ -78,43 +84,29 @@ jobs:
 
       - name: Check APK
         run: |
-          APK=$(ls apk/*-qa.apk | head -1)
-          test -n "$APK" || { echo "::error::no *-qa.apk in run ${{ inputs.build_run_id || github.run_id }}（需要 qa=true 的构建）"; exit 1; }
-          unzip -l "$APK" | grep -q 'lib/x86_64/' || { echo "::error::$APK has no x86_64 libs; rebuild with abis=x86_64"; exit 1; }
-          echo "APK=$GITHUB_WORKSPACE/$APK" >> "$GITHUB_ENV"
-          ls -l "$APK"
-
-      - name: Test account
-        run: python3 qa/ci/account.py "$ACCOUNT" >> "$GITHUB_ENV"
-
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Install Maestro
-        run: bash qa/ci/install-maestro.sh
+          $apk = Get-ChildItem apk -Filter *-qa.apk | Select-Object -First 1
+          if (-not $apk) { Write-Host "::error::no *-qa.apk（需要 qa=true 的构建）"; exit 1 }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead($apk.FullName)
+          $x86 = $zip.Entries | Where-Object FullName -like 'lib/x86_64/*' | Select-Object -First 1
+          $zip.Dispose()
+          if (-not $x86) { Write-Host "::error::$($apk.Name) has no x86_64 libs; rebuild with abis=x86_64"; exit 1 }
+          "APK=$($apk.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $apk | Format-List Name, Length
 
       - name: Run Maestro on emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: ${{ env.API_LEVEL }}
-          arch: x86_64
-          target: google_apis
-          profile: pixel_6
-          ram-size: 4096M
-          disk-size: 6000M
-          force-avd-creation: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          disable-animations: true
-          script: bash qa/ci/android-run.sh "$APK" $FLOWS
+        # 每个 flow 最多 10 分钟，整步最多 30 分钟（脚本内预算 27 分钟，超时前停下来，保证后面能上传产物）
+        timeout-minutes: 30
+        run: |
+          $flows = $env:FLOWS.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+          ./qa/ci/android-run.ps1 -Apk $env:APK -Account $env:ACCOUNT -Flows $flows -Out $env:OUT -FlowTimeoutMin 10 -BudgetMin 27
+
+      - name: Stop emulator (safety net)
+        if: always()
+        run: |
+          # 只按端口关我们自己的模拟器；不要按进程名结束 qemu-system-x86_64（本机还有 Debian 虚拟机）
+          $adb = Join-Path $env:ANDROID_HOME 'platform-tools\adb.exe'
+          if ((& $adb devices) -match '^emulator-5554\s') { & $adb -s emulator-5554 emu kill }
 
       - name: Upload report
         if: always()
