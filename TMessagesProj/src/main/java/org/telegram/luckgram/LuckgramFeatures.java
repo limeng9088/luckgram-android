@@ -47,6 +47,9 @@ public final class LuckgramFeatures {
         // ---- 账号与隐私 / Accounts & Privacy
 
         // ---- 消息与语言 / Messages & Language
+        add(toggle("translate_out", MESSAGES_LANGUAGE, true,
+            "发送前翻译", "Translate before sending",
+            "在输入框里先翻译成对方的语言再发送", "Translate your message into the other person's language before sending"));
 
         // ---- 媒体、通话与存储 / Media, Calls & Storage
         add(toggle(ROUND_VIDEO_FROM_GALLERY, MEDIA_CALLS_STORAGE, true,
