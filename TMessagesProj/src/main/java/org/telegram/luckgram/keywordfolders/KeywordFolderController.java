@@ -115,7 +115,12 @@ public class KeywordFolderController extends BaseController implements Notificat
 
     private KeywordFolderController(int num) {
         super(num);
-        AndroidUtilities.runOnUIThread(() -> getNotificationCenter().addObserver(this, NotificationCenter.didReceiveNewMessages));
+        AndroidUtilities.runOnUIThread(() -> {
+            getNotificationCenter().addObserver(this, NotificationCenter.didReceiveNewMessages);
+            // Edits and deletions can add or remove a hit (#51).
+            getNotificationCenter().addObserver(this, NotificationCenter.replaceMessagesObjects);
+            getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
+        });
     }
 
     private SharedPreferences prefs() {
@@ -488,7 +493,36 @@ public class KeywordFolderController extends BaseController implements Notificat
     @Override
     @SuppressWarnings("unchecked")
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (id != NotificationCenter.didReceiveNewMessages || !isEnabled() || !loaded || folders.isEmpty()) {
+        if (!isEnabled() || !loaded || folders.isEmpty()) {
+            return;
+        }
+        if (id == NotificationCenter.replaceMessagesObjects) {
+            if (args.length > 0 && args[0] instanceof Long) {
+                HashSet<Long> dids = new HashSet<>();
+                dids.add((Long) args[0]);
+                recheckDialogs(dids);
+            }
+            return;
+        }
+        if (id == NotificationCenter.messagesDeleted) {
+            if (args.length > 2 && args[2] instanceof Boolean && (Boolean) args[2]) {
+                return; // scheduled messages
+            }
+            HashSet<Long> dids = new HashSet<>();
+            long channelId = args.length > 1 && args[1] instanceof Long ? (Long) args[1] : 0;
+            if (channelId != 0) {
+                dids.add(-channelId);
+            } else {
+                // Private chats and basic groups: the event does not say which chat, so re-check
+                // every chat that currently counts as a hit.
+                for (HashSet<Long> set : matches.values()) {
+                    dids.addAll(set);
+                }
+            }
+            recheckDialogs(dids);
+            return;
+        }
+        if (id != NotificationCenter.didReceiveNewMessages) {
             return;
         }
         if (args.length > 2 && args[2] instanceof Boolean && (Boolean) args[2]) {
@@ -523,6 +557,84 @@ public class KeywordFolderController extends BaseController implements Notificat
             this.messageId = messageId;
             this.keyword = keyword;
         }
+    }
+
+    /**
+     * Re-evaluates hits of the given chats from the latest cached messages, after edits or deletions.
+     * Queued behind the storage writes for the same change, so it reads the updated rows.
+     */
+    private void recheckDialogs(HashSet<Long> dids) {
+        if (dids.isEmpty()) {
+            return;
+        }
+        final int token = scanToken;
+        final ArrayList<KeywordFolder> snapshot = new ArrayList<>();
+        for (KeywordFolder f : folders) {
+            snapshot.add(f.copy());
+        }
+        final ArrayList<Long> dialogIds = new ArrayList<>(dids);
+        getMessagesStorage().getStorageQueue().postRunnable(() -> {
+            final HashMap<Integer, HashSet<Long>> found = new HashMap<>();
+            SQLiteCursor cursor = null;
+            try {
+                SQLiteDatabase db = getMessagesStorage().getDatabase();
+                for (long did : dialogIds) {
+                    cursor = db.queryFinalized(String.format(Locale.US, "SELECT data FROM messages_v2 WHERE uid = %d ORDER BY date DESC LIMIT %d", did, RECENT_MESSAGES_LIMIT));
+                    while (cursor.next()) {
+                        NativeByteBuffer data = cursor.byteBufferValue(0);
+                        if (data == null) {
+                            continue;
+                        }
+                        TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                        data.reuse();
+                        CharSequence text = textOf(message);
+                        if (text == null || text.length() == 0) {
+                            continue;
+                        }
+                        for (KeywordFolder f : snapshot) {
+                            if (KeywordMatcher.matchesAny(text, f.keywords)) {
+                                HashSet<Long> set = found.get(f.id);
+                                if (set == null) {
+                                    set = new HashSet<>();
+                                    found.put(f.id, set);
+                                }
+                                set.add(did);
+                            }
+                        }
+                    }
+                    cursor.dispose();
+                    cursor = null;
+                }
+            } catch (Exception e) {
+                FileLog.e(e);
+                return;
+            } finally {
+                if (cursor != null) {
+                    cursor.dispose();
+                }
+            }
+            AndroidUtilities.runOnUIThread(() -> {
+                if (token != scanToken) {
+                    return; // a full rescan is under way and will replace everything
+                }
+                boolean changed = false;
+                for (KeywordFolder f : snapshot) {
+                    HashSet<Long> hits = found.get(f.id);
+                    for (long did : dialogIds) {
+                        boolean hit = hits != null && hits.contains(did);
+                        HashSet<Long> set = matches.get(f.id);
+                        if (hit) {
+                            changed |= addMatch(f.id, did);
+                        } else if (set != null) {
+                            changed |= set.remove(did);
+                        }
+                    }
+                }
+                if (changed) {
+                    notifyFoldersChanged();
+                }
+            });
+        });
     }
 
     /**
