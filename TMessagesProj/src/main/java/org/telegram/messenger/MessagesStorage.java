@@ -3684,12 +3684,21 @@ public class MessagesStorage extends BaseController {
 
     public void saveDialogFiltersOrder() {
         ArrayList<MessagesController.DialogFilter> filtersFinal = new ArrayList<>(getMessagesController().dialogFilters);
+        // Luckgram: keyword folders are local; keep their position in our own store, not in dialog_filter
+        for (int i = 0; i < filtersFinal.size(); i++) {
+            filtersFinal.get(i).order = i;
+        }
+        org.telegram.luckgram.keywordfolders.KeywordFolderController.getInstance(currentAccount).saveOrders(filtersFinal);
+        for (int i = filtersFinal.size() - 1; i >= 0; i--) {
+            if (filtersFinal.get(i).isKeywordFolder()) {
+                filtersFinal.remove(i);
+            }
+        }
         storageQueue.postRunnable(() -> {
             dialogFilters.clear();
             dialogFiltersMap.clear();
             dialogFilters.addAll(filtersFinal);
             for (int i = 0; i < filtersFinal.size(); i++) {
-                filtersFinal.get(i).order = i;
                 dialogFiltersMap.put(filtersFinal.get(i).id, filtersFinal.get(i));
             }
             saveDialogFiltersOrderInternal();

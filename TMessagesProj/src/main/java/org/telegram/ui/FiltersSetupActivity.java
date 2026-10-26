@@ -427,7 +427,9 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
             shareImageView.setVisibility(filter.isChatlist() ? VISIBLE : GONE);
 
             StringBuilder info = new StringBuilder();
-            if (filter.isDefault() || (filter.flags & MessagesController.DIALOG_FILTER_FLAG_ALL_CHATS) == MessagesController.DIALOG_FILTER_FLAG_ALL_CHATS) {
+            if (filter.isKeywordFolder()) {
+                info.append(org.telegram.luckgram.keywordfolders.KeywordFolderUi.describe(filter.keywordFolder));
+            } else if (filter.isDefault() || (filter.flags & MessagesController.DIALOG_FILTER_FLAG_ALL_CHATS) == MessagesController.DIALOG_FILTER_FLAG_ALL_CHATS) {
                 info.append(LocaleController.getString(R.string.FilterAllChats));
             } else {
                 if ((filter.flags & MessagesController.DIALOG_FILTER_FLAG_CONTACTS) != 0) {
@@ -461,7 +463,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
                     info.append(LocaleController.getString(R.string.FilterBots));
                 }
             }
-            if (!filter.alwaysShow.isEmpty() || !filter.neverShow.isEmpty()) {
+            if (!filter.isKeywordFolder() && (!filter.alwaysShow.isEmpty() || !filter.neverShow.isEmpty())) {
                 if (info.length() != 0) {
                     info.append(", ");
                 }
@@ -595,6 +597,11 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
         if (dialogFilters.size() < getMessagesController().dialogFiltersLimitPremium) {
             items.add(ItemInner.asButton(LocaleController.getString(R.string.CreateNewFilter)));
         }
+        if (org.telegram.luckgram.keywordfolders.KeywordFolderController.isEnabled() && org.telegram.luckgram.keywordfolders.KeywordFolderController.getInstance(currentAccount).canCreate()) {
+            ItemInner keywordButton = ItemInner.asButton(org.telegram.luckgram.keywordfolders.KeywordFolderStrings.newFolder());
+            keywordButton.keywordFolderButton = true;
+            items.add(keywordButton);
+        }
         items.add(ItemInner.asShadow(null));
         folderTagsPosition = items.size();
         showTagsRow = items.size();
@@ -623,6 +630,9 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
             ArrayList<MessagesController.DialogFilter> filters = getMessagesController().getDialogFilters();
             for (int a = 0, N = filters.size(); a < N; a++) {
                 MessagesController.DialogFilter filter = filters.get(a);
+                if (filter.isKeywordFolder()) {
+                    continue; // Luckgram: local keyword folder, not known to the server
+                }
                 req.order.add(filter.id);
             }
             getConnectionsManager().sendRequest(req, (response, error) -> {
@@ -709,11 +719,15 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
                 if (filter == null || filter.isDefault()) {
                     return;
                 }
-                if (filter.locked) {
+                if (filter.isKeywordFolder()) {
+                    presentFragment(new org.telegram.luckgram.keywordfolders.KeywordFolderEditActivity(filter.keywordFolder.id));
+                } else if (filter.locked) {
                     showDialog(new LimitReachedBottomSheet(this, context, LimitReachedBottomSheet.TYPE_FOLDERS, currentAccount, null));
                 } else {
                     presentFragment(new FilterCreateActivity(filter));
                 }
+            } else if (item.viewType == VIEW_TYPE_BUTTON && item.keywordFolderButton) {
+                org.telegram.luckgram.keywordfolders.KeywordFolderUi.openCreate(this);
             } else if (item.viewType == VIEW_TYPE_BUTTON) {
                 createFolder(getParentLayout());
             }
@@ -732,7 +746,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
     }
 
     public void createFolder(INavigationLayout navigationLayout) {
-        final int count = getMessagesController().getDialogFilters().size();
+        final int count = org.telegram.luckgram.keywordfolders.KeywordFolderUi.cloudFolderCount(getMessagesController()) + 1;
         if (
             count - 1 >= getMessagesController().dialogFiltersLimitDefault && !getUserConfig().isPremium() ||
             count >= getMessagesController().dialogFiltersLimitPremium
@@ -796,6 +810,7 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
         MessagesController.DialogFilter filter;
         int filterColor;
         TLRPC.TL_dialogFilterSuggested suggested;
+        boolean keywordFolderButton;
 
         public static ItemInner asHeader(CharSequence text) {
             ItemInner i = new ItemInner(VIEW_TYPE_HEADER);
@@ -912,13 +927,19 @@ public class FiltersSetupActivity extends BaseFragment implements NotificationCe
                         MessagesController.DialogFilter filter = cell.getCurrentFilter();
                         ItemOptions options = ItemOptions.makeOptions(FiltersSetupActivity.this, cell);
                         options.add(R.drawable.msg_edit, LocaleController.getString(R.string.FilterEditItem), () -> {
-                            if (filter.locked) {
+                            if (filter.isKeywordFolder()) {
+                                presentFragment(new org.telegram.luckgram.keywordfolders.KeywordFolderEditActivity(filter.keywordFolder.id));
+                            } else if (filter.locked) {
                                 showDialog(new LimitReachedBottomSheet(FiltersSetupActivity.this, mContext, LimitReachedBottomSheet.TYPE_FOLDERS, currentAccount, null));
                             } else {
                                 presentFragment(new FilterCreateActivity(filter));
                             }
                         });
                         options.add(R.drawable.msg_delete, LocaleController.getString(R.string.FilterDeleteItem), true, () -> {
+                            if (filter.isKeywordFolder()) {
+                                org.telegram.luckgram.keywordfolders.KeywordFolderUi.showDeleteAlert(FiltersSetupActivity.this, filter.keywordFolder, () -> updateRows(true));
+                                return;
+                            }
                             if (filter.isChatlist()) {
                                 FolderBottomSheet.showForDeletion(FiltersSetupActivity.this, filter.id, success -> {
                                     updateRows(true);
