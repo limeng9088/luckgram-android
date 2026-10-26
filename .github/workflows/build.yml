@@ -133,6 +133,36 @@ jobs:
           grep -n QA_BUILD "$F"
           grep -q "QA_BUILD = $QA;" "$F" || { echo "::error::QA_BUILD does not match QA=$QA"; exit 1; }
 
+      # 从最终 APK 的 dex 里读 BuildConfig（luckgram-qa/ci/apk-buildconfig.py，w-1014）：
+      # 正式包 QA_BUILD 必须为 False、API 是正式地址；QA 包 QA_BUILD 必须为 True。
+      - name: Checkout luckgram-qa (APK checks)
+        uses: actions/checkout@v4
+        with:
+          repository: limeng9088/luckgram-qa
+          ref: master
+          ssh-key: ${{ secrets.QA_REPO_DEPLOY_KEY }}
+          path: .qa
+
+      - name: Verify BuildConfig in APK
+        run: |
+          APK=TMessagesProj_App/build/outputs/apk/afat/release/app.apk
+          python3 .qa/ci/apk-buildconfig.py "$APK" | tee /tmp/buildconfig.txt
+          python3 - <<'PY'
+          import os, re, sys
+          vals = dict(re.findall(r"^(\w+) = (.*)$", open("/tmp/buildconfig.txt").read(), re.M))
+          qa = os.environ["QA"] == "true"
+          if vals.get("QA_BUILD") != ("True" if qa else "False"):
+              sys.exit(f"::error::QA_BUILD in APK is {vals.get('QA_BUILD')!r}, expected {qa} (QA={os.environ['QA']})")
+          url = vals.get("LUCKGRAM_API_URL")
+          if url is not None:
+              url = url.strip("'")
+              if not qa and url != "https://api.luckgram.cc":
+                  sys.exit(f"::error::release APK points to {url}, expected https://api.luckgram.cc")
+              if qa and url != "https://api-dev.luckgram.cc":
+                  print(f"::warning::QA APK points to {url}; QA builds should use https://api-dev.luckgram.cc")
+          print("BuildConfig OK")
+          PY
+
       - name: Verify signing certificate
         env:
           # Luckgram 正式签名证书 SHA-256（公开信息）
