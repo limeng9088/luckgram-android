@@ -188,9 +188,12 @@ public final class LuckgramSettings {
 
     // ---------------------------------------------------------------- debug tools
 
-    /** Debug builds only (spec 00: debug_demo 仅调试构建可见). QA uses the qa build, never a release build. */
+    /**
+     * Debug builds and QA test builds ({@code -PLUCKGRAM_QA=true}) only; never in a normal release
+     * build (spec 00: debug_demo 仅调试构建可见, issues #37 / #44).
+     */
     public static boolean isDebugToolsVisible() {
-        return BuildConfig.DEBUG;
+        return BuildConfig.DEBUG || BuildConfig.QA_BUILD;
     }
 
     // ---------------------------------------------------------------- logout cleanup
