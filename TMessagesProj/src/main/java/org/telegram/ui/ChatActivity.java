@@ -591,6 +591,12 @@ public class ChatActivity extends BaseFragment implements
     private View emojiButtonRed;
     private FrameLayout pinnedMessageView;
     private org.telegram.luckgram.notes.UserNoteChatBar luckNoteBar; // Luckgram: private notes (spec 05)
+    // Luckgram: hide / show the note bar right away when the user_notes switch changes (locally or remotely).
+    private final NotificationCenter.NotificationCenterDelegate luckSettingsObserver = (id, account, args) -> {
+        if (id == NotificationCenter.luckgramSettingsChanged && (args.length == 0 || args[0] == null || org.telegram.luckgram.notes.UserNotesStore.FEATURE_KEY.equals(args[0]))) {
+            luckUpdateNoteBar(true);
+        }
+    };
     private BluredView blurredView;
     private PinnedLineView pinnedLineView;
     private boolean setPinnedTextTranslationX;
@@ -29937,6 +29943,7 @@ public class ChatActivity extends BaseFragment implements
         super.onResume();
         checkShowBlur(false);
         activityResumeTime = System.currentTimeMillis();
+        NotificationCenter.getGlobalInstance().addObserver(luckSettingsObserver, NotificationCenter.luckgramSettingsChanged);
         luckUpdateNoteBar(false);
         if (openImport && getSendMessagesHelper().getImportingHistory(dialog_id) != null) {
             ImportingAlert alert = new ImportingAlert(getParentActivity(), null, this, themeDelegate);
@@ -30148,6 +30155,7 @@ public class ChatActivity extends BaseFragment implements
     @Override
     public void onPause() {
         super.onPause();
+        NotificationCenter.getGlobalInstance().removeObserver(luckSettingsObserver, NotificationCenter.luckgramSettingsChanged);
         scrolling = false;
         if (scrimPopupWindow != null) {
             scrimPopupWindow.setPauseNotifications(false);

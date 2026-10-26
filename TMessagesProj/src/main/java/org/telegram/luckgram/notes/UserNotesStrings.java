@@ -5,45 +5,26 @@
 
 package org.telegram.luckgram.notes;
 
-import org.telegram.messenger.LocaleController;
-
-import java.util.Locale;
-
 /**
  * Chinese / English UI strings for private notes.
  *
- * Telegram loads translations from cloud language packs, which have no keys for Luckgram features,
- * so the strings live here. Chinese is used when the selected app language is Chinese, or when the
- * app uses its default (English) pack and the system language is Chinese.
+ * Telegram's language packs have no keys for Luckgram features, so the strings live here; the
+ * Chinese / English choice is the shared Luckgram rule ({@code LuckgramStrings.isChinese()}).
  */
 public final class UserNotesStrings {
 
     private UserNotesStrings() {
     }
 
+    /** Same rule as every other Luckgram string (00 {@code LuckgramStrings}, see specs#42). */
     public static boolean isChinese() {
-        try {
-            LocaleController lc = LocaleController.getInstance();
-            LocaleController.LocaleInfo info = lc.getCurrentLocaleInfo();
-            String code = info != null ? (info.pluralLangCode != null ? info.pluralLangCode : info.shortName) : null;
-            if (code != null && code.toLowerCase(Locale.ROOT).startsWith("zh")) {
-                return true;
-            }
-            if (info == null || "en".equals(info.shortName)) {
-                Locale sys = lc.getSystemDefaultLocale();
-                return sys != null && "zh".equals(sys.getLanguage());
-            }
-        } catch (Exception ignore) {
-        }
-        return false;
+        return org.telegram.luckgram.LuckgramStrings.isChinese();
     }
 
     private static String s(String en, String zh) {
         return isChinese() ? zh : en;
     }
 
-    public static String featureName() { return s("Private notes", "私人备注"); }
-    public static String featureDescription() { return s("Notes about contacts, groups and channels that only you can see", "给联系人、群组和频道写只有自己能看到的备注"); }
 
     public static String rowTitle() { return s("Private note", "私人备注"); }
     public static String onlyYou() { return s("only visible to you", "只有你能看到"); }
