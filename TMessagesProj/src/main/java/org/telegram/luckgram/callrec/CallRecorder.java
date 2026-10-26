@@ -117,9 +117,7 @@ public final class CallRecorder {
     public void toggle(VoIPService service) {
         if (session != null) {
             stop(true);
-        } else if (!CallRecSettings.isEnabled()) {
-            toast(CallRecStrings.enableFirst());
-        } else if (isEligible(service) && service.getCallState() == VoIPService.STATE_ESTABLISHED) {
+        } else if (CallRecSettings.isEnabled() && isEligible(service) && service.getCallState() == VoIPService.STATE_ESTABLISHED) {
             start(service);
         }
     }
