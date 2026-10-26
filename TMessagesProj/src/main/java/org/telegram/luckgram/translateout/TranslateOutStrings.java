@@ -6,26 +6,17 @@
  */
 package org.telegram.luckgram.translateout;
 
-import org.telegram.messenger.LocaleController;
+import org.telegram.luckgram.LuckgramStrings;
 
-import java.util.Locale;
 
 public final class TranslateOutStrings {
 
     private TranslateOutStrings() {
     }
 
+    /** Same rule as every other Luckgram string (LuckgramStrings, feature 00). */
     public static boolean isChinese() {
-        try {
-            final LocaleController.LocaleInfo info = LocaleController.getInstance().getCurrentLocaleInfo();
-            if (info != null && info.pluralLangCode != null && info.pluralLangCode.toLowerCase(Locale.ROOT).startsWith("zh")) {
-                return true;
-            }
-            final Locale system = LocaleController.getInstance().getSystemDefaultLocale();
-            return system != null && "zh".equalsIgnoreCase(system.getLanguage());
-        } catch (Exception e) {
-            return "zh".equalsIgnoreCase(Locale.getDefault().getLanguage());
-        }
+        return LuckgramStrings.isChinese();
     }
 
     private static String s(String zh, String en) {
