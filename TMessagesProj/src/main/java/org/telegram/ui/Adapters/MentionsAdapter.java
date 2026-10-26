@@ -109,6 +109,17 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
     private HashtagHint topHint, bottomHint;
     private ArrayList<String> searchResultHashtags;
     private ArrayList<String> searchResultCommands;
+    // Luckgram: local quick reply templates (feature 02), shown after bot commands / Business quick replies
+    private ArrayList<String> luckgramTemplates;
+
+    /** A Luckgram quick reply template picked from the "/" suggestions. */
+    public static class LuckgramTemplate {
+        public final String text;
+
+        public LuckgramTemplate(String text) {
+            this.text = text;
+        }
+    }
     private ArrayList<String> searchResultCommandsHelp;
     private String quickRepliesQuery;
     private ArrayList<QuickRepliesController.QuickReply> quickReplies;
@@ -889,6 +900,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
                 searchResultUsernames = null;
                 searchResultUsernamesMap = null;
                 searchResultCommands = null;
+                luckgramTemplates = null;
                 searchResultCommandsEphemeral = null;
                 quickReplies = null;
                 searchResultSuggestions = null;
@@ -1214,7 +1226,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
 //                            delegate.needChangePanelVisibility(false);
                             return;
                         }
-                    } else if (a == 0 && botInfo != null && ch == '/') {
+                    } else if (a == 0 && ch == '/' && (botInfo != null || org.telegram.luckgram.quickreplies.QuickRepliesStore.isEnabled())) {
                         foundType = 2;
                         resultStartPosition = a;
                         resultLength = result.length() + 1;
@@ -1453,6 +1465,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
             stickers = null;
             quickReplies = null;
             searchResultCommands = null;
+            luckgramTemplates = null;
             searchResultCommandsEphemeral = null;
             searchResultCommandsHelp = null;
             searchResultCommandsUsers = null;
@@ -1544,6 +1557,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
             searchResultUsernamesMap = null;
             quickReplies = null;
             searchResultCommands = null;
+            luckgramTemplates = null;
             searchResultCommandsEphemeral = null;
             searchResultCommandsHelp = null;
             searchResultCommandsUsers = null;
@@ -1558,7 +1572,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
             ArrayList<TLRPC.User> newResultUsers = new ArrayList<>();
             ArrayList<Boolean> newResultEphemeral = new ArrayList<>();
             final String command = result.toString().toLowerCase();
-            for (int b = 0; b < botInfo.size(); b++) {
+            for (int b = 0; botInfo != null && b < botInfo.size(); b++) {
                 TL_bots.BotInfo info = botInfo.valueAt(b);
                 for (int a = 0; a < info.commands.size(); a++) {
                     TLRPC.BotCommand botCommand = info.commands.get(a);
@@ -1596,10 +1610,14 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
             searchResultCommandsHelp = newResultHelp;
             searchResultCommandsUsers = newResultUsers;
             searchResultCommandsEphemeral = newResultEphemeral;
+            luckgramTemplates = org.telegram.luckgram.quickreplies.QuickRepliesStore.search(currentAccount, result.toString());
+            if (luckgramTemplates.isEmpty()) {
+                luckgramTemplates = null;
+            }
             contextMedia = false;
             searchResultBotContext = null;
             notifyDataSetChanged();
-            delegate.needChangePanelVisibility(!newResult.isEmpty() || quickReplies != null && !quickReplies.isEmpty());
+            delegate.needChangePanelVisibility(!newResult.isEmpty() || quickReplies != null && !quickReplies.isEmpty() || luckgramTemplates != null);
         } else if (foundType == 3) {
             String[] newLanguage = AndroidUtilities.getCurrentKeyboardLanguage();
             if (!Arrays.equals(newLanguage, lastSearchKeyboardLanguage)) {
@@ -1613,6 +1631,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
                 searchResultUsernames = null;
                 searchResultUsernamesMap = null;
                 searchResultCommands = null;
+                luckgramTemplates = null;
                 searchResultCommandsEphemeral = null;
                 quickReplies = null;
                 searchResultCommandsHelp = null;
@@ -1626,6 +1645,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
             searchResultUsernamesMap = null;
             searchResultSuggestions = null;
             searchResultCommands = null;
+            luckgramTemplates = null;
             searchResultCommandsEphemeral = null;
             quickReplies = null;
             searchResultCommandsHelp = null;
@@ -1713,7 +1733,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
         } else if (searchResultHashtags != null) {
             count += searchResultHashtags.size();
         } else if (searchResultCommands != null || quickReplies != null) {
-            count += (quickReplies == null ? 0 : quickReplies.size()) + (searchResultCommands == null ? 0 : searchResultCommands.size());
+            count += (quickReplies == null ? 0 : quickReplies.size()) + (searchResultCommands == null ? 0 : searchResultCommands.size()) + (luckgramTemplates == null ? 0 : luckgramTemplates.size());
         } else if (searchResultSuggestions != null) {
             count += searchResultSuggestions.size();
         }
@@ -1743,6 +1763,7 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
         if (searchResultCommands != null) {
             searchResultCommands.clear();
         }
+        luckgramTemplates = null;
         if (quickReplies != null) {
             quickReplies.clear();
         }
@@ -1854,6 +1875,10 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
                 }
             }
             if (searchResultCommands != null) {
+                if (i >= searchResultCommands.size() && luckgramTemplates != null) {
+                    final int t = i - searchResultCommands.size();
+                    return t >= 0 && t < luckgramTemplates.size() ? new LuckgramTemplate(luckgramTemplates.get(t)) : null;
+                }
                 if (i < 0 || i >= searchResultCommands.size()) {
                     return null;
                 }
@@ -1877,6 +1902,16 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
             }
         }
         return null;
+    }
+
+    /** Index into {@link #luckgramTemplates} for an adapter position (after hint offset), or -1. */
+    private int luckgramTemplateIndex(int position) {
+        if (luckgramTemplates == null || searchResultCommands == null || stickers != null || searchResultBotContext != null
+            || searchResultUsernames != null || searchResultHashtags != null || searchResultSuggestions != null) {
+            return -1;
+        }
+        final int t = position - (quickReplies == null ? 0 : quickReplies.size()) - searchResultCommands.size();
+        return t >= 0 && t < luckgramTemplates.size() ? t : -1;
     }
 
     public static class EphemeralCommand {
@@ -2035,6 +2070,8 @@ public class MentionsAdapter extends RecyclerListView.SelectionAdapter implement
                 cell.setText(searchResultHashtags.get(position));
             } else if (searchResultSuggestions != null && position >= 0 && position < searchResultSuggestions.size()) {
                 cell.setEmojiSuggestion(searchResultSuggestions.get(position));
+            } else if (luckgramTemplateIndex(position) >= 0) {
+                cell.setText(luckgramTemplates.get(luckgramTemplateIndex(position)).replace('\n', ' '));
             } else if (searchResultCommands != null && position >= 0 && position < searchResultCommands.size()) {
                 final String help = searchResultCommandsHelp != null && position >= 0 && position < searchResultCommandsHelp.size() ? searchResultCommandsHelp.get(position) : null;
                 final TLRPC.User user = searchResultCommandsUsers != null && position >= 0 && position < searchResultCommandsUsers.size() ? searchResultCommandsUsers.get(position) : null;
