@@ -29,6 +29,15 @@ public final class LuckgramAIMock implements LuckgramAI.Transport {
     private volatile int chatLimit = 50;
     private final AtomicInteger transcribeCalls = new AtomicInteger();
 
+    private volatile int failTranscribeAt;
+    private volatile String failTranscribeCode;
+
+    /** The (okSegments + 1)-th transcribe request from now fails with {@code code}. */
+    public void failTranscribeAfter(int okSegments, String code) {
+        failTranscribeAt = transcribeCalls.get() + okSegments + 1;
+        failTranscribeCode = code;
+    }
+
     /** Number of /v1/ai/transcribe requests so far (one per uploaded segment). */
     public int transcribeCount() {
         return transcribeCalls.get();
@@ -103,6 +112,10 @@ public final class LuckgramAIMock implements LuckgramAI.Transport {
                     if (ctype == null || !ctype.startsWith("audio/") || body == null || body.length == 0) return error(400, "invalid_request");
                     if (body.length > LuckgramSettings.remoteLong("ai.transcribe_max_mb", 4) * 1024 * 1024) return error(413, "input_too_large");
                     int n = transcribeCalls.incrementAndGet();
+                    if (n == failTranscribeAt) {
+                        failTranscribeAt = 0;
+                        return error("quota_exceeded".equals(failTranscribeCode) ? 429 : 503, failTranscribeCode);
+                    }
                     String lang = query.startsWith("language=") ? query.substring(9) : "zh";
                     if (!lang.matches("[a-z]{2}")) return error(400, "invalid_request");
                     String text = (LuckgramStrings.isChinese() ? "第" + n + "段（" + body.length + " 字节）。" : "Segment " + n + " (" + body.length + " bytes).");

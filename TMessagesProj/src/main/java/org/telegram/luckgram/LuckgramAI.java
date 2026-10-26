@@ -115,8 +115,17 @@ public final class LuckgramAI {
         public String text;
         public String language;
         public double durationSeconds;
-        /** Number of uploaded segments (1 unless the file was over ai.transcribe_max_mb). */
+        /** Number of segments the file was split into (1 unless it was over ai.transcribe_max_mb). */
         public int segments = 1;
+        /** Segments transcribed successfully; less than {@link #segments} when {@link #partial}. */
+        public int completedSegments;
+        /**
+         * True when a later segment failed (e.g. {@code quota_exceeded}) after earlier ones succeeded:
+         * {@link #text} holds the completed part and {@link #error} says why the rest is missing (#55).
+         * The server charges each successful segment, so that text is kept instead of discarded.
+         */
+        public boolean partial;
+        public LuckgramAIError error;
     }
 
     /** Handle returned by every call. */
@@ -466,6 +475,7 @@ public final class LuckgramAI {
         final String finalPath = path;
         withConsent(context, req, callback::onError, () -> {
             Transcription t = new Transcription();
+            t.segments = segments.size();
             StringBuilder text = new StringBuilder();
             for (byte[] segment : segments) {
                 try (HttpResponse res = authorized(req, "POST", finalPath, mimeType, segment, "application/json")) {
@@ -478,10 +488,19 @@ public final class LuckgramAI {
                         t.language = optString(j, "language");
                     }
                     t.durationSeconds += j.optDouble("duration_seconds", j.optDouble("duration", 0));
+                    t.completedSegments++;
+                } catch (Exception e) {
+                    // Nothing done yet, or cancelled by the caller: a plain error, as before.
+                    if (t.completedSegments == 0 || req.cancelled) {
+                        throw e;
+                    }
+                    t.partial = true;
+                    t.error = e instanceof ApiException ? ((ApiException) e).error
+                        : new LuckgramAIError(e instanceof IOException ? LuckgramAIError.NETWORK_ERROR : LuckgramAIError.UPSTREAM_UNAVAILABLE, 0);
+                    break;
                 }
             }
             t.text = text.toString();
-            t.segments = segments.size();
             AndroidUtilities.runOnUIThread(() -> callback.onResult(t));
         });
         return req;

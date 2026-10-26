@@ -277,13 +277,38 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
         LuckgramAI.getInstance().transcribe(getParentActivity(), wav, "audio/wav", "zh", new LuckgramAI.Callback<LuckgramAI.Transcription>() {
             @Override
             public void onResult(LuckgramAI.Transcription t) {
-                line("   " + (t.segments > 1 ? "✓ " : "✗ ") + t.segments + " segments: \"" + t.text + "\"");
-                step2c();
+                line("   " + (t.segments > 1 && !t.partial ? "✓ " : "✗ ") + t.segments + " segments: \"" + t.text + "\"");
+                step2bPartial(wav);
             }
 
             @Override
             public void onError(LuckgramAIError error) {
                 line("   ✗ " + error.code + " — " + error.getLocalizedMessage());
+                step2c();
+            }
+        });
+    }
+
+    /** Mock only: segment 2 fails with quota_exceeded; segment 1's text must be kept (#55). */
+    private void step2bPartial(byte[] wav) {
+        LuckgramAI ai = LuckgramAI.getInstance();
+        if (!ai.isUsingMock()) {
+            step2c();
+            return;
+        }
+        line("2b'. partial result when segment 2 hits quota (mock) …");
+        ai.getMock().failTranscribeAfter(1, LuckgramAIError.QUOTA_EXCEEDED);
+        ai.transcribe(getParentActivity(), wav, "audio/wav", null, new LuckgramAI.Callback<LuckgramAI.Transcription>() {
+            @Override
+            public void onResult(LuckgramAI.Transcription t) {
+                boolean ok = t.partial && t.completedSegments == 1 && t.error != null && LuckgramAIError.QUOTA_EXCEEDED.equals(t.error.code) && !t.text.isEmpty();
+                line("   " + (ok ? "✓ " : "✗ ") + "partial=" + t.partial + " " + t.completedSegments + "/" + t.segments + " error=" + (t.error == null ? "-" : t.error.code) + " text=\"" + t.text + "\"");
+                step2c();
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                line("   ✗ whole call failed: " + error.code);
                 step2c();
             }
         });
