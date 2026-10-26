@@ -13622,6 +13622,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (id == NotificationCenter.luckgramSettingsChanged) {
             // Luckgram: a switch changed locally or remotely (feature 00 / S4)
             updateTranslateOutButton();
+            updateQuickRepliesButton();
             return;
         }
         if (id == NotificationCenter.emojiLoaded) {
