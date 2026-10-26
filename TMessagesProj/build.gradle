@@ -42,7 +42,7 @@ configurations.all {
 }
 
 dependencies {
-    // Luckgram: plain-JVM unit tests (./gradlew :TMessagesProj:testAfatReleaseUnitTest or testDebugUnitTest)
+    // Luckgram: plain-JVM unit tests (./gradlew :TMessagesProj:testDebugUnitTest)
     testImplementation 'junit:junit:4.13.2'
     implementation 'androidx.core:core:1.16.0'
     implementation 'androidx.palette:palette:1.0.0'
