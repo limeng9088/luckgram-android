@@ -164,8 +164,14 @@ public final class LuckgramAccounts {
         return TextUtils.isEmpty(alias) ? null : alias;
     }
 
+    /** Longest local name (same as iOS). */
+    public static final int ALIAS_MAX_LENGTH = 32;
+
     public static void setAlias(int account, String alias) {
         alias = alias == null ? null : alias.trim();
+        if (alias != null && alias.length() > ALIAS_MAX_LENGTH) {
+            alias = alias.substring(0, ALIAS_MAX_LENGTH);
+        }
         LuckgramSettings.setStringForAccount(account, KEY_ALIAS, TextUtils.isEmpty(alias) ? null : alias);
     }
 

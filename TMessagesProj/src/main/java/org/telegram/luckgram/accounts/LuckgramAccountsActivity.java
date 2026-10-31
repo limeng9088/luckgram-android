@@ -21,7 +21,6 @@ import java.util.ArrayList;
 public class LuckgramAccountsActivity extends UniversalFragment implements NotificationCenter.NotificationCenterDelegate {
 
     private static final int ID_NOTIFY_BASE = 1000;
-    private static final int ALIAS_MAX_LENGTH = 32;
 
     @Override
     public boolean onFragmentCreate() {
@@ -115,7 +114,7 @@ public class LuckgramAccountsActivity extends UniversalFragment implements Notif
 
     private void editAlias(int account, String current) {
         AlertsCreator.createSimpleTextInputAlert(getContext(), this, LuckgramAccounts.aliasText(), null,
-                LuckgramAccounts.aliasHintText(), current, ALIAS_MAX_LENGTH,
+                LuckgramAccounts.aliasHintText(), current, LuckgramAccounts.ALIAS_MAX_LENGTH,
                 LocaleController.getString(R.string.Save), getResourceProvider(), text -> {
                     LuckgramAccounts.setAlias(account, text);
                     if (listView != null) {
