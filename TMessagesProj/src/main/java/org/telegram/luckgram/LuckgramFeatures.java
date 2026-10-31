@@ -72,6 +72,10 @@ public final class LuckgramFeatures {
             .confirmEnable(org.telegram.luckgram.callrec.CallRecSettingsActivity::confirmEnable));
 
         // ---- 资料与整理 / Profiles & Organization
+        add(toggle(org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.FEATURE_KEY, PROFILE_ORGANIZE, true,
+            "隐藏聊天", "Hidden chats",
+            "把聊天从列表里藏起来，下拉列表找回", "Hide chats from the list; pull down to find them")
+            .subpage(org.telegram.luckgram.hiddenchats.LuckgramHiddenChatsActivity::new));
         add(toggle(org.telegram.luckgram.notes.UserNotesStore.FEATURE_KEY, PROFILE_ORGANIZE, true,
             "私人备注", "Private notes",
             "给联系人、群组和频道写只有自己能看到的备注", "Notes about contacts, groups and channels that only you can see")

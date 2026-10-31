@@ -944,8 +944,11 @@ public class PasscodeView extends FrameLayout implements NotificationCenter.Noti
         this.delegate = delegate;
     }
 
+    /** Luckgram 12: only check the passcode (e.g. before opening hidden chats); not the app lock. */
+    public boolean luckgramVerifyOnly;
+
     protected boolean isAppLock() {
-        return true;
+        return !luckgramVerifyOnly;
     }
 
     protected void processDone(boolean fingerprint) {

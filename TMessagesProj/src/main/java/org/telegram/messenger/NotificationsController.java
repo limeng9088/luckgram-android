@@ -1134,6 +1134,10 @@ public class NotificationsController extends BaseController implements Notificat
                     }
                     continue;
                 }
+                // Luckgram 12 (hidden chats): no notification and no count for hidden chats
+                if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.suppressNotifications(currentAccount, messageObject.getDialogId())) {
+                    continue;
+                }
                 if (messageObject.isStoryPush) {
                     long date = messageObject.messageOwner == null ? System.currentTimeMillis() : messageObject.messageOwner.date * 1000L;
                     long dialogId = messageObject.getDialogId();
@@ -1432,7 +1436,40 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     public int getTotalUnreadCount() {
-        return total_unread_count;
+        return total_unread_count - luckgramHiddenUnread();
+    }
+
+    /** Luckgram 12 (hidden chats): unread of hidden chats, left out of the badge. */
+    private int luckgramHiddenUnread() {
+        if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isNotifyEnabled() || !org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hasHidden(currentAccount)) {
+            return 0;
+        }
+        int result = 0;
+        for (int i = 0; i < pushDialogs.size(); i++) {
+            long did = pushDialogs.keyAt(i);
+            if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, did)) {
+                Integer count = pushDialogs.valueAt(i);
+                int c = count == null ? 0 : count;
+                if (getMessagesController().isCommunity(did)) {
+                    continue;
+                }
+                result += getMessagesController().isForum(did) ? (c > 0 ? 1 : 0) : c;
+            }
+        }
+        return Math.max(0, Math.min(result, total_unread_count));
+    }
+
+    private int luckgramHiddenPushDialogs() {
+        if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isNotifyEnabled() || !org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hasHidden(currentAccount)) {
+            return 0;
+        }
+        int result = 0;
+        for (int i = 0; i < pushDialogs.size(); i++) {
+            if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, pushDialogs.keyAt(i))) {
+                result++;
+            }
+        }
+        return result;
     }
 
     public void processDialogsUpdateRead(LongSparseIntArray dialogsToUpdate) {
@@ -1802,6 +1839,9 @@ public class NotificationsController extends BaseController implements Notificat
                                     continue;
                                 }
                             }
+                            if (dialog != null && !org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isNotifyEnabled() && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(a, dialog.id)) {
+                                continue;
+                            }
                             if (dialog != null) {
                                 count += MessagesController.getInstance(a).getDialogUnreadCount(dialog);
                             }
@@ -1810,7 +1850,7 @@ public class NotificationsController extends BaseController implements Notificat
                         FileLog.e(e);
                     }
                 } else {
-                    count += controller.total_unread_count;
+                    count += controller.getTotalUnreadCount();
                 }
             } else {
                 if (controller.showBadgeMuted) {
@@ -1823,6 +1863,9 @@ public class NotificationsController extends BaseController implements Notificat
                                     continue;
                                 }
                             }
+                            if (!org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isNotifyEnabled() && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(a, dialog.id)) {
+                                continue;
+                            }
                             if (MessagesController.getInstance(a).getDialogUnreadCount(dialog) != 0) {
                                 count++;
                             }
@@ -1832,7 +1875,7 @@ public class NotificationsController extends BaseController implements Notificat
                         FileLog.e(e, false);
                     }
                 } else {
-                    count += controller.pushDialogs.size();
+                    count += controller.pushDialogs.size() - controller.luckgramHiddenPushDialogs();
                 }
             }
         }

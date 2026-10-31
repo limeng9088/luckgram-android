@@ -642,6 +642,9 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                                     continue;
                                 }
                             }
+                            if (luckgramSkip(MessageObject.getDialogId(message))) {
+                                continue;
+                            }
                             searchResultMessages.add(msg);
                             long dialog_id = MessageObject.getDialogId(message);
                             ConcurrentHashMap<Long, Integer> read_max = message.out ? MessagesController.getInstance(currentAccount).dialogs_read_outbox_max : MessagesController.getInstance(currentAccount).dialogs_read_inbox_max;
@@ -1070,6 +1073,30 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                     }
                 }
             }
+            // Luckgram 12 (hidden chats): leave hidden chats out; tell the screen how many matched.
+            int luckgramHiddenMatches = 0;
+            for (int a = 0; a < result.size(); a++) {
+                Object obj = result.get(a);
+                long did = 0;
+                if (obj instanceof TLRPC.User) {
+                    did = ((TLRPC.User) obj).id;
+                } else if (obj instanceof TLRPC.Chat) {
+                    did = -((TLRPC.Chat) obj).id;
+                } else if (obj instanceof TLRPC.EncryptedChat) {
+                    did = DialogObject.makeEncryptedDialogId(((TLRPC.EncryptedChat) obj).id);
+                }
+                if (did != 0 && luckgramSkip(did)) {
+                    result.remove(a);
+                    if (a < names.size()) {
+                        names.remove(a);
+                    }
+                    a--;
+                    luckgramHiddenMatches++;
+                }
+            }
+            if (luckgramHiddenMatches > 0 && dialogsActivity != null) {
+                dialogsActivity.luckgramOnHiddenSearchMatches(this, luckgramHiddenMatches);
+            }
             MessagesController.getInstance(currentAccount).putUsers(encUsers, true);
             searchResult = result;
             searchResultNames = names;
@@ -1095,10 +1122,35 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
 
     int waitingResponseCount;
 
+    // Luckgram 12 (hidden chats): results leave hidden chats out until the user asks for them.
+    private boolean luckgramIncludeHidden;
+    private boolean luckgramResearching;
+    private boolean luckgramLastAllowPublicPosts;
+
+    public void luckgramSearchHidden() {
+        String query = lastSearchText;
+        if (TextUtils.isEmpty(query)) {
+            return;
+        }
+        luckgramIncludeHidden = true;
+        luckgramResearching = true;
+        lastSearchText = null;
+        searchDialogs(query, folderId, luckgramLastAllowPublicPosts);
+        luckgramResearching = false;
+    }
+
+    private boolean luckgramSkip(long dialogId) {
+        return !luckgramIncludeHidden && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, dialogId);
+    }
+
     public void searchDialogs(String text, int folderId, boolean allowPublicPosts) {
         if (text != null && text.equals(lastSearchText) && (folderId == this.folderId || TextUtils.isEmpty(text))) {
             return;
         }
+        if (!luckgramResearching) {
+            luckgramIncludeHidden = false;
+        }
+        luckgramLastAllowPublicPosts = allowPublicPosts;
         lastSearchText = text;
         this.folderId = folderId;
         if (searchRunnable != null) {
