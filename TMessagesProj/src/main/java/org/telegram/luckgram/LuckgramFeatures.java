@@ -48,6 +48,8 @@ public final class LuckgramFeatures {
     /** spec 18 */
     public static final String AI_ASSISTANT = "ai_assistant";
     public static final String AI_ASSISTANT_ROW = "ai_assistant_row";
+    /** spec 22 */
+    public static final String AI_AGENTS = "ai_agents";
 
     private static final ArrayList<LuckgramFeature> ALL = new ArrayList<>();
 
@@ -97,6 +99,9 @@ public final class LuckgramFeatures {
         add(toggle(AI_ASSISTANT, AI, true,
             "AI 助手", "AI assistant",
             "聊天列表顶部的「AI」按钮：提问、总结、改写、讲解、解题", "The \"AI\" button on the chat list: ask, summarize, rewrite, explain, solve"));
+        add(toggle(AI_AGENTS, AI, true,
+            "AI 智能体", "AI agents",
+            "AI 助手里的旅行规划师、文案写手等，也能自己创建", "Travel planner, copywriter and more in the AI assistant, or make your own"));
         add(toggle(AI_ASSISTANT_ROW, AI, true,
             "聊天列表置顶「Luckgram AI」", "Pin \"Luckgram AI\" in the chat list",
             "在聊天列表顶部显示一行 AI 助手入口", "Show an AI assistant row at the top of the chat list"));
