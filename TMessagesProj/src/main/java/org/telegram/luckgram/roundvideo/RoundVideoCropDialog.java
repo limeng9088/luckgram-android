@@ -56,8 +56,6 @@ import java.util.Locale;
  */
 public class RoundVideoCropDialog extends Dialog {
 
-    private static final float MAX_ZOOM = 4f;
-
     private final ChatActivity chatActivity;
     private final String path;
     private final Runnable onSent;
@@ -117,9 +115,7 @@ public class RoundVideoCropDialog extends Dialog {
         this.path = path;
         this.onSent = onSent;
         this.meta = RoundVideoConverter.Meta.read(path);
-        if (meta.durationMs > RoundVideoFeature.MAX_DURATION_MS) {
-            rightProgress = RoundVideoFeature.MAX_DURATION_MS / (float) meta.durationMs;
-        }
+        rightProgress = RoundVideoGeometry.initialRightProgress(meta.durationMs);
         setCancelable(true);
     }
 
@@ -158,7 +154,7 @@ public class RoundVideoCropDialog extends Dialog {
             }
         };
         videoContainer.setClipChildren(true);
-        root.addView(videoContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT, 0, 56, 0, meta.durationMs > RoundVideoFeature.MAX_DURATION_MS ? 196 : 132));
+        root.addView(videoContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT, 0, 56, 0, RoundVideoGeometry.needsTimeline(meta.durationMs) ? 196 : 132));
 
         textureView = new TextureView(context);
         videoContainer.addView(textureView, new FrameLayout.LayoutParams(1, 1, Gravity.LEFT | Gravity.TOP));
@@ -169,7 +165,7 @@ public class RoundVideoCropDialog extends Dialog {
         ScaleGestureDetector scaleDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
             public boolean onScale(ScaleGestureDetector detector) {
-                zoom = Math.max(1f, Math.min(MAX_ZOOM, zoom * detector.getScaleFactor()));
+                zoom = RoundVideoGeometry.clampZoom(zoom * detector.getScaleFactor());
                 applyTransform();
                 return true;
             }
@@ -220,7 +216,7 @@ public class RoundVideoCropDialog extends Dialog {
         hintTextView.setText(RoundVideoFeature.getString(RoundVideoFeature.STR_HINT));
         bottom.addView(hintTextView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 16, 8, 16, 8));
 
-        if (meta.durationMs > RoundVideoFeature.MAX_DURATION_MS) {
+        if (RoundVideoGeometry.needsTimeline(meta.durationMs)) {
             timelineView = new VideoTimelinePlayView(context);
             timelineView.setVideoPath(path, 0, 0, rightProgress, 0);
             timelineView.setMaxProgressDiff(rightProgress);
@@ -310,7 +306,7 @@ public class RoundVideoCropDialog extends Dialog {
         progressColumn.setOrientation(LinearLayout.VERTICAL);
         progressColumn.setGravity(Gravity.CENTER);
         progressColumn.setBackgroundColor(Color.BLACK);
-        progressColumn.setMinimumHeight(dp(meta.durationMs > RoundVideoFeature.MAX_DURATION_MS ? 196 : 132));
+        progressColumn.setMinimumHeight(dp(RoundVideoGeometry.needsTimeline(meta.durationMs) ? 196 : 132));
         progressLayout.addView(progressColumn, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
 
         progressTextView = new TextView(context);
@@ -379,16 +375,11 @@ public class RoundVideoCropDialog extends Dialog {
     }
 
     private long selectedStartMs() {
-        return meta.durationMs > RoundVideoFeature.MAX_DURATION_MS ? (long) (leftProgress * meta.durationMs) : 0;
+        return RoundVideoGeometry.selectedRange(meta.durationMs, leftProgress, rightProgress)[0];
     }
 
     private long selectedEndMs() {
-        if (meta.durationMs > RoundVideoFeature.MAX_DURATION_MS) {
-            long start = selectedStartMs();
-            long end = (long) (rightProgress * meta.durationMs);
-            return Math.min(end, start + RoundVideoFeature.MAX_DURATION_MS);
-        }
-        return meta.durationMs;
+        return RoundVideoGeometry.selectedRange(meta.durationMs, leftProgress, rightProgress)[1];
     }
 
     private void layoutVideo() {
@@ -400,7 +391,7 @@ public class RoundVideoCropDialog extends Dialog {
         circleD = Math.min(w, h) - dp(32);
         circleCx = w / 2f;
         circleCy = h / 2f;
-        baseScale = circleD / Math.min(meta.width, meta.height);
+        baseScale = RoundVideoGeometry.baseScale(circleD, meta.width, meta.height);
         int vw = Math.round(meta.width * baseScale);
         int vh = Math.round(meta.height * baseScale);
         FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) textureView.getLayoutParams();
@@ -418,12 +409,9 @@ public class RoundVideoCropDialog extends Dialog {
         if (baseScale <= 0) {
             return;
         }
-        float dispW = meta.width * baseScale * zoom;
-        float dispH = meta.height * baseScale * zoom;
-        float maxTx = Math.max(0, (dispW - circleD) / 2f);
-        float maxTy = Math.max(0, (dispH - circleD) / 2f);
-        tx = Math.max(-maxTx, Math.min(maxTx, tx));
-        ty = Math.max(-maxTy, Math.min(maxTy, ty));
+        float[] offset = RoundVideoGeometry.clampOffset(meta.width, meta.height, baseScale, zoom, circleD, tx, ty);
+        tx = offset[0];
+        ty = offset[1];
         textureView.setScaleX(zoom);
         textureView.setScaleY(zoom);
         textureView.setTranslationX(tx);
@@ -435,14 +423,8 @@ public class RoundVideoCropDialog extends Dialog {
         if (converter != null || sent) {
             return;
         }
-        float s = baseScale * zoom;
-        float dispW = meta.width * s;
-        float dispH = meta.height * s;
-        float cropSide = Math.min(Math.min(meta.width, meta.height), circleD / s);
-        float cropX = (dispW / 2f - tx - circleD / 2f) / s;
-        float cropY = (dispH / 2f - ty - circleD / 2f) / s;
-        cropX = Math.max(0, Math.min(meta.width - cropSide, cropX));
-        cropY = Math.max(0, Math.min(meta.height - cropSide, cropY));
+        float[] crop = RoundVideoGeometry.cropSquare(meta.width, meta.height, baseScale, zoom, circleD, tx, ty);
+        float cropX = crop[0], cropY = crop[1], cropSide = crop[2];
 
         if (videoPlayer != null) {
             videoPlayer.pause();
