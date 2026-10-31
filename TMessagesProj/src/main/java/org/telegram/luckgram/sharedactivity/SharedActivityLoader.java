@@ -12,6 +12,7 @@ import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 
 import java.util.ArrayDeque;
@@ -226,7 +227,7 @@ public final class SharedActivityLoader {
         callback.onLoaded(result);
     }
 
-    private void send(TLRPC.TLObject req, ResponseOnUi onResponse) {
+    private void send(TLObject req, ResponseOnUi onResponse) {
         int[] holder = new int[1];
         holder[0] = ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
             requestIds.remove((Integer) holder[0]);
@@ -241,7 +242,7 @@ public final class SharedActivityLoader {
     }
 
     private interface ResponseOnUi {
-        void run(TLRPC.TLObject response, TLRPC.TL_error error);
+        void run(TLObject response, TLRPC.TL_error error);
     }
 
     // region strings (Chinese + English, same wording as iOS)
