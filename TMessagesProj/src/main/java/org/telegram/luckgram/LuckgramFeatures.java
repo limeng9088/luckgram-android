@@ -48,12 +48,12 @@ public final class LuckgramFeatures {
         // ---- 消息与语言 / Messages & Language
 
         // ---- 媒体、通话与存储 / Media, Calls & Storage
-        // Shows the legal reminder when the switch below is flipped on (#58).
-        org.telegram.luckgram.callrec.CallRecLegalGuard.install();
         add(toggle(org.telegram.luckgram.callrec.CallRecSettings.KEY_ENABLED, MEDIA_CALLS_STORAGE, false,
             "通话录音", "Call recording",
             "一对一通话中录音，挂断后保存到收藏夹", "Record one-on-one calls and save them to Saved Messages")
-            .subpage(org.telegram.luckgram.callrec.CallRecSettingsActivity::new));
+            .subpage(org.telegram.luckgram.callrec.CallRecSettingsActivity::new)
+            // Legal reminder before it is switched on (spec 04 §1, #58).
+            .confirmEnable(org.telegram.luckgram.callrec.CallRecSettingsActivity::confirmEnable));
 
         // ---- 资料与整理 / Profiles & Organization
 

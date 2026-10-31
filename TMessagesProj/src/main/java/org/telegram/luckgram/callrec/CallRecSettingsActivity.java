@@ -11,8 +11,10 @@ import android.view.View;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
+import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Components.UItem;
@@ -46,6 +48,24 @@ public class CallRecSettingsActivity extends UniversalFragment {
                 maybeAskAiConsent(context);
             }
             onResult.accept(agreed);
+        });
+    }
+
+    /**
+     * 00's confirm-before-enable hook for the switch on the Luckgram features page (#58):
+     * done(true) only after "我知道了"; the page then writes the switch.
+     */
+    public static void confirmEnable(BaseFragment fragment, Utilities.Callback<Boolean> done) {
+        final Context context = fragment != null ? fragment.getParentActivity() : null;
+        if (context == null) {
+            done.run(false);
+            return;
+        }
+        showLegalReminder(context, fragment.getResourceProvider(), agreed -> {
+            done.run(agreed);
+            if (agreed) {
+                maybeAskAiConsent(context);
+            }
         });
     }
 
