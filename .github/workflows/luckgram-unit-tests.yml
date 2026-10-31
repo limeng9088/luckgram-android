@@ -58,11 +58,20 @@ jobs:
             notes/UserNotesText.java \
             translateout/TranslateOutLogic.java \
             profileinfo/ProfileInfoLogic.java \
-            sharedactivity/SharedActivityLogic.java; do
+            sharedactivity/SharedActivityLogic.java \
+            voice/DictationAudio.java \
+            ai/LuckgramAiMarkdown.java \
+            summary/ChatSummaryLogic.java \
+            reply/AiReplyText.java \
+            post/AiPostText.java \
+            callrec/CallRecMixer.java \
+            callrec/CallRecText.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"
           # KeywordMatcher imports android.text (highlighting), so its test cannot compile on plain javac.
           TESTS=$(find TMessagesProj/src/test/java/org/telegram/luckgram -name '*Test.java' ! -name 'KeywordMatcherTest.java')
           javac -d "$RUNNER_TEMP/classes" -cp "$CP" $PURE $TESTS
-          java -jar "$L/console.jar" execute --class-path "$RUNNER_TEMP/classes:$L/junit4.jar:$L/hamcrest.jar:$L/json.jar" --scan-class-path --details=tree --fail-if-no-tests
+          # Test resources (e.g. the 10 backup test vector) are read via the class loader.
+          RES=TMessagesProj/src/test/resources
+          java -jar "$L/console.jar" execute --class-path "$RUNNER_TEMP/classes:$RES:$L/junit4.jar:$L/hamcrest.jar:$L/json.jar" --scan-class-path --details=tree --fail-if-no-tests
