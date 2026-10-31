@@ -139,9 +139,9 @@ public class LogoutActivity extends BaseFragment {
                 }
                 if (freeAccounts > 0 && availableAccount != null) {
                     presentFragment(new LoginActivity(availableAccount));
-                } else if (!UserConfig.hasPremiumOnAccounts()) {
-                    LimitReachedBottomSheet limitReachedBottomSheet = new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null);
-                    showDialog(limitReachedBottomSheet);
+                } else {
+                    // Luckgram 09: limit is 20 for everyone, no Premium upsell
+                    org.telegram.luckgram.accounts.LuckgramAccounts.showLimitReached();
                 }
             } else if (position == passcodeRow) {
                 presentFragment(PasscodeActivity.determineOpenFragment());

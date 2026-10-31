@@ -605,24 +605,12 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         final ArrayList<Integer> accountNumbers = new ArrayList<>();
 
         accountNumbers.clear();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (UserConfig.getInstance(a).isClientActivated()) {
-                accountNumbers.add(a);
-            }
-        }
-        Collections.sort(accountNumbers, (o1, o2) -> {
-            long l1 = UserConfig.getInstance(o1).loginTime;
-            long l2 = UserConfig.getInstance(o2).loginTime;
-            if (l1 > l2) {
-                return 1;
-            } else if (l1 < l2) {
-                return -1;
-            }
-            return 0;
-        });
+        // Luckgram 09: the user's account order (Settings → Manage accounts)
+        accountNumbers.addAll(org.telegram.luckgram.accounts.LuckgramAccounts.orderedAccounts());
 
         ItemOptions o = ItemOptions.makeOptions(this, button);
-        if (UserConfig.getActivatedAccountsCount() < UserConfig.MAX_ACCOUNT_COUNT) {
+        // Luckgram 09: always offer "Add account"; at the limit it says "at most 20 accounts"
+        if (true) {
             o.add(R.drawable.msg_addbot, getString(R.string.AddAccount), () -> {
                 int freeAccounts = 0;
                 Integer availableAccount = null;
@@ -639,8 +627,9 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
                 }
                 if (freeAccounts > 0 && availableAccount != null) {
                     presentFragment(new LoginActivity(availableAccount));
-                } else if (!UserConfig.hasPremiumOnAccounts()) {
-                    showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
+                } else {
+                    // Luckgram 09: limit is 20 for everyone, no Premium upsell
+                    org.telegram.luckgram.accounts.LuckgramAccounts.showLimitReached();
                 }
             });
         }
@@ -715,7 +704,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         final TextView textView = new TextView(getContext());
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         textView.setTextColor(getThemedColor(Theme.key_dialogTextBlack));
-        textView.setText(UserObject.getUserName(user));
+        textView.setText(org.telegram.luckgram.accounts.LuckgramAccounts.displayName(account));
         textView.setMaxLines(2);
         textView.setEllipsize(TextUtils.TruncateAt.END);
         btn.addView(textView, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL, 13, 0, 14, 0));
