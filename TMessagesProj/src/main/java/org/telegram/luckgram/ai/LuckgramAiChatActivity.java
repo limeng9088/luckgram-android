@@ -161,8 +161,7 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         AvatarDrawable avatar = new AvatarDrawable();
         avatar.setInfo(0x4c47414cL, "Luckgram", "AI", "AI");
         avatarContainer.getAvatarImageView().setImageDrawable(avatar);
-        avatarContainer.setTitle(LuckgramStrings.get("Luckgram AI", "Luckgram AI"));
-        avatarContainer.setSubtitle(LuckgramStrings.get("助手", "Assistant"));
+        updateHeader();
         avatarContainer.setOnClickListener(null);
         actionBar.addView(avatarContainer, 0, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT, 56, 0, 96, 0));
         ActionBarMenu menu = actionBar.createMenu();
@@ -343,10 +342,26 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         }
     }
 
+    /**
+     * "Luckgram AI / 助手"; a conversation opened by a feature with its own key (e.g. an agent,
+     * spec 22) shows its title instead, with "Luckgram AI" below.
+     */
+    private void updateHeader() {
+        if (avatarContainer == null) return;
+        if (conversation.key != null && !TextUtils.isEmpty(conversation.title)) {
+            avatarContainer.setTitle(conversation.title);
+            avatarContainer.setSubtitle("Luckgram AI");
+        } else {
+            avatarContainer.setTitle("Luckgram AI");
+            avatarContainer.setSubtitle(LuckgramStrings.get("助手", "Assistant"));
+        }
+    }
+
     private void switchTo(LuckgramAiConversation c) {
         if (c == null || c == conversation) return;
         stopStreaming();
         conversation = c;
+        updateHeader();
         if (adapter != null) {
             adapter.notifyDataSetChanged();
             scrollToBottom();
