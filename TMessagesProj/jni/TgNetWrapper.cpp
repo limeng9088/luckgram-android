@@ -7,6 +7,8 @@
 #include "tgnet/ConnectionSocket.h"
 #include "tgnet/FileLog.h"
 #include "tgnet/Handshake.h"
+#include "tgnet/ByteArray.h"
+#include <cstring>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 #include <openssl/bn.h>
@@ -252,6 +254,39 @@ jint getConnectionState(JNIEnv *env, jclass c, jint instanceNum) {
 
 void setUserId(JNIEnv *env, jclass c, jint instanceNum, int64_t id) {
     ConnectionsManager::getInstance(instanceNum).setUserId(id);
+}
+
+// Luckgram 10 (account backup). Export layout: int32 dc id, int64 server salt (little endian),
+// then the 256-byte permanent auth key. Every native copy is wiped before it is freed.
+jbyteArray luckgramExportAuth(JNIEnv *env, jclass c, jint instanceNum) {
+    uint32_t datacenterId = 0;
+    int64_t salt = 0;
+    ByteArray *authKey = ConnectionsManager::getInstance(instanceNum).luckgramExportAuth(&datacenterId, &salt);
+    if (authKey == nullptr) {
+        return nullptr;
+    }
+    jsize length = (jsize) (4 + 8 + authKey->length);
+    jbyteArray result = env->NewByteArray(length);
+    if (result != nullptr) {
+        int32_t dc = (int32_t) datacenterId;
+        env->SetByteArrayRegion(result, 0, 4, (jbyte *) &dc);
+        env->SetByteArrayRegion(result, 4, 8, (jbyte *) &salt);
+        env->SetByteArrayRegion(result, 12, (jsize) authKey->length, (jbyte *) authKey->bytes);
+    }
+    memset(authKey->bytes, 0, authKey->length);
+    delete authKey;
+    salt = 0;
+    return result;
+}
+
+void luckgramImportAuth(JNIEnv *env, jclass c, jint instanceNum, jint datacenterId, jbyteArray key, jlong salt) {
+    jsize length = env->GetArrayLength(key);
+    if (length != 256) {
+        return;
+    }
+    ByteArray *authKey = new ByteArray((uint32_t) length);
+    env->GetByteArrayRegion(key, 0, length, (jbyte *) authKey->bytes);
+    ConnectionsManager::getInstance(instanceNum).luckgramImportAuth((uint32_t) datacenterId, authKey, (int64_t) salt);
 }
 
 void setUserPremium(JNIEnv *env, jclass c, jint instanceNum, bool premium) {
@@ -529,6 +564,8 @@ static JNINativeMethod ConnectionsManagerMethods[] = {
         {"native_getCurrentPingTime", "(I)I", (void *) getCurrentPingTime},
         {"native_getCurrentDatacenterId", "(I)I", (void *) getCurrentDatacenterId},
         {"native_getCurrentAuthKeyId", "(I)J", (void *) getCurrentAuthKeyId},
+        {"native_luckgramExportAuth", "(I)[B", (void *) luckgramExportAuth},
+        {"native_luckgramImportAuth", "(II[BJ)V", (void *) luckgramImportAuth},
         {"native_isTestBackend", "(I)I", (void *) isTestBackend},
         {"native_getTimeDifference", "(I)I", (void *) getTimeDifference},
         {"native_sendRequest", "(IJIIIZII)V", (void *) sendRequest},

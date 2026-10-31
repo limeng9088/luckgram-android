@@ -557,6 +557,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
         checkCurrentAccount();
         updateCurrentConnectionState(currentAccount);
+        org.telegram.luckgram.accounts.LuckgramAccounts.onAccountUsed(currentAccount);
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.closeOtherAppActivities, this);
 
         currentConnectionState = ConnectionsManager.getInstance(currentAccount).getConnectionState();
@@ -1205,6 +1206,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         UserConfig.getInstance(0).saveConfig(false);
 
         checkCurrentAccount();
+        org.telegram.luckgram.accounts.LuckgramAccounts.onAccountUsed(account);
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.activeAccountChanged, account);
         if (AndroidUtilities.isTablet()) {
             layersActionBarLayout.removeAllFragments();

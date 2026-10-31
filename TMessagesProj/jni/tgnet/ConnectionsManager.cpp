@@ -17,6 +17,7 @@
 #include <openssl/rand.h>
 #include <zlib.h>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <cinttypes>
 #include "ConnectionsManager.h"
@@ -136,25 +137,24 @@ ConnectionsManager::~ConnectionsManager() {
     pthread_mutex_destroy(&mutex);
 }
 
+// Luckgram 09 (more accounts): one instance per account slot, created on first use (was five
+// function-local statics). Instances are never destroyed, like the statics they replace.
 ConnectionsManager& ConnectionsManager::getInstance(int32_t instanceNum) {
-    switch (instanceNum) {
-        case 0:
-            static ConnectionsManager instance0(0);
-            return instance0;
-        case 1:
-            static ConnectionsManager instance1(1);
-            return instance1;
-        case 2:
-            static ConnectionsManager instance2(2);
-            return instance2;
-        case 3:
-            static ConnectionsManager instance3(3);
-            return instance3;
-        case 4:
-        default:
-            static ConnectionsManager instance4(4);
-            return instance4;
+    static ConnectionsManager *instances[MAX_ACCOUNT_COUNT] = {nullptr};
+    static std::mutex instancesMutex;
+    if (instanceNum < 0 || instanceNum >= MAX_ACCOUNT_COUNT) {
+        instanceNum = MAX_ACCOUNT_COUNT - 1;
     }
+    ConnectionsManager *instance = __atomic_load_n(&instances[instanceNum], __ATOMIC_ACQUIRE);
+    if (instance == nullptr) {
+        std::lock_guard<std::mutex> lock(instancesMutex);
+        instance = instances[instanceNum];
+        if (instance == nullptr) {
+            instance = new ConnectionsManager(instanceNum);
+            __atomic_store_n(&instances[instanceNum], instance, __ATOMIC_RELEASE);
+        }
+    }
+    return *instance;
 }
 
 int ConnectionsManager::callEvents(int64_t now) {
@@ -4003,3 +4003,38 @@ void ConnectionsManager::reconnect(int32_t dcId, int32_t connectionType) {
 }
 
 #endif
+
+// Luckgram 10 (account backup): the permanent auth key of the main datacenter, for an encrypted
+// backup file. Returns a copy the caller wipes and deletes; nullptr when the account has no key.
+ByteArray *ConnectionsManager::luckgramExportAuth(uint32_t *datacenterId, int64_t *salt) {
+    // Read like getCurrentAuthKeyId(): the key only changes on login, logout and import.
+    ByteArray *result = nullptr;
+    Datacenter *datacenter = getDatacenterWithId(DEFAULT_DATACENTER_ID);
+    if (datacenter != nullptr) {
+        *datacenterId = datacenter->getDatacenterId();
+        *salt = datacenter->luckgramServerSalt();
+        result = datacenter->luckgramCopyPermAuthKey();
+    }
+    return result;
+}
+
+// Luckgram 10 (account backup): makes datacenterId the main datacenter of this (empty) account
+// slot and installs the backed-up permanent key. Takes ownership of authKey.
+void ConnectionsManager::luckgramImportAuth(uint32_t datacenterId, ByteArray *authKey, int64_t salt) {
+    scheduleTask([&, datacenterId, authKey, salt] {
+        Datacenter *datacenter = getDatacenterWithId(datacenterId);
+        if (datacenter == nullptr) {
+            if (LOGS_ENABLED) DEBUG_E("account%u luckgram: unknown dc%u in backup", instanceNum, datacenterId);
+            memset(authKey->bytes, 0, authKey->length);
+            delete authKey;
+            return;
+        }
+        currentDatacenterId = datacenterId;
+        movingToDatacenterId = DEFAULT_DATACENTER_ID;
+        datacenter->luckgramImportPermAuthKey(authKey, salt, getCurrentTime());
+        saveConfig();
+        datacenter->recreateSessions(HandshakeTypeAll);
+        clearRequestsForDatacenter(datacenter, HandshakeTypeAll);
+        processRequestQueue(AllConnectionTypes, datacenterId);
+    });
+}
