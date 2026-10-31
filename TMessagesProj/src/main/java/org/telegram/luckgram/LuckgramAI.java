@@ -330,6 +330,14 @@ public final class LuckgramAI {
     // ---------------------------------------------------------------- public API
 
     public Request chat(Context context, String task, List<Message> messages, boolean stream, ChatListener listener) {
+        return chat(context, task, null, messages, stream, listener);
+    }
+
+    /**
+     * @param effect only for {@link #TASK_WRITING}: one of {@code polish, formal, friendly, shorter,
+     *               grammar, dictation} (server prompts/writing-*.md), or null for the default.
+     */
+    public Request chat(Context context, String task, String effect, List<Message> messages, boolean stream, ChatListener listener) {
         Request req = new Request();
         int chars = 0;
         JSONObject body = new JSONObject();
@@ -340,6 +348,9 @@ public final class LuckgramAI {
                 arr.put(new JSONObject().put("role", m.role).put("content", m.content == null ? "" : m.content));
             }
             body.put("task", task).put("messages", arr).put("stream", stream);
+            if (effect != null && TASK_WRITING.equals(task)) {
+                body.put("effect", effect);
+            }
         } catch (Exception e) {
             deliverError(listener::onError, new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));
             return req;

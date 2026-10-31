@@ -2834,6 +2834,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             }
 
             createQuickRepliesButton(context);
+            createDictationButton(context);
 
             attachButton = new ImageView(context) {
                 @Override
@@ -6244,6 +6245,74 @@ public class ChatActivityEnterView extends FrameLayout implements
         }).show();
     }
 
+    // ------------------------------------------------------------ Luckgram: voice input (feature 17)
+
+    private ImageView dictationButton;
+
+    private static boolean isDictationEnabled() {
+        return org.telegram.luckgram.LuckgramSettings.isEnabled(org.telegram.luckgram.LuckgramFeatures.DICTATION);
+    }
+
+    private void createDictationButton(Context context) {
+        if (parentFragment == null || attachLayout == null) {
+            return;
+        }
+        dictationButton = new ImageView(context);
+        dictationButton.setImageResource(R.drawable.luckgram_dictation);
+        dictationButton.setScaleType(ImageView.ScaleType.CENTER);
+        dictationButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+        dictationButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector)));
+        dictationButton.setContentDescription(org.telegram.luckgram.LuckgramStrings.get("语音输入", "Voice input"));
+        dictationButton.setOnClickListener(v -> startDictation());
+        dictationButton.setVisibility(isDictationEnabled() ? VISIBLE : GONE);
+        attachLayout.addView(dictationButton, LayoutHelper.createLinear(DEFAULT_HEIGHT, DEFAULT_HEIGHT));
+    }
+
+    private void updateDictationButton() {
+        if (dictationButton == null) {
+            return;
+        }
+        final int visibility = isDictationEnabled() ? VISIBLE : GONE;
+        if (dictationButton.getVisibility() != visibility) {
+            dictationButton.setVisibility(visibility);
+            if (scheduledButton != null) {
+                scheduledButton.setTranslationX(scheduledButton.getTranslationX());
+            }
+            updateFieldRight(lastAttachVisible);
+        }
+    }
+
+    private void startDictation() {
+        if (parentFragment == null || parentActivity == null || messageEditText == null) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 23 && parentActivity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            parentActivity.requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 3);
+            return;
+        }
+        // Ask for AI consent before recording, so nobody talks into a dialog that then gets declined.
+        org.telegram.luckgram.LuckgramAI.getInstance().requestConsent(parentActivity, agreed -> {
+            if (!agreed || parentActivity == null) {
+                return;
+            }
+            new org.telegram.luckgram.voice.LuckgramDictationSheet(parentActivity, resourcesProvider, this::insertDictatedText).show();
+        });
+    }
+
+    private void insertDictatedText(String text) {
+        if (messageEditText == null || TextUtils.isEmpty(text)) {
+            return;
+        }
+        Editable editable = messageEditText.getText();
+        int start = Math.max(0, messageEditText.getSelectionStart());
+        int end = Math.max(start, messageEditText.getSelectionEnd());
+        start = Math.min(start, editable.length());
+        end = Math.min(end, editable.length());
+        editable.replace(start, end, text);
+        messageEditText.setSelection(Math.min(editable.length(), start + text.length()));
+        messageEditText.requestFocus();
+    }
+
     // ------------------------------------------------------------ Luckgram: quick replies (feature 02)
 
     private ImageView quickRepliesButton;
@@ -6898,6 +6967,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     public void onResume() {
         updateQuickRepliesButton();
+        updateDictationButton();
         isPaused = false;
         if (hideKeyboardRunnable != null) {
             AndroidUtilities.cancelRunOnUIThread(hideKeyboardRunnable);
@@ -9051,6 +9121,9 @@ public class ChatActivityEnterView extends FrameLayout implements
             }
             if (quickRepliesButton != null && quickRepliesButton.getVisibility() == VISIBLE) {
                 layoutParams.rightMargin += dp(DEFAULT_HEIGHT); // Luckgram: quick replies button in attachLayout
+            }
+            if (dictationButton != null && dictationButton.getVisibility() == VISIBLE) {
+                layoutParams.rightMargin += dp(DEFAULT_HEIGHT); // Luckgram: voice input button in attachLayout
             }
         } else {
             if (scheduledButton != null && scheduledButton.getTag() != null) {

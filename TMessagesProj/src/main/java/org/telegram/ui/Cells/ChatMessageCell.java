@@ -100,6 +100,7 @@ import androidx.core.graphics.ColorUtils;
 import androidx.core.math.MathUtils;
 
 import org.telegram.PhoneFormat.PhoneFormat;
+import org.telegram.luckgram.voice.LuckgramTranscriber;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.AppGlobalConfig;
@@ -12664,6 +12665,8 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             (!currentMessageObject.isOutOwner() || currentMessageObject.isSent()) &&
             (
                 UserConfig.getInstance(currentAccount).isPremium()
+                ||
+                LuckgramTranscriber.handles(currentMessageObject)
                 ||
                 TranscribeButton.isFreeTranscribeInChat(currentMessageObject)
                 ||

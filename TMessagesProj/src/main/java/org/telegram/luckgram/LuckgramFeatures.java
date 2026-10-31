@@ -35,6 +35,10 @@ public final class LuckgramFeatures {
     }
 
     public static final String DEBUG_DEMO = "debug_demo";
+    /** spec 17 */
+    public static final String FREE_TRANSCRIBE = "free_transcribe";
+    public static final String DICTATION = "dictation";
+    public static final String DICTATION_AI_TIDY = "dictation_ai_tidy";
 
     private static final ArrayList<LuckgramFeature> ALL = new ArrayList<>();
 
@@ -77,6 +81,15 @@ public final class LuckgramFeatures {
             "用户资料页显示对方最近在共同群组里发的消息", "Show a user's recent messages in your groups in common on their profile"));
 
         // ---- AI
+        add(toggle(FREE_TRANSCRIBE, AI, true,
+            "免费语音转文字", "Free voice-to-text",
+            "不需要会员，把语音消息和圆形视频转成文字", "Transcribe voice and video messages without Premium"));
+        add(toggle(DICTATION, AI, true,
+            "语音输入", "Voice input",
+            "输入框旁的按钮，说话即可输入文字", "A button in the message field to type by speaking"));
+        add(toggle(DICTATION_AI_TIDY, AI, false,
+            "语音输入 AI 整理", "Tidy voice input with AI",
+            "去掉口头禅、补全标点，语言不变", "Remove filler words and add punctuation, same language"));
 
         // ---- 调试 / Debug (debug builds or unlocked debug tools only)
         add(toggle(DEBUG_DEMO, DEBUG, false,
