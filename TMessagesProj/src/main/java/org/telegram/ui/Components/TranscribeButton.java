@@ -27,6 +27,7 @@ import androidx.core.graphics.ColorUtils;
 import androidx.core.math.MathUtils;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 
+import org.telegram.luckgram.voice.LuckgramTranscriber;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
@@ -205,6 +206,10 @@ public class TranscribeButton {
         if (parent == null) {
             return;
         }
+        if (!premium && LuckgramTranscriber.handles(parent.getMessageObject())) {
+            onLuckgramTap();
+            return;
+        }
         clickedToOpen = false;
         boolean processClick, toOpen = !shouldBeOpen;
         if (!shouldBeOpen) {
@@ -241,6 +246,38 @@ public class TranscribeButton {
                 }
                 transcribePressed(parent.getMessageObject(), toOpen, parent.getDelegate());
             }
+        }
+    }
+
+    /** spec 17: non-Premium accounts transcribe through Luckgram instead of the trial / Premium flow. */
+    private void onLuckgramTap() {
+        MessageObject m = parent.getMessageObject();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && selectorDrawable instanceof RippleDrawable) {
+            selectorDrawable.setState(StateSet.NOTHING);
+            parent.invalidate();
+        }
+        pressed = false;
+        clickedToOpen = false;
+        if (m == null || m.messageOwner == null || !m.isSent()) {
+            return;
+        }
+        if (LuckgramTranscriber.isFailed(m)) {
+            setOpen(false, true);
+            setLoading(true, true);
+            clickedToOpen = true;
+            LuckgramTranscriber.start(parent.getContext(), m);
+        } else if (shouldBeOpen || LuckgramTranscriber.isTranscribing(m)) {
+            setOpen(false, true);
+            setLoading(false, true);
+            LuckgramTranscriber.close(m);
+        } else if (m.messageOwner.voiceTranscription != null && m.messageOwner.voiceTranscriptionFinal) {
+            // cached locally: open without a request
+            clickedToOpen = true;
+            transcribePressed(m, true, parent.getDelegate());
+        } else {
+            setLoading(true, true);
+            clickedToOpen = true;
+            LuckgramTranscriber.start(parent.getContext(), m);
         }
     }
 
@@ -662,7 +699,8 @@ public class TranscribeButton {
     public static boolean isTranscribing(MessageObject messageObject) {
         return (
             (transcribeOperationsByDialogPosition != null && (transcribeOperationsByDialogPosition.containsValue(messageObject) || transcribeOperationsByDialogPosition.containsKey((Integer) reqInfoHash(messageObject)))) ||
-            (transcribeOperationsById != null && messageObject != null && messageObject.messageOwner != null && transcribeOperationsById.containsKey(messageObject.messageOwner.voiceTranscriptionId))
+            (transcribeOperationsById != null && messageObject != null && messageObject.messageOwner != null && transcribeOperationsById.containsKey(messageObject.messageOwner.voiceTranscriptionId)) ||
+            LuckgramTranscriber.isTranscribing(messageObject)
         );
     }
 
@@ -857,7 +895,7 @@ public class TranscribeButton {
         if (messageObject == null || messageObject.messageOwner == null) {
             return false;
         }
-        if (isFreeTranscribeInChat(messageObject)) {
+        if (isFreeTranscribeInChat(messageObject) || LuckgramTranscriber.handles(messageObject)) {
             return false;
         }
         if (!TextUtils.isEmpty(messageObject.messageOwner.voiceTranscription)) {

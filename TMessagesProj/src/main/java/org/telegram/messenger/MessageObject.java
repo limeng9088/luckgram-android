@@ -7553,8 +7553,9 @@ public class MessageObject {
         if (messageOwner == null || messageOwner.voiceTranscription == null) {
             return null;
         }
-        if (TextUtils.isEmpty(messageOwner.voiceTranscription)) {
-            SpannableString ssb = new SpannableString(getString(R.string.NoWordsRecognized));
+        final boolean luckgramFailed = org.telegram.luckgram.voice.LuckgramTranscriber.isFailed(this);
+        if (TextUtils.isEmpty(messageOwner.voiceTranscription) || luckgramFailed) {
+            SpannableString ssb = new SpannableString(luckgramFailed ? org.telegram.luckgram.voice.LuckgramTranscriber.failureText() : getString(R.string.NoWordsRecognized));
             ssb.setSpan(new CharacterStyle() {
                 @Override
                 public void updateDrawState(TextPaint textPaint) {
