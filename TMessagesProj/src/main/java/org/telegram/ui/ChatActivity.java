@@ -509,6 +509,9 @@ public class ChatActivity extends BaseFragment implements
     private ChatNotificationsPopupWrapper chatNotificationsPopupWrapper;
     // private ChatActivitySideControlsButtonsLayout topButtonsLayout;
     private ChatActivitySideControlsButtonsLayout sideControlsButtonsLayout;
+    /** Luckgram (spec 14): loader while "select all from sender" runs; the mode stays on until selection ends. */
+    private org.telegram.luckgram.selectall.SelectAllFromSender luckgramSelectAll;
+    private boolean luckgramSelectAllMode;
     private boolean pagedownButtonShowedByScroll;
     private int reactionsMentionCount;
     private int pollVotesMentionCount;
@@ -1247,6 +1250,8 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_SEND_NOW = 100;
     public final static int OPTION_EDIT_SCHEDULE_TIME = 102;
     public final static int OPTION_SPEED_PROMO = 103;
+    // Luckgram: select all messages from one sender (spec 14)
+    public final static int OPTION_LUCKGRAM_SELECT_ALL_FROM_SENDER = 200;
     public final static int OPTION_OPEN_PROFILE = 104;
     public final static int OPTION_FACT_CHECK = 106;
     public final static int OPTION_EDIT_PRICE = 107;
@@ -3797,6 +3802,14 @@ public class ChatActivity extends BaseFragment implements
                 } else if (id == delete) {
                     if (getParentActivity() == null) {
                         return;
+                    }
+                    if (luckgramSelectAllMode && cantDeleteMessagesCount > 0) {
+                        // Luckgram (spec 14): only delete what we may delete, say how many were skipped.
+                        int skipped = luckgramDeselectUndeletable();
+                        if (selectedMessagesIds[0].size() + selectedMessagesIds[1].size() == 0) {
+                            return;
+                        }
+                        BulletinFactory.of(ChatActivity.this).createSimpleBulletin(R.raw.info, org.telegram.luckgram.selectall.SelectAllFromSender.cantDeleteText(skipped)).show();
                     }
                     createDeleteMessagesAlert(null, null);
                 } else if (id == forward) {
@@ -19243,7 +19256,7 @@ public class ChatActivity extends BaseFragment implements
                     }
                 }
             } else {
-                if (selectedMessagesIds[0].size() + selectedMessagesIds[1].size() >= 100) {
+                if (!luckgramSelectAllMode && selectedMessagesIds[0].size() + selectedMessagesIds[1].size() >= 100) {
                     AndroidUtilities.shakeView(selectedMessagesCountTextView);
                     Vibrator vibrator = (Vibrator) ApplicationLoader.applicationContext.getSystemService(Context.VIBRATOR_SERVICE);
                     if (vibrator != null) {
@@ -19357,7 +19370,7 @@ public class ChatActivity extends BaseFragment implements
                 }
 
                 if (deleteItem != null) {
-                    deleteItem.setVisibility(cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
+                    deleteItem.setVisibility(cantDeleteMessagesCount == 0 || luckgramSelectAllMode && cantDeleteMessagesCount < selectedCount ? View.VISIBLE : View.GONE);
                 }
                 hasUnfavedSelected = false;
                 for (int a = 0; a < 2; a++) {
@@ -30714,6 +30727,7 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void hideActionMode() {
+        luckgramStopSelectAll();
         if (actionBar != null) {
             if (!actionBar.isActionModeShowed()) {
                 return;
@@ -34424,6 +34438,11 @@ public class ChatActivity extends BaseFragment implements
                 }).show();
                 break;
             }
+            case OPTION_LUCKGRAM_SELECT_ALL_FROM_SENDER: {
+                final MessageObject anchor = selectedObject;
+                AndroidUtilities.runOnUIThread(() -> luckgramStartSelectAll(anchor));
+                break;
+            }
             case OPTION_SUGGESTION_EDIT_TIME: {
                 final MessageObject msg = selectedObjectGroup != null ? selectedObjectGroup.findPrimaryMessageObject() : selectedObject;
                 final TLRPC.SuggestedPost suggestedPost = msg != null && msg.messageOwner != null ? msg.messageOwner.suggested_post : null;
@@ -34847,6 +34866,131 @@ public class ChatActivity extends BaseFragment implements
     public void clearSelectionMode() {
         clearSelectionMode(false);
     }
+
+    // region Luckgram: select all messages from one sender (spec 14)
+
+    private boolean luckgramCanSelectAll(MessageObject message) {
+        if (!org.telegram.luckgram.selectall.SelectAllFromSender.isEnabled() || message == null || isReport()) {
+            return false;
+        }
+        if (chatMode != 0 || message.getId() <= 0 || message.isSponsored() || message.isEphemeral()) {
+            return false;
+        }
+        if (message.messageOwner == null || message.messageOwner.action != null && !(message.messageOwner.action instanceof TLRPC.TL_messageActionEmpty)) {
+            return false;
+        }
+        return message.getFromChatId() != 0;
+    }
+
+    private void luckgramStartSelectAll(MessageObject anchor) {
+        if (anchor == null || getParentActivity() == null || actionBar == null) {
+            return;
+        }
+        final long senderId = anchor.getFromChatId();
+        // Enter the regular multi-select mode with the long-pressed message.
+        if (!actionBar.isActionModeShowed()) {
+            View cell = null;
+            for (int i = 0, n = chatListView.getChildCount(); i < n; i++) {
+                View child = chatListView.getChildAt(i);
+                if (child instanceof ChatMessageCell && ((ChatMessageCell) child).getMessageObject() != null && ((ChatMessageCell) child).getMessageObject().getId() == anchor.getId()) {
+                    cell = child;
+                    break;
+                }
+            }
+            if (cell == null) {
+                return;
+            }
+            createMenu(cell, false, false, 0, 0, false, false);
+            if (!actionBar.isActionModeShowed()) {
+                return;
+            }
+        }
+        luckgramStopSelectAll();
+        luckgramSelectAllMode = true;
+        if (currentEncryptedChat != null) {
+            // Secret chats: only messages that are on this device.
+            ArrayList<MessageObject> local = new ArrayList<>();
+            for (int i = 0; i < messages.size(); i++) {
+                MessageObject m = messages.get(i);
+                if (m != null && m.getId() != 0 && m.getFromChatId() == senderId && luckgramCanSelectAll(m)) {
+                    local.add(m);
+                }
+            }
+            luckgramAddToSelection(local);
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.info, org.telegram.luckgram.selectall.SelectAllFromSender.doneText(selectedMessagesIds[0].size() + selectedMessagesIds[1].size())).show();
+            return;
+        }
+        // Broadcast channels: every post is "from" the channel, so load all posts.
+        long fromId = senderId == dialog_id ? 0 : senderId;
+        int topMsgId = isTopic || isThreadChat() ? (int) threadMessageId : 0;
+        luckgramSelectAll = new org.telegram.luckgram.selectall.SelectAllFromSender(currentAccount, dialog_id, fromId, topMsgId, new org.telegram.luckgram.selectall.SelectAllFromSender.Delegate() {
+            @Override
+            public void onPage(ArrayList<MessageObject> page) {
+                luckgramAddToSelection(page);
+            }
+
+            @Override
+            public void onFinished(boolean complete, int total) {
+                luckgramSelectAll = null;
+                if (!actionBar.isActionModeShowed()) {
+                    return;
+                }
+                int count = selectedMessagesIds[0].size() + selectedMessagesIds[1].size();
+                BulletinFactory.of(ChatActivity.this).createSimpleBulletin(R.raw.info, complete
+                    ? org.telegram.luckgram.selectall.SelectAllFromSender.doneText(count)
+                    : org.telegram.luckgram.selectall.SelectAllFromSender.failedText(count)).show();
+            }
+        });
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.info, org.telegram.luckgram.selectall.SelectAllFromSender.loadingText()).show();
+        luckgramSelectAll.start();
+    }
+
+    private void luckgramAddToSelection(ArrayList<MessageObject> page) {
+        if (!actionBar.isActionModeShowed() || page.isEmpty()) {
+            return;
+        }
+        for (int i = 0; i < page.size(); i++) {
+            MessageObject m = page.get(i);
+            int index = m.getDialogId() == dialog_id ? 0 : 1;
+            if (selectedMessagesIds[index].indexOfKey(m.getId()) >= 0) {
+                continue;
+            }
+            // Prefer the object already shown in the chat so cells draw their checkbox.
+            MessageObject shown = messagesDict[index].get(m.getId());
+            addToSelectedMessages(shown != null ? shown : m, false, i == page.size() - 1);
+        }
+        updateActionModeTitle();
+        updateVisibleRows();
+    }
+
+    private void luckgramStopSelectAll() {
+        if (luckgramSelectAll != null) {
+            luckgramSelectAll.cancel();
+            luckgramSelectAll = null;
+        }
+        luckgramSelectAllMode = false;
+    }
+
+    /** Removes messages we may not delete from the selection; returns how many were removed. */
+    private int luckgramDeselectUndeletable() {
+        ArrayList<MessageObject> undeletable = new ArrayList<>();
+        for (int a = 0; a < 2; a++) {
+            for (int b = 0; b < selectedMessagesIds[a].size(); b++) {
+                MessageObject m = selectedMessagesIds[a].valueAt(b);
+                if (m != null && !m.canDeleteMessage(chatMode == MODE_SCHEDULED, currentChat)) {
+                    undeletable.add(m);
+                }
+            }
+        }
+        for (int i = 0; i < undeletable.size(); i++) {
+            addToSelectedMessages(undeletable.get(i), false, i == undeletable.size() - 1);
+        }
+        updateActionModeTitle();
+        updateVisibleRows();
+        return undeletable.size();
+    }
+
+    // endregion
 
     public void clearSelectionMode(boolean suppressUpdateMessageObject) {
         for (int a = 1; a >= 0; a--) {
@@ -46522,6 +46666,17 @@ public class ChatActivity extends BaseFragment implements
             items.add(sendMoneyIndex, getString(R.string.WalletSendMoney));
             options.add(sendMoneyIndex, OPTION_SEND_MONEY);
             icons.add(sendMoneyIndex, R.drawable.ic_gram);
+        }
+
+        if (luckgramCanSelectAll(message)) {
+            // Luckgram (spec 14): right after Forward (Android has no "Select" item), else after Copy/Reply.
+            int index = options.indexOf(OPTION_FORWARD);
+            if (index < 0) index = options.indexOf(OPTION_COPY);
+            if (index < 0) index = options.indexOf(OPTION_REPLY);
+            index = index < 0 ? Math.min(1, options.size()) : index + 1;
+            items.add(index, org.telegram.luckgram.selectall.SelectAllFromSender.menuTitle(currentAccount, dialog_id, message.getFromChatId()));
+            options.add(index, OPTION_LUCKGRAM_SELECT_ALL_FROM_SENDER);
+            icons.add(index, R.drawable.msg_select);
         }
 
         if (showWelcomeMessageRevertOption(primaryMessage)) {

@@ -46,6 +46,9 @@ public final class LuckgramFeatures {
         // ---- 账号与隐私 / Accounts & Privacy
 
         // ---- 消息与语言 / Messages & Language
+        add(toggle(org.telegram.luckgram.selectall.SelectAllFromSender.SETTING_KEY, MESSAGES_LANGUAGE, true,
+            "全选某人的消息", "Select all from sender",
+            "长按消息一次选中这个人在本聊天的全部消息", "Long-press a message to select everything its sender wrote here"));
 
         // ---- 媒体、通话与存储 / Media, Calls & Storage
 
