@@ -29,7 +29,6 @@ import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
-import org.telegram.ui.Components.CodepointsLengthInputFilter;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.NumberTextView;
@@ -138,11 +137,14 @@ public class UserNoteEditActivity extends BaseFragment {
         editText.setCursorColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         editText.setCursorSize(AndroidUtilities.dp(20));
         editText.setCursorWidth(1.5f);
-        editText.setFilters(new android.text.InputFilter[]{new CodepointsLengthInputFilter(UserNotesStore.MAX_LENGTH) {
+        // Limit in grapheme clusters, same as iOS (specs#60): keeps only the whole characters that fit.
+        editText.setFilters(new android.text.InputFilter[]{new android.text.InputFilter() {
             @Override
             public CharSequence filter(CharSequence source, int start, int end, Spanned dest, int dstart, int dend) {
-                CharSequence result = super.filter(source, start, end, dest, dstart, dend);
-                if (result != null && source != null && result.length() != source.length()) {
+                CharSequence src = source.subSequence(start, end);
+                int keep = UserNotesText.fittingPrefix(src, dest, dstart, dend);
+                CharSequence result = keep >= src.length() ? null : src.subSequence(0, keep);
+                if (result != null) {
                     AndroidUtilities.shakeView(counterView);
                     try {
                         org.telegram.ui.Components.BulletinFactory.of(UserNoteEditActivity.this).createSimpleBulletin(R.raw.error, UserNotesStrings.tooLong()).show();
@@ -193,8 +195,7 @@ public class UserNoteEditActivity extends BaseFragment {
             return;
         }
         Editable s = editText.getText();
-        int used = s == null ? 0 : Character.codePointCount(s, 0, s.length());
-        int left = UserNotesStore.MAX_LENGTH - used;
+        int left = UserNotesText.remaining(s);
         // Only show the counter close to the limit, like Telegram's caption limit.
         counterView.setVisibility(left <= 200 ? View.VISIBLE : View.GONE);
         counterView.setNumber(left, animated);

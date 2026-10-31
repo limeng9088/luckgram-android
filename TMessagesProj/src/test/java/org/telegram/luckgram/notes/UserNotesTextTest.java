@@ -45,11 +45,55 @@ class UserNotesTextTest {
     }
 
     @Test
-    void limitCountsEmojiAsOneCharacterAndNeverSplitsThem() {
+    void surrogatePairEmojiCountAsOneCharacter() {
         // 😀 is two UTF-16 units; 2001 of them must become exactly 2000 whole emoji.
         String cut = UserNotesText.normalize(repeat("😀", 2001));
         assertEquals(2000, cut.codePointCount(0, cut.length()));
         assertEquals(4000, cut.length());
+    }
+
+    // ---- specs#60：和 iOS 一样按字形簇计数（一个 emoji / ZWJ 组合 / 国旗算 1 个）
+
+    private static final String FAMILY = "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67"; // 👨‍👩‍👧, 5 code points
+    private static final String FLAG_CN = "\uD83C\uDDE8\uD83C\uDDF3"; // 🇨🇳
+    private static final String THUMB_DARK = "\uD83D\uDC4D\uD83C\uDFFF"; // 👍🏿
+    private static final String KEYCAP_1 = "1\uFE0F\u20E3"; // 1️⃣
+
+    @Test
+    void emojiSequencesCountAsOneCharacter() {
+        assertEquals(1, UserNotesText.graphemeCount(FAMILY));
+        assertEquals(1, UserNotesText.graphemeCount(FLAG_CN));
+        assertEquals(1, UserNotesText.graphemeCount(THUMB_DARK));
+        assertEquals(1, UserNotesText.graphemeCount(KEYCAP_1));
+        assertEquals(1, UserNotesText.graphemeCount("e\u0301")); // é with combining accent
+        assertEquals(2, UserNotesText.graphemeCount(FLAG_CN + FLAG_CN));
+        assertEquals(1, UserNotesText.graphemeCount("\r\n"));
+    }
+
+    @Test
+    void twoThousandFamilyEmojiFitLikeOnIos() {
+        String note = repeat(FAMILY, 2000);
+        assertEquals(note, UserNotesText.normalize(note));
+        assertEquals(0, UserNotesText.remaining(note));
+    }
+
+    @Test
+    void cuttingNeverSplitsAZwjSequence() {
+        String cut = UserNotesText.normalize(repeat(FAMILY, 2001));
+        assertEquals(repeat(FAMILY, 2000), cut);
+    }
+
+    @Test
+    void editorKeepsOnlyWholeCharactersThatFit() {
+        String dest = repeat("字", 1998);
+        // Pasting 3 families into room for 2: keep exactly two whole families.
+        String paste = FAMILY + FAMILY + FAMILY;
+        int keep = UserNotesText.fittingPrefix(paste, dest, dest.length(), dest.length());
+        assertEquals(FAMILY.length() * 2, keep);
+        // Replacing a selection frees its room.
+        assertEquals(paste.length(), UserNotesText.fittingPrefix(paste, dest, 0, 3));
+        // Full note: nothing more fits.
+        assertEquals(0, UserNotesText.fittingPrefix("a", repeat("字", 2000), 2000, 2000));
     }
 
     // ---- 需求 3：聊天顶部细条显示备注第一行
