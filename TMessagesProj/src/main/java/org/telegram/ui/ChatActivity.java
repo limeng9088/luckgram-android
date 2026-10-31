@@ -30804,9 +30804,15 @@ public class ChatActivity extends BaseFragment implements
         if (finalSelectedObject == null && (selectedMessagesIds[0].size() + selectedMessagesIds[1].size()) == 0) {
             return;
         }
+        final int luckgramDeleteCount = finalSelectedObject == null ? selectedMessagesIds[0].size() + selectedMessagesIds[1].size() : 0;
         AlertsCreator.createDeleteMessagesAlert(this, currentUser, currentChat, currentEncryptedChat, chatInfo, mergeDialogId, finalSelectedObject, selectedMessagesIds, finalSelectedGroup, (int) getTopicId(), chatMode, null, () -> {
             hideActionMode();
             updatePinnedMessageView(true);
+            if (luckgramDeleteCount > org.telegram.luckgram.selectall.SelectAllFromSender.BATCH_SIZE) {
+                // Spec 14 requirement 3: MessagesController splits this into 100-id requests, each a
+                // persisted pending task that is retried until the server accepts it.
+                BulletinFactory.of(this).createSimpleBulletin(R.raw.ic_delete, org.telegram.luckgram.selectall.SelectAllFromSender.deletingText(luckgramDeleteCount, (luckgramDeleteCount + org.telegram.luckgram.selectall.SelectAllFromSender.BATCH_SIZE - 1) / org.telegram.luckgram.selectall.SelectAllFromSender.BATCH_SIZE), 2).show();
+            }
         }, hideDimAfter ? () -> dimBehindView(false) : null, themeDelegate);
     }
 
@@ -34679,9 +34685,14 @@ public class ChatActivity extends BaseFragment implements
 
                 messagePreviewParams = null;
                 hideFieldPanel(false);
+                boolean luckgramBatched = false;
                 for (int a = 0; a < dids.size(); a++) {
                     final long did = dids.get(a).dialogId;
                     final Long price = prices == null ? (Long) 0L : prices.get(did);
+                    if (dids.size() == 1 && luckgramForwardInBatches(fmessages, dids.get(a), notify, scheduleDate, price, message)) {
+                        luckgramBatched = true;
+                        break;
+                    }
                     if (message != null) {
                         final SendMessagesHelper.SendMessageParams params = SendMessagesHelper.SendMessageParams.of(message.toString(), did, null, null, null, true, null, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, false);
                         params.sendMessageChatArguments = getMessageChatSendParams();
@@ -34694,7 +34705,7 @@ public class ChatActivity extends BaseFragment implements
                 }
                 fragment.finishFragment();
                 createUndoView();
-                if (undoView != null) {
+                if (undoView != null && !luckgramBatched) {
                     if (dids.size() == 1) {
                         if (!BulletinFactory.of(ChatActivity.this).showForwardedBulletinWithTag(dids.get(0).dialogId, fmessages.size())) {
                             undoView.showWithAction(dids.get(0).dialogId, UndoView.ACTION_FWD_MESSAGES, fmessages.size());
@@ -34967,7 +34978,7 @@ public class ChatActivity extends BaseFragment implements
         if (!org.telegram.luckgram.selectall.SelectAllFromSender.isEnabled() || message == null || isReport()) {
             return false;
         }
-        if (chatMode != 0 || message.getId() <= 0 || message.isSponsored() || message.isEphemeral()) {
+        if (chatMode != 0 || message.getId() == 0 || message.getId() < 0 && currentEncryptedChat == null || message.isSponsored() || message.isEphemeral()) {
             return false;
         }
         if (message.messageOwner == null || message.messageOwner.action != null && !(message.messageOwner.action instanceof TLRPC.TL_messageActionEmpty)) {
@@ -35011,7 +35022,7 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
             luckgramAddToSelection(local);
-            BulletinFactory.of(this).createSimpleBulletin(R.raw.info, org.telegram.luckgram.selectall.SelectAllFromSender.doneText(selectedMessagesIds[0].size() + selectedMessagesIds[1].size())).show();
+            luckgramShowDoneWithCopy(org.telegram.luckgram.selectall.SelectAllFromSender.doneText(selectedMessagesIds[0].size() + selectedMessagesIds[1].size()));
             return;
         }
         // Broadcast channels: every post is "from" the channel, so load all posts.
@@ -35030,9 +35041,9 @@ public class ChatActivity extends BaseFragment implements
                     return;
                 }
                 int count = selectedMessagesIds[0].size() + selectedMessagesIds[1].size();
-                BulletinFactory.of(ChatActivity.this).createSimpleBulletin(R.raw.info, complete
+                luckgramShowDoneWithCopy(complete
                     ? org.telegram.luckgram.selectall.SelectAllFromSender.doneText(count)
-                    : org.telegram.luckgram.selectall.SelectAllFromSender.failedText(count)).show();
+                    : org.telegram.luckgram.selectall.SelectAllFromSender.failedText(count));
             }
         });
         BulletinFactory.of(this).createSimpleBulletin(R.raw.info, org.telegram.luckgram.selectall.SelectAllFromSender.loadingText()).show();
@@ -35065,6 +35076,90 @@ public class ChatActivity extends BaseFragment implements
         luckgramSelectAllMode = false;
     }
 
+    private ArrayList<MessageObject> luckgramSelectedMessages() {
+        ArrayList<MessageObject> list = new ArrayList<>();
+        for (int a = 0; a < 2; a++) {
+            for (int b = 0; b < selectedMessagesIds[a].size(); b++) {
+                MessageObject m = selectedMessagesIds[a].valueAt(b);
+                if (m != null) {
+                    list.add(m);
+                }
+            }
+        }
+        return list;
+    }
+
+    /** "All N selected" with a "Copy text" button: the selection's text oldest first (spec 14 requirement 4). */
+    private void luckgramShowDoneWithCopy(CharSequence text) {
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.info, text, org.telegram.luckgram.selectall.SelectAllFromSender.copyText(), Bulletin.DURATION_PROLONG, () -> {
+            CharSequence copy = org.telegram.luckgram.selectall.BatchForward.chronologicalText(luckgramSelectedMessages());
+            if (copy.length() == 0) {
+                return;
+            }
+            AndroidUtilities.addToClipboard(copy);
+            if (AndroidUtilities.shouldShowClipboardToast()) {
+                BulletinFactory.of(this).createCopyBulletin(org.telegram.luckgram.selectall.SelectAllFromSender.copiedText()).show();
+            }
+        }).show();
+    }
+
+    private org.telegram.luckgram.selectall.BatchForward luckgramBatchForward;
+    private Bulletin luckgramBatchBulletin;
+
+    /**
+     * Spec 14 requirement 3: more than 100 messages to one chat go out as a sequence of 100-id
+     * requests with a progress toast; a failed batch can be retried. Returns false to let the
+     * regular forward handle it (text comment, schedule, paid messages, several targets).
+     */
+    private boolean luckgramForwardInBatches(ArrayList<MessageObject> fmessages, MessagesStorage.TopicKey target, boolean notify, int scheduleDate, Long price, CharSequence comment) {
+        if (fmessages.size() <= org.telegram.luckgram.selectall.SelectAllFromSender.BATCH_SIZE || comment != null || scheduleDate != 0 || price != null && price > 0) {
+            return false;
+        }
+        if (luckgramBatchForward != null) {
+            luckgramBatchForward.cancel();
+        }
+        final long did = target.dialogId;
+        luckgramBatchForward = new org.telegram.luckgram.selectall.BatchForward(currentAccount, fmessages, did, target.topicId, notify, new org.telegram.luckgram.selectall.BatchForward.Listener() {
+            @Override
+            public void onProgress(int done, int total) {
+                if (luckgramBatchBulletin != null) {
+                    luckgramBatchBulletin.hide();
+                }
+                luckgramBatchBulletin = BulletinFactory.of(ChatActivity.this).createSimpleBulletin(R.raw.forward, org.telegram.luckgram.selectall.SelectAllFromSender.forwardingText(done, total), 2, 60_000);
+                luckgramBatchBulletin.show();
+            }
+
+            @Override
+            public void onBatchFailed(int index, int total, TLRPC.TL_error error) {
+                if (luckgramBatchBulletin != null) {
+                    luckgramBatchBulletin.hide();
+                }
+                luckgramBatchBulletin = BulletinFactory.of(ChatActivity.this).createSimpleBulletin(R.raw.error, org.telegram.luckgram.selectall.SelectAllFromSender.batchFailedText(index + 1, total), org.telegram.luckgram.selectall.SelectAllFromSender.retryText(), 60_000, () -> {
+                    if (luckgramBatchForward != null) {
+                        luckgramBatchForward.retry();
+                    }
+                });
+                luckgramBatchBulletin.show();
+            }
+
+            @Override
+            public void onDone(int messageCount) {
+                if (luckgramBatchBulletin != null) {
+                    luckgramBatchBulletin.hide();
+                    luckgramBatchBulletin = null;
+                }
+                luckgramBatchForward = null;
+                if (!BulletinFactory.of(ChatActivity.this).showForwardedBulletinWithTag(did, messageCount)) {
+                    createUndoView();
+                    if (undoView != null) {
+                        undoView.showWithAction(did, UndoView.ACTION_FWD_MESSAGES, messageCount);
+                    }
+                }
+            }
+        });
+        luckgramBatchForward.start();
+        return true;
+    }
     // region Luckgram: save to Saved Messages in one tap (spec 15)
 
     private boolean luckgramCanSaveToSaved() {

@@ -164,7 +164,7 @@ public class SelectAllFromSender {
     }
 
     public static String loadingText() {
-        return LuckgramStrings.get("正在加载全部消息，按返回可取消", "Loading all messages… Press back to cancel");
+        return LuckgramStrings.get("正在加载全部消息，退出多选可取消", "Loading all messages… Leave selection to cancel");
     }
 
     public static String doneText(int count) {
@@ -173,6 +173,32 @@ public class SelectAllFromSender {
 
     public static String failedText(int count) {
         return LuckgramStrings.get("加载中断，已选中 " + count + " 条", "Loading stopped, " + count + " selected");
+    }
+
+    public static String copyText() {
+        return LuckgramStrings.get("复制文字", "Copy Text");
+    }
+
+    public static String copiedText() {
+        return LuckgramStrings.get("已按时间顺序复制", "Copied in chronological order");
+    }
+
+    /** "正在转发 第 2/4 批" while a large forward runs. */
+    public static String forwardingText(int done, int total) {
+        return LuckgramStrings.get("正在转发 第 " + Math.min(done + 1, total) + "/" + total + " 批", "Forwarding batch " + Math.min(done + 1, total) + " of " + total);
+    }
+
+    public static String batchFailedText(int batch, int total) {
+        return LuckgramStrings.get("第 " + batch + "/" + total + " 批转发失败", "Batch " + batch + " of " + total + " failed to forward");
+    }
+
+    public static String retryText() {
+        return LuckgramStrings.get("重试", "Retry");
+    }
+
+    /** Large deletions: the app splits them into 100-id requests and retries failed ones itself. */
+    public static String deletingText(int count, int batches) {
+        return LuckgramStrings.get("正在删除 " + count + " 条（分 " + batches + " 批），失败的批次会自动重试", "Deleting " + count + " messages in " + batches + " batches; failed batches retry automatically");
     }
 
     public static String cantDeleteText(int count) {
