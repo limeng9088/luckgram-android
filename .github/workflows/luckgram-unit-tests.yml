@@ -52,7 +52,8 @@ jobs:
             LuckgramRemoteConfigLogic.java \
             LuckgramAudioSplitter.java \
             quickreplies/QuickRepliesLogic.java \
-            roundvideo/RoundVideoGeometry.java; do
+            roundvideo/RoundVideoGeometry.java \
+            unblock/StoreRestrictions.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"
