@@ -143,6 +143,10 @@ import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.R;
+import org.telegram.luckgram.quickreplies.QuickRepliesManageActivity;
+import org.telegram.luckgram.quickreplies.QuickRepliesSheet;
+import org.telegram.luckgram.quickreplies.QuickRepliesStore;
+import org.telegram.luckgram.quickreplies.QuickRepliesStrings;
 import org.telegram.luckgram.translateout.TranslateOutController;
 import org.telegram.luckgram.translateout.TranslateOutLanguageSheet;
 import org.telegram.luckgram.translateout.TranslateOutStrings;
@@ -2829,6 +2833,8 @@ public class ChatActivityEnterView extends FrameLayout implements
                 });
             }
 
+            createQuickRepliesButton(context);
+
             attachButton = new ImageView(context) {
                 @Override
                 public boolean dispatchTouchEvent(MotionEvent event) {
@@ -3708,7 +3714,8 @@ public class ChatActivityEnterView extends FrameLayout implements
                     dp(-DEFAULT_HEIGHT) +
                     innerTranslationX + attachLayoutPaddingTranslationX + attachLayoutTranslationX +
                     dp(giftButton != null && giftButton.getVisibility() == View.VISIBLE ? -DEFAULT_HEIGHT : 0) * (giftButton == null ? 0 : giftButton.getAlpha()) +
-                    dp(botButton != null && botButton.getVisibility() == VISIBLE ? -DEFAULT_HEIGHT : 0) * (botButton == null ? 0 : botButton.getAlpha())
+                    dp(botButton != null && botButton.getVisibility() == VISIBLE ? -DEFAULT_HEIGHT : 0) * (botButton == null ? 0 : botButton.getAlpha()) +
+                    dp(quickRepliesButton != null && quickRepliesButton.getVisibility() == VISIBLE ? -DEFAULT_HEIGHT : 0)
                 );
             }
         };
@@ -6237,6 +6244,103 @@ public class ChatActivityEnterView extends FrameLayout implements
         }).show();
     }
 
+    // ------------------------------------------------------------ Luckgram: quick replies (feature 02)
+
+    private ImageView quickRepliesButton;
+
+    private void createQuickRepliesButton(Context context) {
+        if (parentFragment == null || attachLayout == null || parentFragment.getChatMode() != 0) {
+            return;
+        }
+        quickRepliesButton = new ImageView(context);
+        quickRepliesButton.setImageResource(R.drawable.menu_quickreply);
+        quickRepliesButton.setScaleType(ImageView.ScaleType.CENTER);
+        quickRepliesButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+        quickRepliesButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector)));
+        quickRepliesButton.setContentDescription(QuickRepliesStrings.title());
+        quickRepliesButton.setOnClickListener(v -> showQuickReplies());
+        quickRepliesButton.setVisibility(QuickRepliesStore.isEnabled() ? VISIBLE : GONE);
+        attachLayout.addView(quickRepliesButton, LayoutHelper.createLinear(DEFAULT_HEIGHT, DEFAULT_HEIGHT));
+    }
+
+    private void updateQuickRepliesButton() {
+        if (quickRepliesButton == null) {
+            return;
+        }
+        final int visibility = QuickRepliesStore.isEnabled() ? VISIBLE : GONE;
+        if (quickRepliesButton.getVisibility() != visibility) {
+            quickRepliesButton.setVisibility(visibility);
+            if (scheduledButton != null) {
+                scheduledButton.setTranslationX(scheduledButton.getTranslationX());
+            }
+            updateFieldRight(lastAttachVisible);
+        }
+    }
+
+    private void showQuickReplies() {
+        if (parentFragment == null || parentFragment.getParentActivity() == null) {
+            return;
+        }
+        new QuickRepliesSheet(parentFragment.getParentActivity(), currentAccount, resourcesProvider, new QuickRepliesSheet.Delegate() {
+            @Override
+            public void onInsert(String text) {
+                insertQuickReply(text);
+            }
+
+            @Override
+            public void onSend(String text) {
+                sendQuickReply(text);
+            }
+
+            @Override
+            public void onManage() {
+                if (parentFragment != null) {
+                    parentFragment.presentFragment(new QuickRepliesManageActivity());
+                }
+            }
+        }).show();
+    }
+
+    /** Puts the template into the input field at the cursor; nothing is sent. */
+    public void insertQuickReply(String text) {
+        if (messageEditText == null || TextUtils.isEmpty(text)) {
+            return;
+        }
+        final Editable editable = messageEditText.getText();
+        final CharSequence value = Emoji.replaceEmoji(text, messageEditText.getPaint().getFontMetricsInt(), false);
+        if (editable == null || editable.length() == 0) {
+            setFieldText(value);
+        } else {
+            int start = Math.max(0, Math.min(messageEditText.getSelectionStart(), messageEditText.getSelectionEnd()));
+            int end = Math.max(0, Math.max(messageEditText.getSelectionStart(), messageEditText.getSelectionEnd()));
+            start = Math.min(start, editable.length());
+            end = Math.min(end, editable.length());
+            editable.replace(start, end, value);
+            messageEditText.setSelection(Math.min(editable.length(), start + value.length()));
+        }
+        openKeyboard();
+    }
+
+    /** Sends the template right away, keeping whatever is in the input field. */
+    private void sendQuickReply(String text) {
+        if (parentFragment == null || TextUtils.isEmpty(text)) {
+            return;
+        }
+        if (parentFragment.checkSlowMode(quickRepliesButton != null ? quickRepliesButton : this)) {
+            return;
+        }
+        AlertsCreator.ensurePaidMessageConfirmation(currentAccount, dialog_id, 1, stars -> {
+            final CharSequence[] message = new CharSequence[]{text};
+            final ArrayList<TLRPC.MessageEntity> entities = MediaDataController.getInstance(currentAccount).getEntities(message, true);
+            final SendMessagesHelper.SendMessageParams params = SendMessagesHelper.SendMessageParams.of(message[0].toString(), dialog_id, replyingMessageObject, getThreadMessage(), null, true, entities, null, null, true, 0, 0, null, false);
+            params.sendMessageChatArguments = parentFragment != null ? parentFragment.getMessageChatSendParams() : null;
+            params.payStars = stars;
+            params.monoForumPeer = getSendMonoForumPeerId();
+            params.suggestionParams = getSendMessageSuggestionParams();
+            SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
+        });
+    }
+
     private boolean shownAiButton;
     private void showAiButton(boolean show_) {
         final boolean show = (show_ || richDraftActive) && parentFragment != null && !parentFragment.isSecretChat();
@@ -6793,6 +6897,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void onResume() {
+        updateQuickRepliesButton();
         isPaused = false;
         if (hideKeyboardRunnable != null) {
             AndroidUtilities.cancelRunOnUIThread(hideKeyboardRunnable);
@@ -8943,6 +9048,9 @@ public class ChatActivityEnterView extends FrameLayout implements
                 layoutParams.rightMargin = dp(98);
             } else {
                 layoutParams.rightMargin = dp(50);
+            }
+            if (quickRepliesButton != null && quickRepliesButton.getVisibility() == VISIBLE) {
+                layoutParams.rightMargin += dp(DEFAULT_HEIGHT); // Luckgram: quick replies button in attachLayout
             }
         } else {
             if (scheduledButton != null && scheduledButton.getTag() != null) {
