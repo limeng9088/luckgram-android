@@ -7347,6 +7347,11 @@ public class ChatActivity extends BaseFragment implements
                 chatActivityEnterView.replaceWithText(start, len, mentionContainer.getAdapter().getHashtagHint() + " ", false);
                 return;
             }
+            if (object instanceof MentionsAdapter.LuckgramTemplate) {
+                // Luckgram quick replies: fill the template in place of "/query", don't send
+                chatActivityEnterView.replaceWithText(start, len, ((MentionsAdapter.LuckgramTemplate) object).text, true);
+                return;
+            }
             if (object instanceof QuickRepliesController.QuickReply) {
                 if (!getUserConfig().isPremium()) {
                     showDialog(new PremiumFeatureBottomSheet(this, getContext(), currentAccount, true, PremiumPreviewFragment.PREMIUM_FEATURE_BUSINESS_QUICK_REPLIES, false, null));
