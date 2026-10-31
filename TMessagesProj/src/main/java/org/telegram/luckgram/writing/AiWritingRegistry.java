@@ -29,6 +29,7 @@ import java.util.List;
  * View panel = ...;
  * host.showPanel(panel);                      // replaces any other panel
  * host.setText("new text", true);             // true: "撤销" restores the previous text
+ * host.send("text", false);                   // sends like the Send button (true: pick a time first)
  * host.hidePanel(panel);
  * </pre>
  */
@@ -65,6 +66,13 @@ public final class AiWritingRegistry {
 
         /** True in a channel where the user can post. */
         boolean canPostInChannel();
+
+        /**
+         * Sends {@code text} to the chat the way the user would from the field (as the channel when
+         * posting in a channel) and clears the field; with {@code schedule}, Telegram's schedule picker
+         * opens first.
+         */
+        void send(CharSequence text, boolean schedule);
     }
 
     public interface Visibility {

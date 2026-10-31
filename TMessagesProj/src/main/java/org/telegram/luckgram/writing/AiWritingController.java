@@ -22,9 +22,11 @@ import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ChatActivity;
+import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.EditTextCaption;
 import org.telegram.ui.Components.ItemOptions;
@@ -251,6 +253,28 @@ public final class AiWritingController implements AiWritingRegistry.Host {
     public boolean canPostInChannel() {
         TLRPC.Chat chat = chatActivity.getCurrentChat();
         return chat != null && ChatObject.isChannelAndNotMegaGroup(chat) && ChatObject.canPost(chat);
+    }
+
+    @Override
+    public void send(CharSequence text, boolean schedule) {
+        if (isEmpty(text) || chatActivity == null) return;
+        final String message = text.toString().trim();
+        if (schedule) {
+            AlertsCreator.createScheduleDatePickerDialog(chatActivity.getParentActivity(), dialogId,
+                (notify, scheduleDate, scheduleRepeatPeriod) -> sendNow(message, notify, scheduleDate, scheduleRepeatPeriod),
+                chatActivity.getResourceProvider());
+        } else {
+            sendNow(message, true, 0, 0);
+        }
+    }
+
+    private void sendNow(String message, boolean notify, int scheduleDate, int scheduleRepeatPeriod) {
+        SendMessagesHelper.SendMessageParams params = SendMessagesHelper.SendMessageParams.of(message, dialogId, null, null, null, true,
+            null, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, false);
+        params.sendMessageChatArguments = chatActivity.getMessageChatSendParams();
+        SendMessagesHelper.getInstance(account).sendMessage(params);
+        undoText = null;
+        replaceText("");
     }
 
     static boolean isEmpty(CharSequence s) {
