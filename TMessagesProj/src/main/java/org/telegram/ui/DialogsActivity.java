@@ -2897,6 +2897,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (!onlySelect) {
                 observersGroup.addGlobal(NotificationCenter.closeSearchByActiveAction);
                 observersGroup.addGlobal(NotificationCenter.proxySettingsChanged);
+                observersGroup.addGlobal(NotificationCenter.luckgramAnnouncementsChanged); // Luckgram S8
                 observersGroup.add(NotificationCenter.filterSettingsUpdated);
                 observersGroup.add(NotificationCenter.dialogsUnreadCounterChanged);
             }
@@ -6020,6 +6021,20 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             dialogsHintCell.setText(Emoji.replaceWithRestrictedEmoji(LocaleController.getString(R.string.GraceTitle), dialogsHintCell.titleView, this::updateDialogsHint), LocaleController.getString(R.string.GraceMessage));
             dialogsHintCell.setOnCloseListener(v -> {
                 MessagesController.getInstance(currentAccount).removeSuggestion(0, "PREMIUM_GRACE");
+                updateDialogsHint();
+            });
+        } else if (folderId == 0 && communityId == 0 && initialDialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect && org.telegram.luckgram.announce.LuckgramAnnouncements.current() != null) {
+            // Luckgram S8: in-app announcement (after Telegram's account-critical hints above).
+            final org.telegram.luckgram.announce.AnnouncementLogic.Item announcement = org.telegram.luckgram.announce.LuckgramAnnouncements.current();
+            dialogsHintCellVisible = true;
+            dialogsHintCell.setOnClickListener(v -> {
+                if (!TextUtils.isEmpty(announcement.url)) {
+                    Browser.openUrl(getContext(), announcement.url);
+                }
+            });
+            dialogsHintCell.setText(announcement.title, announcement.body);
+            dialogsHintCell.setOnCloseListener(v -> {
+                org.telegram.luckgram.announce.LuckgramAnnouncements.dismiss(announcement.id);
                 updateDialogsHint();
             });
         } else if (folderId == 0 && communityId == 0 && getMessagesController().customPendingSuggestion != null) {
@@ -10560,6 +10575,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             updateVisibleRows(0);
         } else if (id == NotificationCenter.dialogsUnreadReactionsCounterChanged) {
             updateVisibleRows(0);
+        } else if (id == NotificationCenter.luckgramAnnouncementsChanged) {
+            updateDialogsHint();
         } else if (id == NotificationCenter.emojiLoaded) {
             if (viewPages != null) {
                 for (int i = 0; i < viewPages.length; ++i) {
