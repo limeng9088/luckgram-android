@@ -44,8 +44,17 @@ public final class LuckgramSettings {
 
     // ---------------------------------------------------------------- registered switches
 
-    /** Switch state of a registered feature (falls back to the registry default). */
+    /**
+     * Whether a registered feature is on: the user's switch (falling back to the registry default)
+     * and not switched off remotely ({@code GET /v1/config}, task S4). Entry points read this, so a
+     * remotely disabled feature disappears everywhere.
+     */
     public static boolean isEnabled(String key) {
+        return isRemotelyAllowed(key) && isLocallyEnabled(key);
+    }
+
+    /** The user's own switch only (what the settings row shows). */
+    public static boolean isLocallyEnabled(String key) {
         LuckgramFeature f = LuckgramFeatures.find(key);
         return getBool(key, f != null && f.defaultValue);
     }

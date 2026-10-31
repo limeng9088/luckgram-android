@@ -3,32 +3,24 @@
  */
 package org.telegram.luckgram.roundvideo;
 
-import android.content.Context;
-import android.content.SharedPreferences;
 
-import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ChatObject;
-import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
-import org.telegram.messenger.MessagesController;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ChatActivity;
 
 import java.io.File;
-import java.util.Locale;
 
 /**
  * Entry point and switch of the "send gallery video as round video" feature.
  *
- * The switch key is {@link #KEY}; it defaults to on. Until the shared Luckgram settings
- * framework (spec 00) lands, the value is read from the device-wide "luckgram_settings"
- * preferences file under the same key, so wiring it into {@code LuckgramSettings} later is a
- * one-line change in {@link #isEnabled()}.
+ * The switch {@link #KEY} is registered in {@code LuckgramFeatures} (group "媒体、通话与存储",
+ * default on) and stored by {@code LuckgramSettings} in the same "luckgram_settings" file and key
+ * as before, so existing values carry over.
  */
 public final class RoundVideoFeature {
 
-    public static final String KEY = "round_video_from_gallery";
-    public static final boolean DEFAULT_VALUE = true;
+    public static final String KEY = org.telegram.luckgram.LuckgramFeatures.ROUND_VIDEO_FROM_GALLERY;
 
     /** Longest round video Telegram accepts, ms. */
     public static final long MAX_DURATION_MS = RoundVideoGeometry.MAX_DURATION_MS;
@@ -36,20 +28,9 @@ public final class RoundVideoFeature {
     private RoundVideoFeature() {
     }
 
-    private static SharedPreferences prefs() {
-        return ApplicationLoader.applicationContext.getSharedPreferences("luckgram_settings", Context.MODE_PRIVATE);
-    }
-
+    /** Registered in {@link org.telegram.luckgram.LuckgramFeatures}; includes the remote switch (S4). */
     public static boolean isEnabled() {
-        try {
-            return prefs().getBoolean(KEY, DEFAULT_VALUE);
-        } catch (Throwable e) {
-            return DEFAULT_VALUE;
-        }
-    }
-
-    public static void setEnabled(boolean enabled) {
-        prefs().edit().putBoolean(KEY, enabled).apply();
+        return org.telegram.luckgram.LuckgramSettings.isEnabled(KEY);
     }
 
     /**
@@ -85,7 +66,6 @@ public final class RoundVideoFeature {
     public static final int STR_CONVERTING = 5;
     public static final int STR_FAILED = 6;
     public static final int STR_SELECTED = 7;
-    public static final int STR_TRIM_HINT = 8;
 
     private static final String[] EN = {
             "Send as Round Video",
@@ -96,7 +76,6 @@ public final class RoundVideoFeature {
             "Converting… %d%%",
             "Couldn't convert this video.",
             "Selected %s",
-            "Videos longer than 60 seconds: choose up to 60 seconds",
     };
 
     private static final String[] ZH = {
@@ -108,23 +87,11 @@ public final class RoundVideoFeature {
             "正在转换… %d%%",
             "无法转换这个视频。",
             "已选 %s",
-            "视频超过 60 秒，请选取不超过 60 秒的一段",
     };
 
+    /** The one Luckgram language rule (00, issue #42). */
     public static boolean isChinese() {
-        try {
-            String lang = LocaleController.getLocaleStringIso639();
-            if (lang != null && lang.toLowerCase(Locale.ROOT).startsWith("zh")) {
-                return true;
-            }
-            boolean userPickedLanguage = MessagesController.getGlobalMainSettings().getString("language", null) != null;
-            if (!userPickedLanguage) {
-                String sys = LocaleController.getSystemLocaleStringIso639();
-                return sys != null && sys.toLowerCase(Locale.ROOT).startsWith("zh");
-            }
-        } catch (Throwable ignore) {
-        }
-        return false;
+        return org.telegram.luckgram.LuckgramStrings.isChinese();
     }
 
     public static String getString(int id) {
