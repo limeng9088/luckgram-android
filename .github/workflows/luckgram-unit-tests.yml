@@ -54,6 +54,7 @@ jobs:
             quickreplies/QuickRepliesLogic.java \
             roundvideo/RoundVideoGeometry.java \
             unblock/StoreRestrictions.java \
+            backup/LuckgramBackupFormat.java \
             notes/UserNotesText.java \
             translateout/TranslateOutLogic.java \
             profileinfo/ProfileInfoLogic.java \
