@@ -35107,6 +35107,14 @@ public class ChatActivity extends BaseFragment implements
     private Bulletin luckgramBatchBulletin;
 
     /**
+     * The chat screen is closed: a running batch forward keeps going (leaving the chat must not
+     * stop it half way), but its progress / retry toasts have nowhere to go (w-1139 review, P2).
+     */
+    private boolean luckgramBatchUiGone() {
+        return isFinished || getParentActivity() == null || fragmentView == null;
+    }
+
+    /**
      * Spec 14 requirement 3: more than 100 messages to one chat go out as a sequence of 100-id
      * requests with a progress toast; a failed batch can be retried. Returns false to let the
      * regular forward handle it (text comment, schedule, paid messages, several targets).
@@ -35122,6 +35130,9 @@ public class ChatActivity extends BaseFragment implements
         luckgramBatchForward = new org.telegram.luckgram.selectall.BatchForward(currentAccount, fmessages, did, target.topicId, notify, new org.telegram.luckgram.selectall.BatchForward.Listener() {
             @Override
             public void onProgress(int done, int total) {
+                if (luckgramBatchUiGone()) {
+                    return;
+                }
                 if (luckgramBatchBulletin != null) {
                     luckgramBatchBulletin.hide();
                 }
@@ -35131,6 +35142,11 @@ public class ChatActivity extends BaseFragment implements
 
             @Override
             public void onBatchFailed(int index, int total, TLRPC.TL_error error) {
+                if (luckgramBatchUiGone()) {
+                    // Nobody to offer "Retry" to; the batches sent so far stay sent.
+                    luckgramBatchForward = null;
+                    return;
+                }
                 if (luckgramBatchBulletin != null) {
                     luckgramBatchBulletin.hide();
                 }
@@ -35144,11 +35160,14 @@ public class ChatActivity extends BaseFragment implements
 
             @Override
             public void onDone(int messageCount) {
+                luckgramBatchForward = null;
+                if (luckgramBatchUiGone()) {
+                    return;
+                }
                 if (luckgramBatchBulletin != null) {
                     luckgramBatchBulletin.hide();
                     luckgramBatchBulletin = null;
                 }
-                luckgramBatchForward = null;
                 if (!BulletinFactory.of(ChatActivity.this).showForwardedBulletinWithTag(did, messageCount)) {
                     createUndoView();
                     if (undoView != null) {
