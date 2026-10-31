@@ -9324,6 +9324,15 @@ public class MessagesController extends BaseController implements NotificationCe
         if ((messages == null || messages.isEmpty()) && taskId == 0) {
             return;
         }
+        // Luckgram (spec 14): the server accepts at most 100 ids per delete request; split larger
+        // selections (e.g. "select all from sender") into batches. Each batch is its own pending task.
+        if (taskId == 0 && taskRequest == null && encryptedChat == null && messages.size() > 100) {
+            for (int start = 0; start < messages.size(); start += 100) {
+                ArrayList<Integer> batch = new ArrayList<>(messages.subList(start, Math.min(messages.size(), start + 100)));
+                deleteMessages(batch, null, null, dialogId, forAll, mode, cacheOnly, 0, null, topicId, movedToScheduled, movedToScheduledMessageId);
+            }
+            return;
+        }
         ArrayList<Integer> toSend = null;
         long channelId;
         if (taskId == 0) {
