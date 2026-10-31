@@ -192,6 +192,8 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
     public static final int TAB_BOT_PREVIEWS = 13;
     public static final int TAB_GIFTS = 14;
     public static final int TAB_POLL = 15;
+    /** Luckgram (spec 16): what this user recently wrote in groups you share. */
+    public static final int TAB_LUCKGRAM_ACTIVITY = 100;
     private static final int TAB_STORIES_ALBUM_PREFIX = 0x00010000;
     private static final int TAB_STORIES_ALBUM_MASK = 0x0000FFFF;
 
@@ -661,6 +663,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
     private PollAdapter pollAdapter;
     private GifAdapter gifAdapter;
     private CommonGroupsAdapter commonGroupsAdapter;
+    private LuckgramActivityAdapter luckgramActivityAdapter;
     private ChannelRecommendationsAdapter channelRecommendationsAdapter;
     private SavedDialogsAdapter savedDialogsAdapter;
     private SavedMessagesSearchAdapter savedMessagesSearchAdapter;
@@ -2291,6 +2294,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         linksSearchAdapter = new MediaSearchAdapter(context, 3);
         groupUsersSearchAdapter = new GroupUsersSearchAdapter(context);
         commonGroupsAdapter = new CommonGroupsAdapter(context);
+        luckgramActivityAdapter = new LuckgramActivityAdapter(context);
         channelRecommendationsAdapter = new ChannelRecommendationsAdapter(context);
         savedDialogsAdapter = new SavedDialogsAdapter(context);
         savedMessagesSearchAdapter = new SavedMessagesSearchAdapter(context);
@@ -3210,6 +3214,8 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                         args.putLong("user_id", user_id);
                         profileActivity.presentFragment(new ProfileActivity(args));
                     }
+                } else if (mediaPage.selectedType == TAB_LUCKGRAM_ACTIVITY) {
+                    luckgramActivityAdapter.onItemClick(view, position);
                 } else if (mediaPage.selectedType == TAB_COMMON_GROUPS && view instanceof ProfileSearchCell) {
                     TLRPC.Chat chat = ((ProfileSearchCell) view).getChat();
                     Bundle args = new Bundle();
@@ -4943,6 +4949,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             type != TAB_VOICE &&
             type != TAB_GIF &&
             type != TAB_COMMON_GROUPS &&
+            type != TAB_LUCKGRAM_ACTIVITY &&
             type != TAB_SAVED_DIALOGS &&
             type != TAB_RECOMMENDED_CHANNELS &&
             type != TAB_BOT_PREVIEWS &&
@@ -5023,6 +5030,9 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
 
     public void onDestroy() {
         observersGroup.removeAllObservers();
+        if (luckgramActivityAdapter != null) {
+            luckgramActivityAdapter.cancel();
+        }
 
         if (storiesAdapter != null && storiesAdapter.storiesList != null) {
             storiesAdapter.destroy();
@@ -6913,6 +6923,9 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             if ((hasMedia[6] <= 0) == scrollSlidingTextTabStrip.hasTab(TAB_COMMON_GROUPS)) {
                 changed++;
             }
+            if (luckgramActivityTabVisible() != scrollSlidingTextTabStrip.hasTab(TAB_LUCKGRAM_ACTIVITY)) {
+                changed++;
+            }
             hasRecommendations = !channelRecommendationsAdapter.chats.isEmpty();
             if (hasRecommendations != scrollSlidingTextTabStrip.hasTab(TAB_RECOMMENDED_CHANNELS)) {
                 changed++;
@@ -7035,6 +7048,9 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 if (hasMedia[6] > 0) {
                     tabs.add(new Pair(TAB_COMMON_GROUPS, getString(R.string.SharedGroupsTab2)));
                 }
+                if (luckgramActivityTabVisible()) {
+                    tabs.add(new Pair(TAB_LUCKGRAM_ACTIVITY, org.telegram.luckgram.sharedactivity.SharedActivityLoader.tabTitle()));
+                }
                 if (hasRecommendations) {
                     tabs.add(new Pair(TAB_RECOMMENDED_CHANNELS, getString(dialog_id > 0 ? R.string.SimilarBotsTab : R.string.SimilarChannelsTab)));
                 }
@@ -7133,7 +7149,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             }
             viewPool = mediaPages[a].searchViewPool;
             if (animated) {
-                if (mediaPages[a].selectedType == TAB_PHOTOVIDEO || mediaPages[a].selectedType == TAB_VOICE || mediaPages[a].selectedType == TAB_GIF || mediaPages[a].selectedType == TAB_COMMON_GROUPS || mediaPages[a].selectedType == TAB_GROUPUSERS && !delegate.canSearchMembers()) {
+                if (mediaPages[a].selectedType == TAB_PHOTOVIDEO || mediaPages[a].selectedType == TAB_VOICE || mediaPages[a].selectedType == TAB_GIF || mediaPages[a].selectedType == TAB_COMMON_GROUPS || mediaPages[a].selectedType == TAB_LUCKGRAM_ACTIVITY || mediaPages[a].selectedType == TAB_GROUPUSERS && !delegate.canSearchMembers()) {
                     searching = false;
                     if (searchTagsList != null) {
                         searchTagsList.show(false);
@@ -7322,6 +7338,12 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     recycleAdapter(currentAdapter);
                     mediaPages[a].listView.setAdapter(commonGroupsAdapter);
                 }
+            } else if (mediaPages[a].selectedType == TAB_LUCKGRAM_ACTIVITY) {
+                sections = true;
+                if (currentAdapter != luckgramActivityAdapter) {
+                    recycleAdapter(currentAdapter);
+                    mediaPages[a].listView.setAdapter(luckgramActivityAdapter);
+                }
             } else if (mediaPages[a].selectedType == TAB_GROUPUSERS) {
                 sections = true;
                 if (currentAdapter != chatUsersAdapter) {
@@ -7427,7 +7449,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             if (giftsContainer != null && mediaPages[a].selectedType != TAB_GIFTS && giftsContainer.getParent() == mediaPages[a]) {
                 mediaPages[a].removeView(giftsContainer);
             }
-            if (mediaPages[a].selectedType == TAB_PHOTOVIDEO || mediaPages[a].selectedType == TAB_SAVED_DIALOGS || isAnyStoryPageType(mediaPages[a].selectedType)|| mediaPages[a].selectedType == TAB_VOICE || mediaPages[a].selectedType == TAB_GIF || mediaPages[a].selectedType == TAB_COMMON_GROUPS || mediaPages[a].selectedType == TAB_GROUPUSERS && !delegate.canSearchMembers() || mediaPages[a].selectedType == TAB_RECOMMENDED_CHANNELS || mediaPages[a].selectedType == TAB_BOT_PREVIEWS || mediaPages[a].selectedType == TAB_GIFTS) {
+            if (mediaPages[a].selectedType == TAB_PHOTOVIDEO || mediaPages[a].selectedType == TAB_SAVED_DIALOGS || isAnyStoryPageType(mediaPages[a].selectedType)|| mediaPages[a].selectedType == TAB_VOICE || mediaPages[a].selectedType == TAB_GIF || mediaPages[a].selectedType == TAB_COMMON_GROUPS || mediaPages[a].selectedType == TAB_LUCKGRAM_ACTIVITY || mediaPages[a].selectedType == TAB_GROUPUSERS && !delegate.canSearchMembers() || mediaPages[a].selectedType == TAB_RECOMMENDED_CHANNELS || mediaPages[a].selectedType == TAB_BOT_PREVIEWS || mediaPages[a].selectedType == TAB_GIFTS) {
                 if (animated) {
                     searchItemState = 2;
                 } else {
@@ -7467,6 +7489,8 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 if (!commonGroupsAdapter.loading && !commonGroupsAdapter.endReached && commonGroupsAdapter.chats.isEmpty()) {
                     commonGroupsAdapter.getChats(0, 100);
                 }
+            } else if (mediaPages[a].selectedType == TAB_LUCKGRAM_ACTIVITY) {
+                luckgramActivityAdapter.load(false);
             } else if (mediaPages[a].selectedType == TAB_GROUPUSERS) {
 
             } else if (isAnyStoryPageType(mediaPages[a].selectedType)) {
@@ -10354,6 +10378,190 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(dp(145), MeasureSpec.EXACTLY));
         }
     }
+
+    // region Luckgram: shared-groups activity tab (spec 16)
+
+    private boolean luckgramActivityTabVisible() {
+        if (!org.telegram.luckgram.sharedactivity.SharedActivityLoader.isEnabled() || isStoriesView() || topicId != 0 || profileActivity == null) {
+            return false;
+        }
+        if (!DialogObject.isUserDialog(dialog_id) || dialog_id == profileActivity.getUserConfig().getClientUserId()) {
+            return false;
+        }
+        TLRPC.User user = profileActivity.getMessagesController().getUser(dialog_id);
+        return user != null && !user.bot && !UserObject.isDeleted(user);
+    }
+
+    private class LuckgramActivityAdapter extends RecyclerListView.SelectionAdapter {
+        private static final int TYPE_HEADER = 0;
+        private static final int TYPE_MESSAGE = 1;
+        private static final int TYPE_EMPTY = 2;
+        private static final int TYPE_LOADING = 3;
+
+        private final Context context;
+        private org.telegram.luckgram.sharedactivity.SharedActivityLoader loader;
+        private org.telegram.luckgram.sharedactivity.SharedActivityLoader.Result result;
+
+        LuckgramActivityAdapter(Context context) {
+            this.context = context;
+        }
+
+        /** Loads unless a result younger than 10 minutes is around; {@code force} reloads. */
+        void load(boolean force) {
+            if (loader != null && !force) {
+                return;
+            }
+            final int account = profileActivity.getCurrentAccount();
+            if (!force) {
+                org.telegram.luckgram.sharedactivity.SharedActivityLoader.Result cached = org.telegram.luckgram.sharedactivity.SharedActivityLoader.cached(account, dialog_id);
+                if (cached != null) {
+                    if (cached != result) {
+                        result = cached;
+                        notifyDataSetChanged();
+                    }
+                    return;
+                }
+            }
+            cancel();
+            loader = new org.telegram.luckgram.sharedactivity.SharedActivityLoader(account, dialog_id, profileActivity.getClassGuid(), r -> {
+                loader = null;
+                result = r;
+                notifyDataSetChanged();
+            });
+            notifyDataSetChanged();
+            loader.load();
+        }
+
+        void cancel() {
+            if (loader != null) {
+                loader.cancel();
+                loader = null;
+            }
+        }
+
+        private int messageCount() {
+            return result == null ? 0 : result.messages.size();
+        }
+
+        void onItemClick(View view, int position) {
+            if (position == 0) {
+                if (loader == null) {
+                    load(true);
+                }
+                return;
+            }
+            int index = position - 1;
+            if (result == null || index < 0 || index >= result.messages.size()) {
+                return;
+            }
+            MessageObject message = result.messages.get(index);
+            Bundle args = new Bundle();
+            args.putLong("chat_id", -message.getDialogId());
+            args.putInt("message_id", message.getId());
+            if (!profileActivity.getMessagesController().checkCanOpenChat(args, profileActivity)) {
+                return;
+            }
+            profileActivity.presentFragment(new ChatActivity(args));
+        }
+
+        @Override
+        public boolean isEnabled(RecyclerView.ViewHolder holder) {
+            int type = holder.getItemViewType();
+            return type == TYPE_MESSAGE || type == TYPE_HEADER && loader == null;
+        }
+
+        @Override
+        public int getItemCount() {
+            if (result == null) {
+                return loader != null ? 4 : 1;
+            }
+            return 1 + Math.max(messageCount(), 1);
+        }
+
+        @Override
+        public int getItemViewType(int position) {
+            if (result == null) {
+                return loader != null ? TYPE_LOADING : TYPE_HEADER;
+            }
+            if (position == 0) {
+                return TYPE_HEADER;
+            }
+            return messageCount() == 0 ? TYPE_EMPTY : TYPE_MESSAGE;
+        }
+
+        @Override
+        public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            View view;
+            switch (viewType) {
+                case TYPE_HEADER: {
+                    FrameLayout header = new FrameLayout(context);
+                    TextView title = new TextView(context);
+                    title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+                    title.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider));
+                    title.setSingleLine(true);
+                    title.setEllipsize(TextUtils.TruncateAt.END);
+                    header.addView(title, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL | Gravity.LEFT, 21, 0, 90, 0));
+                    TextView refresh = new TextView(context);
+                    refresh.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+                    refresh.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText, resourcesProvider));
+                    refresh.setText(org.telegram.luckgram.sharedactivity.SharedActivityLoader.refreshText());
+                    header.addView(refresh, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL | Gravity.RIGHT, 0, 0, 21, 0));
+                    header.setTag(title);
+                    header.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+                    return new RecyclerListView.Holder(header);
+                }
+                case TYPE_MESSAGE:
+                    view = new DialogCell(null, context, false, true, profileActivity.getCurrentAccount(), resourcesProvider);
+                    break;
+                case TYPE_EMPTY: {
+                    TextView empty = new TextView(context);
+                    empty.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+                    empty.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2, resourcesProvider));
+                    empty.setGravity(Gravity.CENTER);
+                    empty.setPadding(dp(40), dp(48), dp(40), dp(48));
+                    view = empty;
+                    break;
+                }
+                case TYPE_LOADING:
+                default: {
+                    FlickerLoadingView flickerLoadingView = new FlickerLoadingView(context, resourcesProvider);
+                    flickerLoadingView.setIsSingleCell(true);
+                    flickerLoadingView.showDate(true);
+                    flickerLoadingView.setViewType(FlickerLoadingView.DIALOG_TYPE);
+                    view = flickerLoadingView;
+                    break;
+                }
+            }
+            view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            return new RecyclerListView.Holder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
+            switch (holder.getItemViewType()) {
+                case TYPE_HEADER: {
+                    TextView title = (TextView) holder.itemView.getTag();
+                    title.setText(org.telegram.luckgram.sharedactivity.SharedActivityLoader.header(result == null ? 0 : result.groupCount));
+                    break;
+                }
+                case TYPE_MESSAGE: {
+                    MessageObject message = result.messages.get(position - 1);
+                    DialogCell cell = (DialogCell) holder.itemView;
+                    cell.useSeparator = position != messageCount();
+                    cell.setDialog(message.getDialogId(), message, message.messageOwner.date, false, false);
+                    break;
+                }
+                case TYPE_EMPTY: {
+                    ((TextView) holder.itemView).setText(result != null && result.groupCount == 0
+                        ? org.telegram.luckgram.sharedactivity.SharedActivityLoader.emptyNoGroups()
+                        : org.telegram.luckgram.sharedactivity.SharedActivityLoader.emptyNoMessages());
+                    break;
+                }
+            }
+        }
+    }
+
+    // endregion
 
     private class CommonGroupsAdapter extends RecyclerListView.SelectionAdapter {
 
