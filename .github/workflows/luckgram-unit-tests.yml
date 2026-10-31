@@ -62,7 +62,9 @@ jobs:
             ai/LuckgramAiMarkdown.java \
             summary/ChatSummaryLogic.java \
             reply/AiReplyText.java \
-            post/AiPostText.java; do
+            post/AiPostText.java \
+            callrec/CallRecMixer.java \
+            callrec/CallRecText.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"
