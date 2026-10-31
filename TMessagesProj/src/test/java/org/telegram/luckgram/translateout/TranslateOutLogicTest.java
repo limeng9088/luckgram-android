@@ -1,22 +1,22 @@
 package org.telegram.luckgram.translateout;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-class TranslateOutLogicTest {
+public class TranslateOutLogicTest {
 
     // ---- normalizeLanguage
 
     @Test
-    void normalizeDropsRegionAndLowercases() {
+    public void normalizeDropsRegionAndLowercases() {
         assertEquals("pt", TranslateOutLogic.normalizeLanguage("pt_BR"));
         assertEquals("pt", TranslateOutLogic.normalizeLanguage("pt-BR"));
         assertEquals("es", TranslateOutLogic.normalizeLanguage("ES"));
@@ -24,7 +24,7 @@ class TranslateOutLogicTest {
     }
 
     @Test
-    void normalizeMapsEveryChineseVariantToZh() {
+    public void normalizeMapsEveryChineseVariantToZh() {
         assertEquals("zh", TranslateOutLogic.normalizeLanguage("zh-CN"));
         assertEquals("zh", TranslateOutLogic.normalizeLanguage("zh_TW"));
         assertEquals("zh", TranslateOutLogic.normalizeLanguage("zh-Hans"));
@@ -32,7 +32,7 @@ class TranslateOutLogicTest {
     }
 
     @Test
-    void normalizeRejectsEmptyAndUnknown() {
+    public void normalizeRejectsEmptyAndUnknown() {
         assertNull(TranslateOutLogic.normalizeLanguage(null));
         assertNull(TranslateOutLogic.normalizeLanguage(""));
         assertNull(TranslateOutLogic.normalizeLanguage("  "));
@@ -43,20 +43,20 @@ class TranslateOutLogicTest {
     // ---- recent languages
 
     @Test
-    void updateRecentPutsNewFirstWithoutDuplicates() {
+    public void updateRecentPutsNewFirstWithoutDuplicates() {
         assertEquals(Arrays.asList("fr", "es", "de"), TranslateOutLogic.updateRecent(Arrays.asList("es", "fr", "de"), "fr"));
         assertEquals(Collections.singletonList("es"), TranslateOutLogic.updateRecent(null, "es"));
     }
 
     @Test
-    void updateRecentKeepsAtMostFive() {
+    public void updateRecentKeepsAtMostFive() {
         final List<String> recent = TranslateOutLogic.updateRecent(Arrays.asList("a", "b", "c", "d", "e"), "f");
         assertEquals(Arrays.asList("f", "a", "b", "c", "d"), recent);
         assertEquals(TranslateOutLogic.MAX_RECENT, recent.size());
     }
 
     @Test
-    void recentRoundTrips() {
+    public void recentRoundTrips() {
         final List<String> recent = Arrays.asList("fr", "es", "ja");
         assertEquals(recent, TranslateOutLogic.parseRecent(TranslateOutLogic.joinRecent(recent)));
         assertEquals(Arrays.asList("fr", "es"), TranslateOutLogic.parseRecent("fr,,es,fr"));
@@ -75,26 +75,26 @@ class TranslateOutLogicTest {
     }
 
     @Test
-    void protectsMentionsAndLinksAcrossLines() {
+    public void protectsMentionsAndLinksAcrossLines() {
         // mixed Chinese text, an @username, an emoji, a line break and a link
         final String text = "\u516b\u70b9\u89c1 @alice_01 \ud83d\ude00\n\u94fe\u63a5 https://t.me/luckgram \u770b\u770b";
         assertEquals(Arrays.asList("mention:@alice_01", "url:https://t.me/luckgram"), covered(text, null));
     }
 
     @Test
-    void linkDoesNotSwallowTrailingPunctuation() {
+    public void linkDoesNotSwallowTrailingPunctuation() {
         assertEquals(Collections.singletonList("url:https://example.com/a"), covered("\u770b https://example.com/a).", null));
         assertEquals(Collections.singletonList("url:www.example.com"), covered("go to www.example.com!", null));
     }
 
     @Test
-    void ignoresEmailsAndTooShortNames() {
+    public void ignoresEmailsAndTooShortNames() {
         assertTrue(covered("mail me@example.com", null).isEmpty());
         assertTrue(covered("hi @ab", null).isEmpty());
     }
 
     @Test
-    void skipsRangesAlreadyCoveredByAnEntity() {
+    public void skipsRangesAlreadyCoveredByAnEntity() {
         final String text = "ping @alice_01 now";
         final int start = text.indexOf('@');
         final List<int[]> occupied = Collections.singletonList(new int[]{start, start + "@alice_01".length()});
@@ -102,12 +102,12 @@ class TranslateOutLogicTest {
     }
 
     @Test
-    void mentionInsideUrlIsNotCountedTwice() {
+    public void mentionInsideUrlIsNotCountedTwice() {
         assertEquals(Collections.singletonList("url:https://t.me/@alice_01"), covered("https://t.me/@alice_01", null));
     }
 
     @Test
-    void emptyText() {
+    public void emptyText() {
         assertTrue(covered("", null).isEmpty());
         assertTrue(TranslateOutLogic.protectedRanges(null, null).isEmpty());
     }
