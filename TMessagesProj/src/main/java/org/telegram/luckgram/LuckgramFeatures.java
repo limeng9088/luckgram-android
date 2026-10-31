@@ -54,6 +54,9 @@ public final class LuckgramFeatures {
             "私人备注", "Private notes",
             "给联系人、群组和频道写只有自己能看到的备注", "Notes about contacts, groups and channels that only you can see")
             .subpage(org.telegram.luckgram.notes.UserNotesListActivity::new));
+        add(toggle(org.telegram.luckgram.keywordfolders.KeywordFolderController.SETTING_KEY, PROFILE_ORGANIZE, true,
+            "关键词文件夹", "Keyword folders",
+            "按关键词自动归类聊天（只在本机）", "Group chats by keyword (this device only)"));
 
         // ---- AI
 

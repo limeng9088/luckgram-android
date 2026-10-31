@@ -1103,6 +1103,9 @@ public class FilterCreateActivity extends BaseFragment {
             TLRPC.TL_messages_updateDialogFiltersOrder req = new TLRPC.TL_messages_updateDialogFiltersOrder();
             ArrayList<MessagesController.DialogFilter> filters = fragment.getMessagesController().getDialogFilters();
             for (int a = 0, N = filters.size(); a < N; a++) {
+                if (filters.get(a).isKeywordFolder()) {
+                    continue; // Luckgram: local keyword folder, not known to the server
+                }
                 req.order.add(filters.get(a).id);
             }
             fragment.getConnectionsManager().sendRequest(req, null);
@@ -1114,6 +1117,14 @@ public class FilterCreateActivity extends BaseFragment {
 
     public static void saveFilterToServer(MessagesController.DialogFilter filter, int newFilterFlags, String newFilterName, ArrayList<TLRPC.MessageEntity> newFilterNameEntities, boolean newFilterNoanimate, int newFilterColor, ArrayList<Long> newAlwaysShow, ArrayList<Long> newNeverShow, LongSparseIntArray newPinned, boolean creatingNew, boolean atBegin, boolean hasUserChanged, boolean resetUnreadCounter, boolean progress, BaseFragment fragment, Runnable onFinish) {
         if (fragment == null || fragment.getParentActivity() == null) {
+            return;
+        }
+        if (filter != null && filter.isKeywordFolder()) {
+            // Luckgram: keyword folders are local only; apply in memory, never send to the server
+            fragment.getMessagesController().onFilterUpdate(filter);
+            if (onFinish != null) {
+                onFinish.run();
+            }
             return;
         }
         AlertDialog progressDialog;

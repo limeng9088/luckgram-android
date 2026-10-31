@@ -70,7 +70,7 @@ public class FiltersListBottomSheet extends BottomSheet implements NotificationC
 //        dialogFilters = getCanAddDialogFilters(baseFragment, selectedDialogs);
         dialogFilters = new ArrayList<>(baseFragment.getMessagesController().dialogFilters);
         for (int i = 0; i < dialogFilters.size(); ++i) {
-            if (dialogFilters.get(i).isDefault()) {
+            if (dialogFilters.get(i).isDefault() || dialogFilters.get(i).isKeywordFolder()) {
                 dialogFilters.remove(i);
                 i--;
             }
@@ -331,7 +331,7 @@ public class FiltersListBottomSheet extends BottomSheet implements NotificationC
         ArrayList<MessagesController.DialogFilter> filters = fragment.getMessagesController().dialogFilters;
         for (int a = 0, N = filters.size(); a < N; a++) {
             MessagesController.DialogFilter filter = filters.get(a);
-            if (!getDialogsCount(fragment, filter, selectedDialogs, true, true).isEmpty() && !filter.isDefault()) {
+            if (!filter.isKeywordFolder() && !getDialogsCount(fragment, filter, selectedDialogs, true, true).isEmpty() && !filter.isDefault()) {
                 result.add(filter);
             }
         }
