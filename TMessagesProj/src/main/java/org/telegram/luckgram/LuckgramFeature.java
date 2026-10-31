@@ -29,6 +29,10 @@ public final class LuckgramFeature {
     public boolean debugOnly;
     /** Optional check before the switch goes from off to on (e.g. a legal notice); see {@link #confirmEnable}. */
     public ConfirmEnable confirmEnable;
+    /** Optional check before the switch goes from on to off (e.g. 11 asks for the main passcode). */
+    public ConfirmEnable confirmDisable;
+    /** Optional: hide the row while this returns true (e.g. 11 hides itself in the second space). */
+    public Utilities.Callback0Return<Boolean> hiddenWhen;
 
     /**
      * Called before a feature is switched on from the settings page. Call {@code done.run(true)} to
@@ -66,6 +70,16 @@ public final class LuckgramFeature {
         return this;
     }
 
+    public LuckgramFeature confirmDisable(ConfirmEnable confirm) {
+        this.confirmDisable = confirm;
+        return this;
+    }
+
+    public LuckgramFeature hiddenWhen(Utilities.Callback0Return<Boolean> hidden) {
+        this.hiddenWhen = hidden;
+        return this;
+    }
+
     public LuckgramFeature debugOnly() {
         this.debugOnly = true;
         return this;
@@ -84,6 +98,9 @@ public final class LuckgramFeature {
     }
 
     public boolean isVisible() {
+        if (hiddenWhen != null && hiddenWhen.run()) {
+            return false;
+        }
         return !debugOnly || LuckgramSettings.isDebugToolsVisible();
     }
 }

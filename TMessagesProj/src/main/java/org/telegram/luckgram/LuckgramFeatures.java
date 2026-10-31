@@ -44,6 +44,13 @@ public final class LuckgramFeatures {
 
     static {
         // ---- 账号与隐私 / Accounts & Privacy
+        add(toggle(org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.FEATURE_KEY, ACCOUNT_PRIVACY, false,
+            "双重空间", "Double space",
+            "用第二个密码解锁时只显示选定的账号", "A second passcode that shows only the accounts you pick")
+            .subpage(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::new)
+            .confirmEnable(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::confirmEnable)
+            .confirmDisable(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::confirmDisable)
+            .hiddenWhen(org.telegram.luckgram.doublebottom.LuckgramDoubleBottom::isActive));
 
         // ---- 消息与语言 / Messages & Language
 

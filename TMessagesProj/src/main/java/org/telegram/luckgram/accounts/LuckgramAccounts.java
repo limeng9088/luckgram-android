@@ -111,6 +111,12 @@ public final class LuckgramAccounts {
 
     /** All logged-in accounts in the user's order (new accounts at the end, by login time). */
     public static ArrayList<Integer> orderedAccounts() {
+        // Luckgram 11: accounts hidden by the second space appear nowhere.
+        return org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.filterVisible(allOrderedAccounts());
+    }
+
+    /** Every logged-in account in the user's order, including ones hidden by the second space. */
+    public static ArrayList<Integer> allOrderedAccounts() {
         ArrayList<Integer> accounts = new ArrayList<>();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) {
@@ -139,7 +145,7 @@ public final class LuckgramAccounts {
      * not in the list keep their place.
      */
     public static void setOrder(ArrayList<Integer> accounts) {
-        ArrayList<Integer> all = orderedAccounts();
+        ArrayList<Integer> all = allOrderedAccounts();
         ArrayList<Integer> slots = new ArrayList<>();
         for (int i = 0; i < all.size(); i++) {
             if (accounts.contains(all.get(i))) {
@@ -224,6 +230,7 @@ public final class LuckgramAccounts {
 
     /** Removes a logged-out user from the order and recent lists. */
     public static void onLogout(long userId) {
+        org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.onLogout(userId);
         for (String key : new String[]{KEY_ORDER, KEY_RECENT}) {
             ArrayList<Long> list = ids(key);
             if (list.remove(userId)) {

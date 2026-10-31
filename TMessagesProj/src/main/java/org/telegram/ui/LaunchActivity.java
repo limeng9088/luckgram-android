@@ -1468,6 +1468,20 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         SharedConfig.isWaitingForPasscodeEnter = true;
         PasscodeView.PasscodeViewDelegate delegate = view -> {
             SharedConfig.isWaitingForPasscodeEnter = false;
+            // Luckgram 11: in the second space, leave a hidden account and drop its notifications.
+            if (org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.isActive()) {
+                for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                    if (UserConfig.getInstance(a).isClientActivated() && org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.isHidden(a)) {
+                        NotificationsController.getInstance(a).luckgramDismissNotifications();
+                    }
+                }
+                if (org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.isHidden(UserConfig.selectedAccount)) {
+                    int visible = org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.firstVisibleAccount();
+                    if (visible >= 0) {
+                        switchToAccount(visible, true);
+                    }
+                }
+            }
             if (passcodeSaveIntent != null) {
                 handleIntent(passcodeSaveIntent, passcodeSaveIntentIsNew, passcodeSaveIntentIsRestore, true, null, false, true);
                 passcodeSaveIntent = null;

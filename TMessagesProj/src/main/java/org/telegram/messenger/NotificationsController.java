@@ -1784,6 +1784,10 @@ public class NotificationsController extends BaseController implements Notificat
             if (!SharedConfig.showNotificationsForAllAccounts && UserConfig.selectedAccount != a) {
                 continue;
             }
+            // Luckgram 11: accounts hidden by the second space don't count in the badge
+            if (org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.isHidden(a)) {
+                continue;
+            }
 
             final NotificationsController controller = getInstance(a);
             if (!controller.showBadgeNumber) {
@@ -4162,7 +4166,8 @@ public class NotificationsController extends BaseController implements Notificat
     private void showOrUpdateNotification(boolean notifyAboutLast) {
         // Luckgram 09 (more accounts): per-account notification switch
         if (!getUserConfig().isClientActivated() || pushMessages.isEmpty() && storyPushMessages.isEmpty() || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount
-                || !org.telegram.luckgram.accounts.LuckgramAccounts.isNotificationsEnabled(currentAccount)) {
+                || !org.telegram.luckgram.accounts.LuckgramAccounts.isNotificationsEnabled(currentAccount)
+                || org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.isHidden(currentAccount)) {
             dismissNotification();
             return;
         }
