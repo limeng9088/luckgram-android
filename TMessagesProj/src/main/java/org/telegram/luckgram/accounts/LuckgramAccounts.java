@@ -63,8 +63,8 @@ public final class LuckgramAccounts {
     }
 
     public static String manageInfoText() {
-        return LuckgramStrings.get("长按拖动可以调整账号顺序。备注名只保存在本机，用于账号列表和通知标题。",
-                "Long-press and drag to reorder accounts. Names are kept on this device only and are used in the account list and notification titles.");
+        return LuckgramStrings.get("拖动可以调整账号顺序，点按账号可以设置备注名。备注名只保存在本机，用于账号列表和通知标题。",
+                "Drag to reorder accounts. Tap an account to set its name. Names are kept on this device only and are used in the account list and notification titles.");
     }
 
     public static String aliasText() {
@@ -85,6 +85,10 @@ public final class LuckgramAccounts {
 
     public static String notificationsText() {
         return LuckgramStrings.get("通知", "Notifications");
+    }
+
+    public static String notificationsInfoText() {
+        return LuckgramStrings.get("关闭后，这个账号收到新消息时不再弹出通知。", "When off, new messages for this account don't show a notification.");
     }
 
     public static String notificationsOffText() {

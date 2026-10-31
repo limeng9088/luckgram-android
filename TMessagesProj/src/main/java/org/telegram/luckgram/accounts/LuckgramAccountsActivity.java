@@ -71,7 +71,7 @@ public class LuckgramAccountsActivity extends UniversalFragment implements Notif
             items.add(UItem.asCheck(ID_NOTIFY_BASE + account, LuckgramAccounts.displayName(account))
                     .setChecked(LuckgramAccounts.isNotificationsEnabled(account)));
         }
-        items.add(UItem.asShadow(null));
+        items.add(UItem.asShadow(LuckgramAccounts.notificationsInfoText()));
     }
 
     private void onReordered(int sectionId, ArrayList<UItem> reordered) {
