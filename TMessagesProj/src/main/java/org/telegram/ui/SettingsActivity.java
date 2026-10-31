@@ -128,6 +128,8 @@ import org.telegram.ui.Components.TextHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
+import org.telegram.luckgram.accounts.LuckgramAccounts;
+import org.telegram.luckgram.accounts.LuckgramAccountsActivity;
 import org.telegram.ui.Components.blur3.DownscaleScrollableNoiseSuppressor;
 import org.telegram.ui.Components.blur3.ViewGroupPartRenderer;
 import org.telegram.ui.Components.blur3.capture.IBlur3Capture;
@@ -352,6 +354,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         listView = new UniversalRecyclerView(this, this::fillItems, this::onClick, this::onLongClick);
         listView.adapter.setApplyBackground(false);
         listView.setSections();
+        listView.listenReorder(this::onAccountsReordered);
+        listView.allowReorder(true);
         listView.setPadding(0, AndroidUtilities.statusBarHeight + dp(12), 0, AndroidUtilities.navigationBarHeight + additionNavigationBarHeight);
         listView.setClipToPadding(false);
         listView.addOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -626,21 +630,12 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(UItem.asCustomShadow(topView, 200 - 12));
 
         accountNumbers.clear();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (UserConfig.getInstance(a).isClientActivated() && currentAccount != a) {
+        // Luckgram 09: the user's account order
+        for (int a : LuckgramAccounts.orderedAccounts()) {
+            if (a != currentAccount) {
                 accountNumbers.add(a);
             }
         }
-        Collections.sort(accountNumbers, (o1, o2) -> {
-            long l1 = UserConfig.getInstance(o1).loginTime;
-            long l2 = UserConfig.getInstance(o2).loginTime;
-            if (l1 > l2) {
-                return 1;
-            } else if (l1 < l2) {
-                return -1;
-            }
-            return 0;
-        });
 
         final Set<String> suggestions = getMessagesController().pendingSuggestions;
         if (suggestions.contains("PREMIUM_GRACE")) {
@@ -684,9 +679,19 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         if (accountNumbers.size() > 0) {
             items.add(UItem.asHeader(getString(R.string.SettingsAccounts)));
-            for (int i = 0; i < accountNumbers.size(); ++i) {
+            // Luckgram 09: collapse after 5 accounts; long-press and drag to reorder
+            final boolean collapsible = accountNumbers.size() > LuckgramAccounts.COLLAPSED_COUNT;
+            final int shown = collapsible && !accountsExpanded ? LuckgramAccounts.COLLAPSED_COUNT : accountNumbers.size();
+            adapter.reorderSectionStart();
+            for (int i = 0; i < shown; ++i) {
                 items.add(AccountCell.Factory.of(i, accountNumbers.get(i)));
             }
+            adapter.reorderSectionEnd();
+            if (collapsible) {
+                items.add(UItem.asButton(LUCKGRAM_ACCOUNTS_EXPAND_ID, accountsExpanded ? R.drawable.arrow_more : R.drawable.msg_expand,
+                        accountsExpanded ? LuckgramAccounts.showLessText() : LuckgramAccounts.showAllText(accountNumbers.size())).accent());
+            }
+            items.add(UItem.asButton(LUCKGRAM_ACCOUNTS_MANAGE_ID, R.drawable.msg_settings, LuckgramAccounts.manageText()));
             items.add(UItem.asShadow(null));
         }
 
@@ -769,6 +774,19 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     }
 
     private static final int LUCKGRAM_FEATURES_ID = 40;
+    private static final int LUCKGRAM_ACCOUNTS_EXPAND_ID = 41;
+    private static final int LUCKGRAM_ACCOUNTS_MANAGE_ID = 42;
+    private boolean accountsExpanded;
+
+    private void onAccountsReordered(int sectionId, ArrayList<UItem> reordered) {
+        ArrayList<Integer> order = new ArrayList<>();
+        for (UItem item : reordered) {
+            if (item.instanceOf(AccountCell.Factory.class)) {
+                order.add(item.intValue);
+            }
+        }
+        LuckgramAccounts.setOrder(order);
+    }
 
     private UItem luckgramFeaturesItem() {
         return SettingCell.Factory.of(LUCKGRAM_FEATURES_ID, 0xFF2AABEE, 0xFF1C8ADB, R.drawable.settings_luckgram, org.telegram.luckgram.LuckgramStrings.featuresTitle());
@@ -860,6 +878,13 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
             case 11:
                 presentSettingFragment(new PremiumPreviewFragment("settings"));
+                break;
+            case LUCKGRAM_ACCOUNTS_EXPAND_ID:
+                accountsExpanded = !accountsExpanded;
+                listView.adapter.update(true);
+                break;
+            case LUCKGRAM_ACCOUNTS_MANAGE_ID:
+                presentSettingFragment(new LuckgramAccountsActivity());
                 break;
             case LUCKGRAM_FEATURES_ID:
                 presentSettingFragment(new org.telegram.luckgram.LuckgramSettingsActivity());
@@ -1085,7 +1110,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             avatarDrawable.setInfo(account, user);
             avatarView.getImageReceiver().setCurrentAccount(account);
             avatarView.setForUserOrChat(user, avatarDrawable);
-            textView.setText(UserObject.getUserName(user));
+            textView.setText(LuckgramAccounts.displayName(account));
 
             botDrawable.setCurrentAccount(account);
             emojiStatusDrawable.setCurrentAccount(account);

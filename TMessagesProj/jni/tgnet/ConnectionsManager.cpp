@@ -17,6 +17,7 @@
 #include <openssl/rand.h>
 #include <zlib.h>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <cinttypes>
 #include "ConnectionsManager.h"
@@ -136,25 +137,24 @@ ConnectionsManager::~ConnectionsManager() {
     pthread_mutex_destroy(&mutex);
 }
 
+// Luckgram 09 (more accounts): one instance per account slot, created on first use (was five
+// function-local statics). Instances are never destroyed, like the statics they replace.
 ConnectionsManager& ConnectionsManager::getInstance(int32_t instanceNum) {
-    switch (instanceNum) {
-        case 0:
-            static ConnectionsManager instance0(0);
-            return instance0;
-        case 1:
-            static ConnectionsManager instance1(1);
-            return instance1;
-        case 2:
-            static ConnectionsManager instance2(2);
-            return instance2;
-        case 3:
-            static ConnectionsManager instance3(3);
-            return instance3;
-        case 4:
-        default:
-            static ConnectionsManager instance4(4);
-            return instance4;
+    static ConnectionsManager *instances[MAX_ACCOUNT_COUNT] = {nullptr};
+    static std::mutex instancesMutex;
+    if (instanceNum < 0 || instanceNum >= MAX_ACCOUNT_COUNT) {
+        instanceNum = MAX_ACCOUNT_COUNT - 1;
     }
+    ConnectionsManager *instance = __atomic_load_n(&instances[instanceNum], __ATOMIC_ACQUIRE);
+    if (instance == nullptr) {
+        std::lock_guard<std::mutex> lock(instancesMutex);
+        instance = instances[instanceNum];
+        if (instance == nullptr) {
+            instance = new ConnectionsManager(instanceNum);
+            __atomic_store_n(&instances[instanceNum], instance, __ATOMIC_RELEASE);
+        }
+    }
+    return *instance;
 }
 
 int ConnectionsManager::callEvents(int64_t now) {

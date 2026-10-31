@@ -301,21 +301,12 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
     private final ArrayList<Integer> accountNumbers = new ArrayList<>();
     private void updateAccounts() {
         accountNumbers.clear();
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-            if (UserConfig.getInstance(a).isClientActivated() && currentAccount != a) {
+        // Luckgram 09: the user's account order
+        for (int a : org.telegram.luckgram.accounts.LuckgramAccounts.orderedAccounts()) {
+            if (a != currentAccount) {
                 accountNumbers.add(a);
             }
         }
-        Collections.sort(accountNumbers, (o1, o2) -> {
-            long l1 = UserConfig.getInstance(o1).loginTime;
-            long l2 = UserConfig.getInstance(o2).loginTime;
-            if (l1 > l2) {
-                return 1;
-            } else if (l1 < l2) {
-                return -1;
-            }
-            return 0;
-        });
     }
 
     @Keep
@@ -431,16 +422,10 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
             for (int i = 0; i < accountNumbers.size(); ++i) {
                 items.add(SettingsActivity.AccountCell.Factory.of(i, accountNumbers.get(i)));
             }
-            if (!UserConfig.hasPremiumOnAccounts()) {
+            if (true) {
+                // Luckgram 09: no Premium upsell; 20 accounts for everyone
                 final int moreAccounts = Math.max(0, UserConfig.getMaxAccountCount() - UserConfig.getActivatedAccountsCount());
-                items.add(UItem.asShadow(
-                    TextUtils.concat(
-                        moreAccounts > 0 ? LocaleController.formatPluralStringComma("AddAccountInfo1", moreAccounts) + " " : "",
-                        replaceSingleTag(LocaleController.formatPluralStringComma("AddAccountInfo2", UserConfig.getMaxAccountCount()), () -> {
-                            presentFragment(new PremiumPreviewFragment("add_account"));
-                        })
-                    )
-                ));
+                items.add(UItem.asShadow(moreAccounts > 0 ? LocaleController.formatPluralStringComma("AddAccountInfo1", moreAccounts) : org.telegram.luckgram.accounts.LuckgramAccounts.limitReachedText()));
             } else {
                 items.add(UItem.asShadow(null));
             }
@@ -486,8 +471,9 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
             }
             if (freeAccounts > 0 && availableAccount != null) {
                 presentFragment(new LoginActivity(availableAccount));
-            } else if (!UserConfig.hasPremiumOnAccounts()) {
-                showDialog(new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null));
+            } else {
+                // Luckgram 09: limit is 20 for everyone, no Premium upsell
+                org.telegram.luckgram.accounts.LuckgramAccounts.showLimitReached();
             }
         } else if (item.instanceOf(SettingsActivity.AccountCell.Factory.class)) {
             final int account = item.intValue;

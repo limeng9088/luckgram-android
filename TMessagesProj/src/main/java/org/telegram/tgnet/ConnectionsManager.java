@@ -194,6 +194,11 @@ public class ConnectionsManager extends BaseController {
     private static int lastClassGuid = 1;
     
     private static final ConnectionsManager[] Instance = new ConnectionsManager[UserConfig.MAX_ACCOUNT_COUNT];
+    /** Luckgram 09: whether the connection of this account slot has been created already. */
+    public static boolean isCreated(int num) {
+        return num >= 0 && num < Instance.length && Instance[num] != null;
+    }
+
     public static ConnectionsManager getInstance(int num) {
         ConnectionsManager localInstance = Instance[num];
         if (localInstance == null) {
@@ -288,6 +293,11 @@ public class ConnectionsManager extends BaseController {
     }
 
     public boolean isPushConnectionEnabled() {
+        // Luckgram 09 (more accounts): only the current and most recently used accounts keep the
+        // background connection; the others are woken by push like a closed app.
+        if (!org.telegram.luckgram.accounts.LuckgramAccounts.keepsBackgroundConnection(currentAccount)) {
+            return false;
+        }
         SharedPreferences preferences = MessagesController.getGlobalNotificationsSettings();
         if (preferences.contains("pushConnection")) {
             return preferences.getBoolean("pushConnection", true);
