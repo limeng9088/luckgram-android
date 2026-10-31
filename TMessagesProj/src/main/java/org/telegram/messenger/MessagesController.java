@@ -22664,6 +22664,8 @@ public class MessagesController extends BaseController implements NotificationCe
             TLRPC.RestrictionReason reason = reasons.get(a);
             if (ignoreRestrictionReasons != null && ignoreRestrictionReasons.contains(reason.reason)) continue;
             if ("sensitive".equals(reason.reason)) continue;
+            // Luckgram (spec 13): skip restrictions that apply only to the store builds.
+            if (org.telegram.luckgram.unblock.StoreRestrictions.ignore(org.telegram.luckgram.unblock.StoreRestrictionsFeature.isEnabled(), reason.platform)) continue;
             if (
                 "all".equals(reason.platform) ||
                 "android".equals(reason.platform) && (!ApplicationLoader.isStandaloneBuild() && !BuildVars.isBetaApp() || BuildVars.DEBUG_PRIVATE_VERSION) ||
