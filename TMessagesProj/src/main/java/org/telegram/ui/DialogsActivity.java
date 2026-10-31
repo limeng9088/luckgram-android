@@ -3293,6 +3293,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             downloadsItem.setContentDescription(getString(R.string.DownloadsTabs));
             downloadsItem.setVisibility(View.GONE);
 
+            // Luckgram: AI assistant button (feature 18)
+            luckgramAiItem = menu.addItem(LUCKGRAM_AI_ITEM, R.drawable.luckgram_ai);
+            luckgramAiItem.setContentDescription("Luckgram AI");
+            luckgramAiItem.setVisibility(org.telegram.luckgram.ai.LuckgramAiChatActivity.isEnabled() ? View.VISIBLE : View.GONE);
+
             updateProxyButton(false, false);
         }
 
@@ -3937,6 +3942,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 } else if (id == 3) {
                     showSearch(true, true, true);
                     fragmentSearchFieldWatcher.toggleSearch(true);
+                } else if (id == LUCKGRAM_AI_ITEM) {
+                    org.telegram.luckgram.ai.LuckgramAiChatActivity.openLatest(DialogsActivity.this);
                 } else if (id == 11) {
                     openAccountSelector(switchItem);
                 } else if (id == add_to_folder) {
@@ -4880,6 +4887,20 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             });
             topPanelLayout.addView(dialogsHintCell);
 
+            // Luckgram: pinned "Luckgram AI" row (feature 18), hidden from Settings → Luckgram Features
+            if (folderId == 0 && communityId == 0) {
+                luckgramAiRow = new org.telegram.ui.community.cells.CommunityRequestsCell(context, resourceProvider, true);
+                luckgramAiRow.set(IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.luckgram_ai, "Luckgram AI", null, false);
+                luckgramAiRow.setBackground(Theme.getSelectorDrawable(false));
+                luckgramAiRow.setOnClickListener(v -> org.telegram.luckgram.ai.LuckgramAiChatActivity.openLatest(this));
+                topPanelLayout.addView(luckgramAiRow);
+                topPanelLayout.setViewVisible(luckgramAiRow, org.telegram.luckgram.ai.LuckgramAiChatActivity.isRowEnabled(), false);
+                // Luckgram: agents added to the chat list (feature 22)
+                luckgramAgentsStrip = new org.telegram.luckgram.agents.LuckgramAgentsStrip(context, this);
+                topPanelLayout.addView(luckgramAgentsStrip);
+                topPanelLayout.setViewVisible(luckgramAgentsStrip, luckgramAgentsStrip.update(), false);
+            }
+
 
             if (communityId != 0) {
                 communityPendingRequests = new CommunityRequestsCell(context, resourceProvider, true);
@@ -5820,6 +5841,24 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private boolean isCommunityPendingRequestsVisible() {
         return communityId != 0 && communityFull != null && communityFull.requests_pending > 0
             && !animatorSearchVisible.getValue();
+    }
+
+    // Luckgram: AI assistant entry points (feature 18)
+    private static final int LUCKGRAM_AI_ITEM = 0x4C47A1;
+    private ActionBarMenuItem luckgramAiItem;
+    private org.telegram.ui.community.cells.CommunityRequestsCell luckgramAiRow;
+    private org.telegram.luckgram.agents.LuckgramAgentsStrip luckgramAgentsStrip;
+
+    private void updateLuckgramAi() {
+        if (luckgramAiItem != null) {
+            luckgramAiItem.setVisibility(org.telegram.luckgram.ai.LuckgramAiChatActivity.isEnabled() ? View.VISIBLE : View.GONE);
+        }
+        if (topPanelLayout != null && luckgramAiRow != null) {
+            topPanelLayout.setViewVisible(luckgramAiRow, org.telegram.luckgram.ai.LuckgramAiChatActivity.isRowEnabled(), true);
+        }
+        if (topPanelLayout != null && luckgramAgentsStrip != null) {
+            topPanelLayout.setViewVisible(luckgramAgentsStrip, luckgramAgentsStrip.update(), true);
+        }
     }
 
     private void checkCommunityPendingRequestsVisible(boolean animated) {
@@ -7057,6 +7096,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onResume() {
         super.onResume();
+        updateLuckgramAi();
         if (dialogStoriesCell != null) {
             dialogStoriesCell.onResume();
         }
