@@ -215,7 +215,7 @@ public final class LuckgramHiddenChats {
             return result;
         }
         HashSet<Long> set = ids(account);
-        List<TLRPC.Dialog> all = MessagesController.getInstance(account).allDialogs;
+        List<TLRPC.Dialog> all = MessagesController.getInstance(account).getAllDialogs();
         for (int i = 0, n = all.size(); i < n; i++) {
             TLRPC.Dialog dialog = all.get(i);
             if (dialog != null && set.contains(dialog.id)) {
