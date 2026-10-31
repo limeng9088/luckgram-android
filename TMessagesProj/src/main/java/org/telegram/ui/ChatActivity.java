@@ -591,6 +591,13 @@ public class ChatActivity extends BaseFragment implements
     private ChecksHintView checksHintView;
     private View emojiButtonRed;
     private FrameLayout pinnedMessageView;
+    private org.telegram.luckgram.notes.UserNoteChatBar luckNoteBar; // Luckgram: private notes (spec 05)
+    // Luckgram: hide / show the note bar right away when the user_notes switch changes (locally or remotely).
+    private final NotificationCenter.NotificationCenterDelegate luckSettingsObserver = (id, account, args) -> {
+        if (id == NotificationCenter.luckgramSettingsChanged && (args.length == 0 || args[0] == null || org.telegram.luckgram.notes.UserNotesStore.FEATURE_KEY.equals(args[0]))) {
+            luckUpdateNoteBar(true);
+        }
+    };
     private BluredView blurredView;
     private PinnedLineView pinnedLineView;
     private boolean setPinnedTextTranslationX;
@@ -4172,6 +4179,7 @@ public class ChatActivity extends BaseFragment implements
         });
 
         topPanelLayout = new ChatActivityTopPanelLayout(context);
+        luckNoteBar = null;
         topPanelLayout.setOnAnimatedHeightChangedListener(() -> {
             invalidateChatListViewTopPadding();
             invalidateMessagesVisiblePart();
@@ -9684,6 +9692,59 @@ public class ChatActivity extends BaseFragment implements
                 }
             }
         }
+    }
+
+    // ---- Luckgram: private notes (spec 05) ----
+
+    private long luckNotePeerId() {
+        if (currentUser != null) {
+            return UserObject.isUserSelf(currentUser) ? 0 : currentUser.id;
+        }
+        if (currentChat != null) {
+            return -currentChat.id;
+        }
+        return 0;
+    }
+
+    private void luckUpdateNoteBar(boolean animated) {
+        if (topPanelLayout == null || getContext() == null) {
+            return;
+        }
+        final long peerId = chatMode == 0 ? luckNotePeerId() : 0;
+        final String note = peerId != 0 && org.telegram.luckgram.notes.UserNotesStore.isEnabled()
+                ? org.telegram.luckgram.notes.UserNotesStore.getNote(currentAccount, peerId) : null;
+        if (note == null) {
+            if (luckNoteBar != null) {
+                topPanelLayout.setViewVisible(luckNoteBar, false, animated);
+            }
+            return;
+        }
+        if (luckNoteBar == null) {
+            luckNoteBar = new org.telegram.luckgram.notes.UserNoteChatBar(getContext(), themeDelegate, new org.telegram.luckgram.notes.UserNoteChatBar.Delegate() {
+                @Override
+                public void onEditNote() {
+                    final long id = luckNotePeerId();
+                    if (id != 0) {
+                        presentFragment(new org.telegram.luckgram.notes.UserNoteEditActivity(id));
+                    }
+                }
+
+                @Override
+                public void onExpandedChanged(boolean expanded) {
+                    final long id = luckNotePeerId();
+                    if (id != 0) {
+                        org.telegram.luckgram.notes.UserNotesStore.setBarExpanded(currentAccount, id, expanded);
+                    }
+                }
+            });
+            topPanelLayout.addView(luckNoteBar, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            // Same priority as the top chat panel; pinned message bar (priority 1) stays above.
+            topPanelLayout.setPriority(luckNoteBar, 2);
+            topPanelLayout.setDebugName(luckNoteBar, "luckgram note bar");
+        }
+        luckNoteBar.updateColors();
+        luckNoteBar.setNote(note, org.telegram.luckgram.notes.UserNotesStore.isBarExpanded(currentAccount, peerId));
+        topPanelLayout.setViewVisible(luckNoteBar, true, animated);
     }
 
     private void createTopPanel() {
@@ -29892,6 +29953,8 @@ public class ChatActivity extends BaseFragment implements
         super.onResume();
         checkShowBlur(false);
         activityResumeTime = System.currentTimeMillis();
+        NotificationCenter.getGlobalInstance().addObserver(luckSettingsObserver, NotificationCenter.luckgramSettingsChanged);
+        luckUpdateNoteBar(false);
         if (openImport && getSendMessagesHelper().getImportingHistory(dialog_id) != null) {
             ImportingAlert alert = new ImportingAlert(getParentActivity(), null, this, themeDelegate);
             alert.setOnHideListener(dialog -> {
@@ -30102,6 +30165,7 @@ public class ChatActivity extends BaseFragment implements
     @Override
     public void onPause() {
         super.onPause();
+        NotificationCenter.getGlobalInstance().removeObserver(luckSettingsObserver, NotificationCenter.luckgramSettingsChanged);
         scrolling = false;
         if (scrimPopupWindow != null) {
             scrimPopupWindow.setPauseNotifications(false);
@@ -42710,6 +42774,9 @@ public class ChatActivity extends BaseFragment implements
             }
             if (topPanelLayout != null) {
                 topPanelLayout.updateColors();
+            }
+            if (luckNoteBar != null) {
+                luckNoteBar.updateColors();
             }
             if (suggestEmojiPanel != null) {
                 suggestEmojiPanel.updateColors();
