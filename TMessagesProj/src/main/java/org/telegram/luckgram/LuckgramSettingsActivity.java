@@ -160,6 +160,15 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
                             listView.adapter.update(true);
                         }
                     });
+                } else if (!value && f.confirmDisable != null) {
+                    f.confirmDisable.confirm(this, ok -> {
+                        if (ok) {
+                            LuckgramSettings.setEnabled(f.key, false);
+                            cell.setChecked(false);
+                        } else if (listView != null) {
+                            listView.adapter.update(true);
+                        }
+                    });
                 } else {
                     LuckgramSettings.setEnabled(f.key, value);
                     cell.setChecked(value);

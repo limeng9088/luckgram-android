@@ -964,7 +964,10 @@ public class PasscodeView extends FrameLayout implements NotificationCenter.Noti
                 onPasscodeError();
                 return;
             }
-            if (!SharedConfig.checkPasscode(password)) {
+            // Luckgram 11: the second passcode opens the second space; the main one leaves it.
+            // (Fingerprint unlock keeps whichever space was open before.)
+            boolean luckgramSecondSpace = isAppLock() && org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.onUnlockAttempt(password);
+            if (!luckgramSecondSpace && !SharedConfig.checkPasscode(password)) {
                 SharedConfig.increaseBadPasscodeTries();
                 if (SharedConfig.passcodeRetryInMs > 0) {
                     checkRetryTextView();
@@ -983,6 +986,9 @@ public class PasscodeView extends FrameLayout implements NotificationCenter.Noti
                     }
                 }
                 return;
+            }
+            if (!luckgramSecondSpace && isAppLock()) {
+                org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.onMainUnlock();
             }
         }
         dismissing = true;
