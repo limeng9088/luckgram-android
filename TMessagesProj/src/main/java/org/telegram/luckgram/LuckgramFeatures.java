@@ -41,6 +41,8 @@ public final class LuckgramFeatures {
     public static final String DICTATION_AI_TIDY = "dictation_ai_tidy";
     /** spec 21 */
     public static final String AI_WRITING = "ai_writing";
+    /** spec 20 */
+    public static final String AI_REPLY = "ai_reply";
 
     private static final ArrayList<LuckgramFeature> ALL = new ArrayList<>();
 
@@ -86,6 +88,9 @@ public final class LuckgramFeatures {
         add(toggle(AI_WRITING, AI, true,
             "AI 写作", "AI writing",
             "输入框里的 ✦ 按钮：润色、更正式、更友好、更简短、修正语法", "The ✦ button in the message field: polish, formal, friendly, shorter, grammar"));
+        add(toggle(AI_REPLY, AI, true,
+            "AI 回复", "AI reply",
+            "✦ 菜单里的「帮我回复」：根据对话和草稿给出 3 条候选", "\"Help me reply\" in the ✦ menu: 3 suggestions from the chat and your draft"));
         add(toggle(FREE_TRANSCRIBE, AI, true,
             "免费语音转文字", "Free voice-to-text",
             "不需要会员，把语音消息和圆形视频转成文字", "Transcribe voice and video messages without Premium"));
