@@ -1,9 +1,6 @@
 package org.telegram.luckgram.cache;
 
 import org.telegram.messenger.CacheByChatsController;
-import org.telegram.messenger.LocaleController;
-
-import java.util.Locale;
 
 /**
  * Luckgram 08 (cache): UI strings for the storage-usage extensions.
@@ -16,20 +13,9 @@ public final class LuckgramCacheStrings {
     private LuckgramCacheStrings() {
     }
 
+    /** Same rule as every Luckgram feature (issue #42). */
     public static boolean isChinese() {
-        try {
-            Locale appLocale = LocaleController.getInstance().getCurrentLocale();
-            if (appLocale != null && "zh".equals(appLocale.getLanguage())) {
-                return true;
-            }
-        } catch (Throwable ignore) {
-        }
-        Locale system = Locale.getDefault();
-        try {
-            system = android.content.res.Resources.getSystem().getConfiguration().locale;
-        } catch (Throwable ignore) {
-        }
-        return system != null && "zh".equals(system.getLanguage());
+        return org.telegram.luckgram.LuckgramStrings.isChinese();
     }
 
     private static String t(String zh, String en) {
