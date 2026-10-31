@@ -429,6 +429,8 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private boolean clearingDialog;
     private CharSequence lastMessageString;
     private int dialogsType;
+    /** Luckgram: keywords of the keyword folder this cell is shown in; hits get a blue background. */
+    public java.util.List<String> luckgramHighlightKeywords;
     private int folderId;
     private int messageId;
     private boolean archiveHidden;
@@ -2769,6 +2771,10 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         messageStringSpannable.removeSpan(span);
                     }
                 }
+            }
+            if (luckgramHighlightKeywords != null && messageString != null && !isFolderCell() && currentDialogFolderId == 0) {
+                int highlightColor = androidx.core.graphics.ColorUtils.setAlphaComponent(Theme.getColor(Theme.key_chats_unreadCounter, resourcesProvider), 0x4D);
+                messageString = org.telegram.luckgram.keywordfolders.KeywordMatcher.highlight(messageString, luckgramHighlightKeywords, highlightColor);
             }
             if ((useForceThreeLines || SharedConfig.useThreeLinesLayout) && !hasTags() && currentDialogFolderId != 0 && currentDialogFolderDialogsCount > 1) {
                 messageStringFinal = messageNameString;

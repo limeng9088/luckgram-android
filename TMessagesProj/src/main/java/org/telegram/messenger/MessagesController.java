@@ -878,9 +878,16 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void lockFiltersInternal() {
         boolean changed = false;
-        if (!getUserConfig().isPremium() && dialogFilters.size() - 1 > dialogFiltersLimitDefault) {
-            int n = dialogFilters.size() - 1 - dialogFiltersLimitDefault;
-            ArrayList<DialogFilter> filtersSortedById = new ArrayList<>(dialogFilters);
+        // Luckgram: local keyword folders don't count towards Telegram's folder limit
+        ArrayList<DialogFilter> cloudFilters = new ArrayList<>(dialogFilters);
+        for (int i = cloudFilters.size() - 1; i >= 0; i--) {
+            if (cloudFilters.get(i).isKeywordFolder()) {
+                cloudFilters.remove(i);
+            }
+        }
+        if (!getUserConfig().isPremium() && cloudFilters.size() - 1 > dialogFiltersLimitDefault) {
+            int n = cloudFilters.size() - 1 - dialogFiltersLimitDefault;
+            ArrayList<DialogFilter> filtersSortedById = new ArrayList<>(cloudFilters);
             Collections.reverse(filtersSortedById);
             for (int i = 0; i < filtersSortedById.size(); i++) {
                 if (i < n) {
@@ -1297,6 +1304,12 @@ public class MessagesController extends BaseController implements NotificationCe
         private static int dialogFilterPointer = 10;
         public int localId = dialogFilterPointer++;
         public boolean locked;
+        // Luckgram: non-null for local keyword folders (never synced to the server)
+        public org.telegram.luckgram.keywordfolders.KeywordFolder keywordFolder;
+
+        public boolean isKeywordFolder() {
+            return keywordFolder != null;
+        }
 
         public boolean includesDialog(AccountInstance accountInstance, long dialogId) {
             MessagesController messagesController = accountInstance.getMessagesController();
@@ -1308,6 +1321,9 @@ public class MessagesController extends BaseController implements NotificationCe
         }
 
         public boolean includesDialog(AccountInstance accountInstance, long dialogId, TLRPC.Dialog d) {
+            if (keywordFolder != null) {
+                return org.telegram.luckgram.keywordfolders.KeywordFolderController.getInstance(accountInstance.getCurrentAccount()).includesDialog(keywordFolder, d);
+            }
             if (neverShow.contains(dialogId)) {
                 return false;
             }
@@ -2228,6 +2244,7 @@ public class MessagesController extends BaseController implements NotificationCe
             AndroidUtilities.runOnUIThread(() -> {
                 if (remote != 2) {
                     dialogFilters = filters;
+                    org.telegram.luckgram.keywordfolders.KeywordFolderController.getInstance(currentAccount).mergeInto(dialogFilters);
                     dialogFiltersById.clear();
                     for (int a = 0, N = dialogFilters.size(); a < N; a++) {
                         DialogFilter filter = dialogFilters.get(a);
@@ -16124,6 +16141,8 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void performLogout(int type) {
+        // Luckgram: private notes are stored per account on this device only; wipe them on logout / account deletion.
+        org.telegram.luckgram.notes.UserNotesStore.wipeAccount(currentAccount, getUserConfig().getClientUserId());
         if (type == 1) {
             GramWalletStorage.wipeForUser(ApplicationLoader.applicationContext, currentAccount, getUserConfig().getClientUserId());
             unregistedPush();
@@ -16145,6 +16164,7 @@ public class MessagesController extends BaseController implements NotificationCe
         SharedPrefsHelper.cleanupAccount(currentAccount);
         org.telegram.luckgram.translateout.TranslateOutController.clearAccount(currentAccount); // Luckgram: translate-out per-chat languages
         org.telegram.luckgram.quickreplies.QuickRepliesStore.clearAccount(currentAccount); // Luckgram: quick reply templates
+        org.telegram.luckgram.keywordfolders.KeywordFolderController.getInstance(currentAccount).clearAccountData();
 
         boolean shouldHandle = true;
         ArrayList<NotificationCenter.NotificationCenterDelegate> observers = getNotificationCenter().getObservers(NotificationCenter.appDidLogout);

@@ -1784,7 +1784,7 @@ public class LimitReachedBottomSheet extends BottomSheetWithRecyclerListView imp
             float percent = .5f, position = .5f;
 
             if (type == TYPE_FOLDERS) {
-                currentValue = MessagesController.getInstance(currentAccount).dialogFilters.size() - 1;
+                currentValue = org.telegram.luckgram.keywordfolders.KeywordFolderUi.cloudFolderCount(MessagesController.getInstance(currentAccount));
             } else if (type == TYPE_ACCOUNTS) {
                 currentValue = UserConfig.getActivatedAccountsCount();
             } else if (type == TYPE_PIN_DIALOGS) {

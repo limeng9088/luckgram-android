@@ -1,0 +1,42 @@
+name: Luckgram unit tests (private notes)
+
+# Plain-JVM tests of the Android-independent private-notes rules (spec 05).
+# Same approach as the round-video tests: javac + JUnit 5, no Android SDK / Gradle.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'TMessagesProj/src/main/java/org/telegram/luckgram/notes/**'
+      - 'TMessagesProj/src/test/java/org/telegram/luckgram/notes/**'
+      - '.github/workflows/luckgram-notes-unit-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      JUNIT_VERSION: 1.11.4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          JAR=junit-platform-console-standalone-$JUNIT_VERSION.jar
+          curl -fsSL -o "$RUNNER_TEMP/$JAR" "https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/$JUNIT_VERSION/$JAR"
+          sha256sum "$RUNNER_TEMP/$JAR"
+          # Only pure classes (no android.* / org.telegram.* imports).
+          mkdir -p "$RUNNER_TEMP/classes"
+          javac -d "$RUNNER_TEMP/classes" -cp "$RUNNER_TEMP/$JAR" \
+            TMessagesProj/src/main/java/org/telegram/luckgram/notes/UserNotesText.java \
+            $(find TMessagesProj/src/test/java/org/telegram/luckgram/notes -name '*Test.java')
+          java -jar "$RUNNER_TEMP/$JAR" execute --class-path "$RUNNER_TEMP/classes" --scan-class-path --details=tree --fail-if-no-tests

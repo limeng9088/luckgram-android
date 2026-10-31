@@ -938,7 +938,7 @@ public class FilterTabsView extends FrameLayout {
 
             @Override
             protected boolean canHighlightChildAt(View child, float x, float y) {
-                if (isEditing) {
+                if (isEditing && child instanceof TabView) {
                     TabView tabView = (TabView) child;
                     int side = dp(6);
                     if (tabView.rect.left - side < x && tabView.rect.right + side > x) {
@@ -1110,6 +1110,13 @@ public class FilterTabsView extends FrameLayout {
             if (!delegate.canPerformActions()) {
                 return;
             }
+            if (!(view instanceof TabView)) {
+                // Luckgram: trailing "+" button
+                if (addButtonListener != null && !isEditing) {
+                    addButtonListener.onClick(view);
+                }
+                return;
+            }
             TabView tabView = (TabView) view;
             if (isEditing) {
                 if (position != 0) {
@@ -1127,7 +1134,7 @@ public class FilterTabsView extends FrameLayout {
             scrollToTab(tabView.currentTab, position);
         });
         listView.setOnItemLongClickListener((view, position) -> {
-            if (!delegate.canPerformActions() || isEditing || !delegate.didSelectTab((TabView) view, position == currentPosition)) {
+            if (!(view instanceof TabView) || !delegate.canPerformActions() || isEditing || !delegate.didSelectTab((TabView) view, position == currentPosition)) {
                 return false;
             }
             listView.hideSelector(true);
@@ -1542,7 +1549,7 @@ public class FilterTabsView extends FrameLayout {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         if (!tabs.isEmpty()) {
-            final int width = MeasureSpec.getSize(widthMeasureSpec) - listViewPaddingH * 2;
+            final int width = MeasureSpec.getSize(widthMeasureSpec) - listViewPaddingH * 2 - (showAddButton() ? dp(ADD_BUTTON_WIDTH) : 0);
             Tab firstTab = findDefaultTab();
             if (firstTab != null) {
                 firstTab.setTitle(LocaleController.getString(R.string.FilterAllChats), null, false);
@@ -1672,6 +1679,40 @@ public class FilterTabsView extends FrameLayout {
         invalidate();
     }
 
+    // region Luckgram: trailing "+" button (new folder / keyword folder)
+
+    private static final int VIEW_TYPE_ADD_BUTTON = 1;
+    private static final int ADD_BUTTON_WIDTH = 40;
+    private static final long ADD_BUTTON_STABLE_ID = Integer.MIN_VALUE + 7L;
+    private View.OnClickListener addButtonListener;
+
+    public void setAddButtonListener(View.OnClickListener listener) {
+        if (addButtonListener == listener) {
+            return;
+        }
+        addButtonListener = listener;
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+        requestLayout();
+    }
+
+    private boolean showAddButton() {
+        return addButtonListener != null && !isEditing && !tabs.isEmpty();
+    }
+
+    private View createAddButton(Context context) {
+        android.widget.ImageView imageView = new android.widget.ImageView(context);
+        imageView.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+        imageView.setImageResource(R.drawable.msg_add);
+        imageView.setColorFilter(new PorterDuffColorFilter(Theme.getColor(unactiveTextColorKey, resourcesProvider), PorterDuff.Mode.MULTIPLY));
+        imageView.setContentDescription(org.telegram.luckgram.keywordfolders.KeywordFolderStrings.newFolder());
+        imageView.setLayoutParams(new RecyclerView.LayoutParams(dp(ADD_BUTTON_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+        return imageView;
+    }
+
+    // endregion
+
     public boolean isEditing() {
         return isEditing;
     }
@@ -1689,6 +1730,9 @@ public class FilterTabsView extends FrameLayout {
             ArrayList<MessagesController.DialogFilter> filters = MessagesController.getInstance(UserConfig.selectedAccount).getDialogFilters();
             for (int a = 0, N = filters.size(); a < N; a++) {
                 MessagesController.DialogFilter filter = filters.get(a);
+                if (filter.isKeywordFolder()) {
+                    continue; // Luckgram: local keyword folder, not known to the server
+                }
                 if (filter.isDefault()) {
                     req.order.add(0);
                 } else {
@@ -1772,11 +1816,14 @@ public class FilterTabsView extends FrameLayout {
 
         @Override
         public int getItemCount() {
-            return tabs.size();
+            return tabs.size() + (showAddButton() ? 1 : 0);
         }
 
         @Override
         public long getItemId(int position) {
+            if (position >= tabs.size()) {
+                return ADD_BUTTON_STABLE_ID;
+            }
             return positionToStableId.get(position);
         }
 
@@ -1788,11 +1835,20 @@ public class FilterTabsView extends FrameLayout {
         @NonNull
         @Override
         public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            if (viewType == VIEW_TYPE_ADD_BUTTON) {
+                return new RecyclerListView.Holder(createAddButton(mContext));
+            }
             return new RecyclerListView.Holder(new TabView(mContext));
         }
 
         @Override
         public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
+            if (!(holder.itemView instanceof TabView)) {
+                if (holder.itemView instanceof android.widget.ImageView) {
+                    ((android.widget.ImageView) holder.itemView).setColorFilter(new PorterDuffColorFilter(Theme.getColor(unactiveTextColorKey, resourcesProvider), PorterDuff.Mode.MULTIPLY));
+                }
+                return;
+            }
             TabView tabView = (TabView) holder.itemView;
             int oldId = tabView.currentTab != null ? tabView.getId() : -1;
             tabView.setTab(tabs.get(position), position);
@@ -1803,7 +1859,7 @@ public class FilterTabsView extends FrameLayout {
 
         @Override
         public int getItemViewType(int i) {
-            return 0;
+            return i >= tabs.size() ? VIEW_TYPE_ADD_BUTTON : 0;
         }
 
         public void swapElements(int fromIndex, int toIndex) {
@@ -1912,6 +1968,9 @@ public class FilterTabsView extends FrameLayout {
 
         @Override
         public int getMovementFlags(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
+            if (!(viewHolder.itemView instanceof TabView)) {
+                return makeMovementFlags(0, 0);
+            }
             if (MessagesController.getInstance(UserConfig.selectedAccount).premiumFeaturesBlocked() && (!isEditing || (viewHolder.getAdapterPosition() == 0 && tabs.get(0).isDefault && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium()))) {
                 return makeMovementFlags(0, 0);
             }
@@ -1920,6 +1979,9 @@ public class FilterTabsView extends FrameLayout {
 
         @Override
         public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder source, @NonNull RecyclerView.ViewHolder target) {
+            if (!(source.itemView instanceof TabView) || !(target.itemView instanceof TabView)) {
+                return false;
+            }
             if (MessagesController.getInstance(UserConfig.selectedAccount).premiumFeaturesBlocked() && ((source.getAdapterPosition() == 0 || target.getAdapterPosition() == 0) && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium())) {
                 return false;
             }

@@ -1020,6 +1020,7 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter implements
                     } else {
                         cell.setCustomMessage(null);
                     }
+                    cell.luckgramHighlightKeywords = org.telegram.luckgram.keywordfolders.KeywordFolderController.highlightKeywords(getCurrentFilter());
                     cell.setDialog(dialog, dialogsType, folderId);
                     cell.checkHeight();
                     if (cell.collapsed != collapsedView) {
