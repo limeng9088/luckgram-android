@@ -700,6 +700,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
         items.add(SettingCell.Factory.of(2, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_chat, getString(R.string.SettingsChat), getString(R.string.SettingsChatInfo)));
         items.add(SettingCell.Factory.of(3, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_privacy, getString(R.string.SettingsPrivacySecurity), getString(R.string.SettingsPrivacySecurityInfo)));
+        if (getMessagesController().premiumFeaturesBlocked()) {
+            // Luckgram: no Premium row -> "Luckgram Features" goes right above Notifications
+            items.add(luckgramFeaturesItem());
+        }
         items.add(SettingCell.Factory.of(5, IconBackgroundColors.RED.top, IconBackgroundColors.RED.bottom, R.drawable.settings_sounds, getString(R.string.SettingsNotifications), getString(R.string.SettingsNotificationsInfo)));
         items.add(SettingCell.Factory.of(6, IconBackgroundColors.BLUE_DEEP.top, IconBackgroundColors.BLUE_DEEP.bottom, R.drawable.settings_data, getString(R.string.SettingsData), getString(R.string.SettingsDataInfo)));
         items.add(SettingCell.Factory.of(7, IconBackgroundColors.BLUE_ALT.top, IconBackgroundColors.BLUE_ALT.bottom, R.drawable.settings_folders, getString(R.string.SettingsFolders), getString(R.string.SettingsFoldersInfo)));
@@ -715,6 +719,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         }
 
         if (!getMessagesController().premiumFeaturesBlocked()) {
+            // Luckgram: "Luckgram Features" goes right above Telegram Premium
+            items.add(luckgramFeaturesItem());
             items.add(SettingCell.Factory.of(11, 0xFFB659FF, 0xFF617CFF, R.drawable.settings_premium, getString(R.string.TelegramPremium)));
         }
         if (getMessagesController().starsPurchaseAvailable()) {
@@ -760,6 +766,12 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         }
 
         items.add(UItem.asCustomShadow(versionView));
+    }
+
+    private static final int LUCKGRAM_FEATURES_ID = 40;
+
+    private UItem luckgramFeaturesItem() {
+        return SettingCell.Factory.of(LUCKGRAM_FEATURES_ID, 0xFF2AABEE, 0xFF1C8ADB, R.drawable.settings_luckgram, org.telegram.luckgram.LuckgramStrings.featuresTitle());
     }
 
     private void presentSettingFragment(BaseFragment fragment) {
@@ -848,6 +860,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
             case 11:
                 presentSettingFragment(new PremiumPreviewFragment("settings"));
+                break;
+            case LUCKGRAM_FEATURES_ID:
+                presentSettingFragment(new org.telegram.luckgram.LuckgramSettingsActivity());
                 break;
             case 12:
                 presentSettingFragment(new StarsIntroActivity());

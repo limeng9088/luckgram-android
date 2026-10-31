@@ -42,7 +42,10 @@ configurations.all {
 }
 
 dependencies {
-    testImplementation 'junit:junit:4.13.2' // Luckgram: local JVM unit tests (src/test)
+    // Luckgram: plain-JVM unit tests (./gradlew :TMessagesProj:testDebugUnitTest)
+    testImplementation 'junit:junit:4.13.2'
+    // android.jar's org.json is a stub in local unit tests; use the real implementation there
+    testImplementation 'org.json:json:20231013'
     implementation 'androidx.core:core:1.16.0'
     implementation 'androidx.palette:palette:1.0.0'
     implementation 'androidx.exifinterface:exifinterface:1.3.6'
@@ -139,6 +142,10 @@ android {
         minSdkVersion 23
         targetSdkVersion 36
 
+        // QA 测试包（./gradlew -PLUCKGRAM_QA=true ...）：登录页显示「Test Backend」，可登录 Telegram 测试服务器。
+        // 正式包不传该属性，开关不出现。
+        buildConfigField "boolean", "QA_BUILD", (project.findProperty("LUCKGRAM_QA") == "true") ? "true" : "false"
+
         vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
         multiDexEnabled true
@@ -164,6 +171,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "0"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL_DEV + "\""
         }
 
         HA_private {
@@ -177,6 +185,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "1"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL_DEV + "\""
         }
 
         HA_public {
@@ -190,6 +199,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "4"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + ((project.findProperty("LUCKGRAM_QA") == "true") ? LUCKGRAM_API_URL_DEV : LUCKGRAM_API_URL) + "\""
         }
 
         HA_hardcore {
@@ -203,6 +213,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "true"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "5"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL_DEV + "\""
         }
 
         standalone {
@@ -216,6 +227,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "6"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + ((project.findProperty("LUCKGRAM_QA") == "true") ? LUCKGRAM_API_URL_DEV : LUCKGRAM_API_URL) + "\""
         }
 
         release {
@@ -229,6 +241,7 @@ android {
             buildConfigField "boolean", "DEBUG_PRIVATE_VERSION", "false"
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "7"
+            buildConfigField "String", "LUCKGRAM_API_URL", "\"" + ((project.findProperty("LUCKGRAM_QA") == "true") ? LUCKGRAM_API_URL_DEV : LUCKGRAM_API_URL) + "\""
         }
     }
 

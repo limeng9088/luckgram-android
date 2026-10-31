@@ -502,6 +502,7 @@ public class UserConfig extends BaseController {
                 break;
             }
         }
+        org.telegram.luckgram.LuckgramSettings.onAccountCleared(currentAccount, !hasActivated);
         if (!hasActivated) {
             SharedConfig.clearConfig();
         }
