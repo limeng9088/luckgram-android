@@ -144,3 +144,32 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "Luckgram Android ${VER} (${GITHUB_RUN_NUMBER})" \
             --notes "Signed release APK (${ABIS}) built from ${GITHUB_SHA}."
+
+      # S5: tell the Luckgram API about the new release (GET /v1/version).
+      - name: Publish version to Luckgram API
+        if: github.ref == 'refs/heads/master'
+        env:
+          TOKEN_DEV: ${{ secrets.LUCKGRAM_RELEASE_TOKEN_DEV }}
+          TOKEN_PROD: ${{ secrets.LUCKGRAM_RELEASE_TOKEN_PROD }}
+        run: |
+          VER=$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)
+          # build = CI run number: APP_VERSION_CODE stays the same across
+          # releases of one versionName (run 6 and run 36 are both 7183), and the
+          # installed versionCode is APP_VERSION_CODE*10+abi. The app reports the
+          # same run number (BuildConfig.LUCKGRAM_BUILD, S5 app part).
+          CODE=$GITHUB_RUN_NUMBER
+          TAG="android-${VER}-${GITHUB_RUN_NUMBER}"
+          APK=$(basename out/*.apk)
+          BODY=$(printf '{"platform":"%s","version":"%s","build":%s,"url":"%s","source":"%s"}' \
+            android "$VER" "$CODE" "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}" "${GITHUB_REPOSITORY}@${GITHUB_SHA} run ${GITHUB_RUN_NUMBER}")
+          # Tokens only via env -> stdin (never argv); a missing secret skips that stage.
+          set -euo pipefail
+          publish() {
+            local host=$1 token=$2
+            if [ -z "$token" ]; then echo "skip $host (no token secret)"; return 0; fi
+            printf 'Authorization: Bearer %s\n' "$token" | curl -sS --fail-with-body --retry 3 --retry-all-errors \
+              -H @- -H 'Content-Type: application/json' -X POST -d "$BODY" "https://$host/v1/internal/release"
+            echo
+          }
+          publish api-dev.luckgram.cc "${TOKEN_DEV:-}"
+          publish api.luckgram.cc "${TOKEN_PROD:-}"
