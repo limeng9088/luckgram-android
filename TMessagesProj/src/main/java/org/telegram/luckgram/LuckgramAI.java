@@ -329,6 +329,15 @@ public final class LuckgramAI {
 
     // ---------------------------------------------------------------- public API
 
+    /**
+     * Blocking authenticated GET for non-AI endpoints (remote config, task S4). Registers the device
+     * if needed but never asks for AI consent: no user content is sent. Call off the main thread;
+     * the caller closes the response.
+     */
+    public HttpResponse getBlocking(String path, Map<String, String> extraHeaders) throws Exception {
+        return authorized(new Request(), "GET", path, null, null, "application/json", extraHeaders);
+    }
+
     public Request chat(Context context, String task, List<Message> messages, boolean stream, ChatListener listener) {
         Request req = new Request();
         int chars = 0;
@@ -589,12 +598,17 @@ public final class LuckgramAI {
 
     /** Sends an authenticated request; registers first if needed and re-registers once on invalid_token. */
     private HttpResponse authorized(Request req, String method, String path, String contentType, byte[] body, String accept) throws Exception {
+        return authorized(req, method, path, contentType, body, accept, null);
+    }
+
+    private HttpResponse authorized(Request req, String method, String path, String contentType, byte[] body, String accept, Map<String, String> extraHeaders) throws Exception {
         for (int attempt = 0; ; attempt++) {
             String t = ensureToken(req);
             Map<String, String> headers = new LinkedHashMap<>();
             headers.put("Authorization", "Bearer " + t);
             headers.put("Accept", accept);
             if (contentType != null) headers.put("Content-Type", contentType);
+            if (extraHeaders != null) headers.putAll(extraHeaders);
             HttpResponse res = send(req, method, path, headers, body);
             if (res.status == 401 && attempt == 0) {
                 res.close();

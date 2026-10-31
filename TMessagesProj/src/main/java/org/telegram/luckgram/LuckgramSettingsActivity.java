@@ -148,7 +148,7 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
             LuckgramFeature f = (LuckgramFeature) item.object;
             boolean onSwitch = f.subpage == null || (LocaleController.isRTL ? x <= dp(76) : x >= view.getMeasuredWidth() - dp(76));
             if (onSwitch) {
-                boolean value = !f.isEnabled();
+                boolean value = !f.isLocallyEnabled();
                 NotificationsCheckCell cell = (NotificationsCheckCell) view;
                 if (value && f.confirmEnable != null) {
                     // Off -> on needs confirmation (#58); the switch stays off until done(true).

@@ -12,6 +12,7 @@ import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextUtils;
 
+import org.telegram.luckgram.LuckgramSettings;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
@@ -36,9 +37,8 @@ import java.util.regex.Pattern;
 
 public final class TranslateOutController {
 
-    /** Switch key, registered in the Luckgram feature registry ("消息与语言" group). Default: on. */
+    /** Switch key, registered in LuckgramFeatures ("消息与语言" group, default on). */
     public static final String FEATURE_KEY = "translate_out";
-    public static final boolean FEATURE_DEFAULT = true;
 
     /** Fallback when neither the chat nor the peer's last message gives us a language. */
     public static final String FALLBACK_LANGUAGE = "en";
@@ -48,7 +48,6 @@ public final class TranslateOutController {
 
     private static final long REQUEST_TIMEOUT_MS = 15_000;
 
-    private static final String DEVICE_PREFS = "luckgram_settings";
     private static final String ACCOUNT_PREFS_PREFIX = "luckgram_translate_out_";
     private static final String KEY_CHAT_LANG_PREFIX = "lang_";
     private static final String KEY_RECENT = "recent";
@@ -62,17 +61,11 @@ public final class TranslateOutController {
     // ---------------------------------------------------------------- switch
 
     /**
-     * Whether the feature is enabled. Device level setting shared by all accounts.
-     * Reads the same key the Luckgram settings page (feature 00, LuckgramSettings) writes.
+     * Whether the feature is enabled: local switch on "Settings -> Luckgram features" and not
+     * switched off remotely (LuckgramSettings, feature 00). Default comes from the registry.
      */
     public static boolean isEnabled() {
-        try {
-            return ApplicationLoader.applicationContext
-                .getSharedPreferences(DEVICE_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(FEATURE_KEY, FEATURE_DEFAULT);
-        } catch (Exception e) {
-            return FEATURE_DEFAULT;
-        }
+        return LuckgramSettings.isEnabled(FEATURE_KEY);
     }
 
     // ---------------------------------------------------------------- per chat language
