@@ -40,20 +40,32 @@ public class CallRecSettingsActivity extends UniversalFragment {
             onResult.accept(true);
             return;
         }
-        final boolean[] accepted = {false};
+        showLegalReminder(context, resourcesProvider, agreed -> {
+            if (agreed) {
+                CallRecSettings.setEnabled(true);
+                maybeAskAiConsent(context);
+            }
+            onResult.accept(agreed);
+        });
+    }
+
+    /** The legal reminder dialog alone; {@code onResult} gets true only for "我知道了". */
+    static void showLegalReminder(Context context, Theme.ResourcesProvider resourcesProvider, Consumer<Boolean> onResult) {
+        final boolean[] decided = {false};
         AlertDialog dialog = new AlertDialog.Builder(context, resourcesProvider)
                 .setTitle(CallRecStrings.legalTitle())
                 .setMessage(CallRecStrings.legalText())
                 .setPositiveButton(CallRecStrings.gotIt(), (d, w) -> {
-                    accepted[0] = true;
-                    CallRecSettings.setEnabled(true);
-                    onResult.accept(true);
-                    maybeAskAiConsent(context);
+                    if (!decided[0]) {
+                        decided[0] = true;
+                        onResult.accept(true);
+                    }
                 })
                 .setNegativeButton(CallRecStrings.cancel(), null)
                 .create();
         dialog.setOnDismissListener(d -> {
-            if (!accepted[0]) {
+            if (!decided[0]) {
+                decided[0] = true;
                 onResult.accept(false);
             }
         });
@@ -64,9 +76,9 @@ public class CallRecSettingsActivity extends UniversalFragment {
      * The transcript is made after the call, when no dialog can be shown, so the shared AI
      * consent (spec 00 §18) is asked for up front. Declining turns the AI transcript off.
      */
-    private static void maybeAskAiConsent(Context context) {
+    static void maybeAskAiConsent(Context context) {
         final CallRecAi ai = CallRecAi.get();
-        if (ai == null || !CallRecSettings.isAiTranscriptEnabled() || ai.hasConsent()) {
+        if (!CallRecSettings.isAiTranscriptEnabled() || ai.hasConsent()) {
             return;
         }
         ai.requestConsent(context, agreed -> {
@@ -149,7 +161,7 @@ public class CallRecSettingsActivity extends UniversalFragment {
             ((TextCheckCell) view).setChecked(value);
             if (value) {
                 final CallRecAi ai = CallRecAi.get();
-                if (ai != null && !ai.hasConsent()) {
+                if (!ai.hasConsent()) {
                     ai.requestConsent(getContext(), agreed -> {
                         if (!agreed) {
                             CallRecSettings.setAiTranscriptEnabled(false);

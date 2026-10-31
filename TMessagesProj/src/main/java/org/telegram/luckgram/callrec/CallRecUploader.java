@@ -195,7 +195,7 @@ final class CallRecUploader implements NotificationCenter.NotificationCenterDele
 
     private void startAi() {
         final CallRecAi ai = CallRecAi.get();
-        if (!CallRecSettings.isAiTranscriptEnabled() || ai == null || !ai.hasConsent()) {
+        if (!CallRecSettings.isAiTranscriptEnabled() || !ai.hasConsent()) {
             aiDone = true;
             return;
         }

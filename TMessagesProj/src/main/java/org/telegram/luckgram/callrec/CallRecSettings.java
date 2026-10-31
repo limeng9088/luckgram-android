@@ -27,6 +27,12 @@ public final class CallRecSettings {
     /** Post a transcript + summary reply via the AI gateway. Default on. */
     public static final String KEY_AI_TRANSCRIPT = "call_recording_ai_transcript";
 
+    /**
+     * Set when the legal reminder was acknowledged for the current "on" period; cleared when the
+     * feature is switched off, so every enable shows it again (spec 04 §1, #58).
+     */
+    public static final String KEY_LEGAL_ACK = "call_recording_legal_ack";
+
     /** Per-account key inside UserConfig preferences. 0 / missing = Saved Messages. */
     private static final String KEY_TARGET_DIALOG = "luckgram_call_recording_target";
 
@@ -36,15 +42,27 @@ public final class CallRecSettings {
      */
     public static boolean isEnabled() {
         try {
-            return LuckgramSettings.isEnabled(KEY_ENABLED);
+            // Not on until the legal reminder was acknowledged, however the switch was flipped.
+            return LuckgramSettings.isEnabled(KEY_ENABLED) && isLegalAcknowledged();
         } catch (Exception e) {
             return false;
         }
     }
 
+    static boolean isLegalAcknowledged() {
+        return LuckgramSettings.getBool(KEY_LEGAL_ACK, false);
+    }
+
     /** Use {@link CallRecSettingsActivity#requestEnable} to turn it on so the legal reminder is shown. */
     public static void setEnabled(boolean enabled) {
-        LuckgramSettings.setEnabled(KEY_ENABLED, enabled);
+        if (enabled) {
+            // Acknowledge first, so the guard sees an acknowledged switch-on.
+            LuckgramSettings.setBool(KEY_LEGAL_ACK, true);
+            LuckgramSettings.setEnabled(KEY_ENABLED, true);
+        } else {
+            LuckgramSettings.setEnabled(KEY_ENABLED, false);
+            LuckgramSettings.setBool(KEY_LEGAL_ACK, false);
+        }
     }
 
     public static boolean isAutoRecord() {
