@@ -37,6 +37,7 @@ public final class AiWritingFeatures {
         registerDebugDemo();
         // ---- other features register here (20 AI reply, 24 AI post) ----
         AiWritingRegistry.register(org.telegram.luckgram.reply.AiReplyFeature.menuItem());
+        AiWritingRegistry.register(org.telegram.luckgram.post.AiPostFeature.menuItem());
     }
 
     private static void effect(String effect, String zh, String en, int icon, int order, String doneZh, String doneEn) {

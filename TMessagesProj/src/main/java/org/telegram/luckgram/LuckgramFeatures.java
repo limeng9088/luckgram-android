@@ -43,6 +43,8 @@ public final class LuckgramFeatures {
     public static final String AI_WRITING = "ai_writing";
     /** spec 20 */
     public static final String AI_REPLY = "ai_reply";
+    /** spec 24 */
+    public static final String AI_POST = "ai_post";
 
     private static final ArrayList<LuckgramFeature> ALL = new ArrayList<>();
 
@@ -88,6 +90,9 @@ public final class LuckgramFeatures {
         add(toggle(AI_WRITING, AI, true,
             "AI 写作", "AI writing",
             "输入框里的 ✦ 按钮：润色、更正式、更友好、更简短、修正语法", "The ✦ button in the message field: polish, formal, friendly, shorter, grammar"));
+        add(toggle(AI_POST, AI, true,
+            "AI 写帖子", "AI posts",
+            "有发帖权限的频道里，✦ 菜单的「写帖子」：按频道风格生成帖子", "\"Write a post\" in the ✦ menu of channels you can post in, in the channel's style"));
         add(toggle(AI_REPLY, AI, true,
             "AI 回复", "AI reply",
             "✦ 菜单里的「帮我回复」：根据对话和草稿给出 3 条候选", "\"Help me reply\" in the ✦ menu: 3 suggestions from the chat and your draft"));
