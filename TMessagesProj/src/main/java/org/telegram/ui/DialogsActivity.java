@@ -4896,6 +4896,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 luckgramAiRow.setOnClickListener(v -> org.telegram.luckgram.ai.LuckgramAiChatActivity.openLatest(this));
                 topPanelLayout.addView(luckgramAiRow);
                 topPanelLayout.setViewVisible(luckgramAiRow, org.telegram.luckgram.ai.LuckgramAiChatActivity.isRowEnabled(), false);
+                // Luckgram: agents added to the chat list (feature 22)
+                luckgramAgentsStrip = new org.telegram.luckgram.agents.LuckgramAgentsStrip(context, this);
+                topPanelLayout.addView(luckgramAgentsStrip);
+                topPanelLayout.setViewVisible(luckgramAgentsStrip, luckgramAgentsStrip.update(), false);
             }
 
 
@@ -5844,6 +5848,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private static final int LUCKGRAM_AI_ITEM = 0x4C47A1;
     private ActionBarMenuItem luckgramAiItem;
     private org.telegram.ui.community.cells.CommunityRequestsCell luckgramAiRow;
+    private org.telegram.luckgram.agents.LuckgramAgentsStrip luckgramAgentsStrip;
 
     private void updateLuckgramAi() {
         if (luckgramAiItem != null) {
@@ -5851,6 +5856,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         if (topPanelLayout != null && luckgramAiRow != null) {
             topPanelLayout.setViewVisible(luckgramAiRow, org.telegram.luckgram.ai.LuckgramAiChatActivity.isRowEnabled(), true);
+        }
+        if (topPanelLayout != null && luckgramAgentsStrip != null) {
+            topPanelLayout.setViewVisible(luckgramAgentsStrip, luckgramAgentsStrip.update(), true);
         }
     }
 
