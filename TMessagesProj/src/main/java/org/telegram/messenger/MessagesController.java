@@ -16115,6 +16115,8 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void performLogout(int type) {
+        // Luckgram: private notes are stored per account on this device only; wipe them on logout / account deletion.
+        org.telegram.luckgram.notes.UserNotesStore.wipeAccount(currentAccount, getUserConfig().getClientUserId());
         if (type == 1) {
             GramWalletStorage.wipeForUser(ApplicationLoader.applicationContext, currentAccount, getUserConfig().getClientUserId());
             unregistedPush();
