@@ -14560,6 +14560,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         }
                         if (freeAccount >= 0) {
                             f.presentFragment(new LoginActivity(freeAccount));
+                        } else {
+                            org.telegram.luckgram.accounts.LuckgramAccounts.showLimitReached();
                         }
                     }).withLink("tg://settings/edit/add-account"),
                     // TODO:

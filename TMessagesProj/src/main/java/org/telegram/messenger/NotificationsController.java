@@ -4154,8 +4154,15 @@ public class NotificationsController extends BaseController implements Notificat
         return channelId;
     }
 
+    /** Luckgram 09: removes this account's notifications (its notification switch was turned off). */
+    public void luckgramDismissNotifications() {
+        notificationsQueue.postRunnable(this::dismissNotification);
+    }
+
     private void showOrUpdateNotification(boolean notifyAboutLast) {
-        if (!getUserConfig().isClientActivated() || pushMessages.isEmpty() && storyPushMessages.isEmpty() || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount) {
+        // Luckgram 09 (more accounts): per-account notification switch
+        if (!getUserConfig().isClientActivated() || pushMessages.isEmpty() && storyPushMessages.isEmpty() || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount
+                || !org.telegram.luckgram.accounts.LuckgramAccounts.isNotificationsEnabled(currentAccount)) {
             dismissNotification();
             return;
         }
@@ -4638,7 +4645,8 @@ public class NotificationsController extends BaseController implements Notificat
             intent.putExtra("currentAccount", currentAccount);
             PendingIntent contentIntent = PendingIntent.getActivity(ApplicationLoader.applicationContext, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_ONE_SHOT);
 
-            mBuilder.setContentTitle(name)
+            // Luckgram 09: "[Work] Noah" when several accounts are logged in
+            mBuilder.setContentTitle(org.telegram.luckgram.accounts.LuckgramAccounts.notificationPrefix(currentAccount) + name)
                     .setSmallIcon(R.drawable.notification)
                     .setAutoCancel(true)
                     .setNumber(total_unread_count)
@@ -5244,6 +5252,9 @@ public class NotificationsController extends BaseController implements Notificat
             } else {
                 conversationName = String.format("%1$s (%2$d)", name, n);
             }
+            // Luckgram 09: "[Work] Noah" when several accounts are logged in
+            final String luckgramAccountPrefix = org.telegram.luckgram.accounts.LuckgramAccounts.notificationPrefix(currentAccount);
+            conversationName = luckgramAccountPrefix + conversationName;
 
             Person selfPerson = personCache.get(selfUserId);
             if (Build.VERSION.SDK_INT >= 28 && selfPerson == null) {
@@ -5386,6 +5397,9 @@ public class NotificationsController extends BaseController implements Notificat
                         }
                     } else {
                         personName = senderName[0];
+                    }
+                    if (DialogObject.isUserDialog(dialogId) && !TextUtils.isEmpty(personName)) {
+                        personName = luckgramAccountPrefix + personName;
                     }
 
                     if (person == null || !TextUtils.equals(person.getName(), personName)) {
@@ -5640,7 +5654,7 @@ public class NotificationsController extends BaseController implements Notificat
             }
 
             NotificationCompat.Builder builder = new NotificationCompat.Builder(ApplicationLoader.applicationContext)
-                    .setContentTitle(name)
+                    .setContentTitle(luckgramAccountPrefix + name)
                     .setSmallIcon(R.drawable.notification)
                     .setContentText(text.toString())
                     .setAutoCancel(true)
