@@ -60,6 +60,8 @@ jobs:
       FLOWS: ${{ github.event_name == 'schedule' && 'maestro/android/smoke maestro/android/regression' || inputs.flows || 'maestro/android/smoke' }}
       ACCOUNT: ${{ github.event_name == 'schedule' && 'RA' || inputs.account || 'A1' }}
       MAESTRO_ARGS: ${{ inputs.maestro_args }}
+      # 正式服账号（P-*）：本仓库公开，不上传报告、不在日志里打印号码和失败详情
+      QA_PRIVATE: ${{ startsWith(inputs.account || '', 'P-') && '1' || '0' }}
       OUT: ${{ github.workspace }}\qa-out
     steps:
       - name: Clean workspace
@@ -99,17 +101,27 @@ jobs:
         timeout-minutes: 30
         run: |
           $flows = $env:FLOWS.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
-          & ./qa/ci/android-run.ps1 -Apk $env:APK -Account $env:ACCOUNT -Flows $flows -Out $env:OUT -FlowTimeoutMin 10 -BudgetMin 27
+          # CI-only AVD + port (docs/android-ci-isolation.md in luckgram-qa); the script refuses luckgram-qa-34 / 5554
+          & ./qa/ci/android-run.ps1 -Apk $env:APK -Account $env:ACCOUNT -Flows $flows -Out $env:OUT -Avd luckgram-ci-34 -Port 5580 -FlowTimeoutMin 10 -BudgetMin 27
 
       - name: Stop emulator (safety net)
         if: always()
         run: |
-          # Kill only our emulator by serial. NEVER kill qemu-system-x86_64 by name (host runs a Debian VM).
+          # Kill only the CI emulator (luckgram-ci-34 on emulator-5580). NEVER touch emulator-5554 / luckgram-qa-34
+          # (manual testing, logged in), and never kill qemu-system-x86_64 by name (host runs a Debian VM).
           $adb = Join-Path $env:ANDROID_HOME 'platform-tools\adb.exe'
-          if ((& $adb devices) -match '^emulator-5554\s') { & $adb -s emulator-5554 emu kill }
+          if ((& $adb devices) -match '^emulator-5580\s') { & $adb -s emulator-5580 emu kill }
+
+      - name: Keep report on runner (private run)
+        if: always() && env.QA_PRIVATE == '1'
+        run: |
+          $d = "D:\luckgram-qa\private-reports\android-${{ github.run_id }}-${{ github.run_attempt }}"
+          New-Item -ItemType Directory -Force -Path $d | Out-Null
+          if (Test-Path qa-out) { Copy-Item -Recurse -Force qa-out\* $d; Remove-Item -Recurse -Force qa-out }
+          Write-Host 'report kept on runner (not uploaded: public repo)'
 
       - name: Upload report
-        if: always()
+        if: always() && env.QA_PRIVATE != '1'
         uses: actions/upload-artifact@v4
         with:
           name: maestro-report-android-${{ github.run_number }}-${{ github.run_attempt }}
