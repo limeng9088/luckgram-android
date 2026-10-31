@@ -52,7 +52,7 @@ class ProfileInfoLogicTest {
         ArrayList<ProfileInfoLogic.Point> t = bundledTable();
         assertTrue(t.size() >= 45, "rows: " + t.size());
         assertEquals(2013, t.get(0).monthIndex / 12);
-        assertTrue(t.get(t.size() - 1).monthIndex / 12 >= 2025);
+        assertTrue(t.get(t.size() - 1).monthIndex / 12 >= 2026);
         for (int i = 1; i < t.size(); i++) {
             assertTrue(t.get(i).id > t.get(i - 1).id);
             assertTrue(t.get(i).monthIndex - t.get(i - 1).monthIndex <= 3, "gap > 1 quarter at row " + i);
@@ -75,6 +75,7 @@ class ProfileInfoLogicTest {
                 {5144324763L, 2022, 4},
                 {6872061796L, 2024, 5},
                 {8325327280L, 2025, 10},
+                {8559682245L, 2025, 11}, // newest data point
         };
         for (long[] k : known) {
             ProfileInfoLogic.Estimate e = ProfileInfoLogic.estimate(t, k[0]);
