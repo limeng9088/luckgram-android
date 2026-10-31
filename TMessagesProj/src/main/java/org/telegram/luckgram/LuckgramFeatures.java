@@ -50,6 +50,8 @@ public final class LuckgramFeatures {
     public static final String AI_ASSISTANT_ROW = "ai_assistant_row";
     /** spec 22 */
     public static final String AI_AGENTS = "ai_agents";
+    /** spec 23 */
+    public static final String AI_IMAGE = "ai_image";
 
     private static final ArrayList<LuckgramFeature> ALL = new ArrayList<>();
 
@@ -99,6 +101,9 @@ public final class LuckgramFeatures {
         add(toggle(AI_ASSISTANT, AI, true,
             "AI 助手", "AI assistant",
             "聊天列表顶部的「AI」按钮：提问、总结、改写、讲解、解题", "The \"AI\" button on the chat list: ask, summarize, rewrite, explain, solve"));
+        add(toggle(AI_IMAGE, AI, true,
+            "AI 画图", "AI images",
+            "在 AI 助手里描述画面生成图片，可发送、保存、重画", "Describe a picture in the AI assistant; send, save or redraw it"));
         add(toggle(AI_AGENTS, AI, true,
             "AI 智能体", "AI agents",
             "AI 助手里的旅行规划师、文案写手等，也能自己创建", "Travel planner, copywriter and more in the AI assistant, or make your own"));
