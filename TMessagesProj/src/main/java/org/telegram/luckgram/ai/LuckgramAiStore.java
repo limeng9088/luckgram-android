@@ -50,6 +50,26 @@ public final class LuckgramAiStore {
         this.account = account;
     }
 
+    /**
+     * Folder for files belonging to one conversation (e.g. generated images, spec 23); deleted with
+     * the conversation and with the account's data.
+     */
+    public static File conversationDir(int account, String conversationId) {
+        File dir = new File(new File(ApplicationLoader.getFilesDirFixed(), "luckgram_ai"), account + "_files" + File.separator + conversationId);
+        //noinspection ResultOfMethodCallIgnored
+        dir.mkdirs();
+        return dir;
+    }
+
+    private static void deleteRecursive(File f) {
+        File[] children = f.listFiles();
+        if (children != null) {
+            for (File c : children) deleteRecursive(c);
+        }
+        //noinspection ResultOfMethodCallIgnored
+        f.delete();
+    }
+
     static File file(int account) {
         File dir = new File(ApplicationLoader.getFilesDirFixed(), "luckgram_ai");
         //noinspection ResultOfMethodCallIgnored
@@ -163,6 +183,8 @@ public final class LuckgramAiStore {
                 break;
             }
         }
+        final File dir = new File(new File(ApplicationLoader.getFilesDirFixed(), "luckgram_ai"), account + "_files" + File.separator + id);
+        diskQueue.postRunnable(() -> deleteRecursive(dir));
         scheduleWrite();
         notifyListeners();
     }
@@ -236,6 +258,7 @@ public final class LuckgramAiStore {
             diskQueue.postRunnable(() -> {
                 //noinspection ResultOfMethodCallIgnored
                 file(account).delete();
+                deleteRecursive(new File(new File(ApplicationLoader.getFilesDirFixed(), "luckgram_ai"), account + "_files"));
             });
         });
     }
