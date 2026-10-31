@@ -49,6 +49,9 @@ public final class LuckgramFeatures {
         add(toggle(org.telegram.luckgram.selectall.SelectAllFromSender.SETTING_KEY, MESSAGES_LANGUAGE, true,
             "全选某人的消息", "Select all from sender",
             "长按消息一次选中这个人在本聊天的全部消息", "Long-press a message to select everything its sender wrote here"));
+        add(toggle(org.telegram.luckgram.savedirect.SaveToSaved.SETTING_KEY, MESSAGES_LANGUAGE, true,
+            "一键收藏", "Save in one tap",
+            "消息菜单里一点就存到收藏夹", "Save a message to Saved Messages straight from its menu"));
 
         // ---- 媒体、通话与存储 / Media, Calls & Storage
 

@@ -1260,6 +1260,8 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_SPEED_PROMO = 103;
     // Luckgram: select all messages from one sender (spec 14)
     public final static int OPTION_LUCKGRAM_SELECT_ALL_FROM_SENDER = 200;
+    // Luckgram: save to Saved Messages in one tap (spec 15)
+    public final static int OPTION_LUCKGRAM_SAVE_TO_SAVED = 201;
     public final static int OPTION_OPEN_PROFILE = 104;
     public final static int OPTION_FACT_CHECK = 106;
     public final static int OPTION_EDIT_PRICE = 107;
@@ -1671,6 +1673,7 @@ public class ChatActivity extends BaseFragment implements
     private final static int auto_delete_timer = 26;
     private final static int change_colors = 27;
     private final static int tag_message = 28;
+    private final static int luckgram_save_to_saved = 140; // Luckgram (spec 15): action mode "Save"
     private final static int boost_group = 29;
 
     private final static int bot_help = 30;
@@ -3822,6 +3825,8 @@ public class ChatActivity extends BaseFragment implements
                     createDeleteMessagesAlert(null, null);
                 } else if (id == forward) {
                     openForward(true);
+                } else if (id == luckgram_save_to_saved) {
+                    luckgramSaveSelectedToSaved();
                 } else if (id == share) {
                     share();
                 } else if (id == open_direct) {
@@ -10465,6 +10470,10 @@ public class ChatActivity extends BaseFragment implements
             if (!isSavedMessages && getDialogId() != UserObject.VERIFY) {
                 actionModeViews.add(actionMode.addItemWithWidth(forward, R.drawable.msg_forward, dp(48), LocaleController.getString(R.string.Forward)));
             }
+            if (!isSavedMessages && getDialogId() != UserObject.VERIFY && org.telegram.luckgram.savedirect.SaveToSaved.isEnabled()) {
+                // Luckgram (spec 15): "Save" next to Forward in multi-select.
+                actionModeViews.add(actionMode.addItemWithWidth(luckgram_save_to_saved, R.drawable.msg_saved, dp(48), org.telegram.luckgram.savedirect.SaveToSaved.menuTitle()));
+            }
             actionModeViews.add(actionMode.addItemWithWidth(share, R.drawable.msg_shareout, dp(48), LocaleController.getString(R.string.ShareFile)));
             actionModeViews.add(actionMode.addItemWithWidth(delete, R.drawable.msg_delete, dp(48), LocaleController.getString(R.string.Delete)));
         } else {
@@ -10478,6 +10487,7 @@ public class ChatActivity extends BaseFragment implements
         actionMode.setItemVisibility(star, selectedMessagesCanStarIds[0].size() + selectedMessagesCanStarIds[1].size() != 0 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(delete, cantDeleteMessagesCount == 0 ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(tag_message, getUserConfig().isPremium() ? View.VISIBLE : View.GONE);
+        actionMode.setItemVisibility(luckgram_save_to_saved, luckgramCanSaveToSaved() ? View.VISIBLE : View.GONE);
         actionMode.setItemVisibility(share, View.GONE);
     }
 
@@ -19378,6 +19388,11 @@ public class ChatActivity extends BaseFragment implements
                 ActionBarMenuItem deleteItem = actionBar.createActionMode().getItem(delete);
                 ActionBarMenuItem tagItem = actionBar.createActionMode().getItem(tag_message);
                 ActionBarMenuItem shareItem = actionBar.createActionMode().getItem(share);
+                ActionBarMenuItem luckgramSaveItem = actionBar.createActionMode().getItem(luckgram_save_to_saved);
+                if (luckgramSaveItem != null) {
+                    // Luckgram (spec 15): hidden where forwarding is not allowed.
+                    luckgramSaveItem.setVisibility(luckgramCanSaveToSaved() && cantForwardMessagesCount == 0 && !hasSelectedNoforwardsMessage() ? View.VISIBLE : View.GONE);
+                }
 
                 boolean noforwards = isPeerNoForwards() || hasSelectedNoforwardsMessage();
                 if (prevCantForwardCount == 0 && cantForwardMessagesCount != 0 || prevCantForwardCount != 0 && cantForwardMessagesCount == 0) {
@@ -34507,6 +34522,16 @@ public class ChatActivity extends BaseFragment implements
                 }).show();
                 break;
             }
+            case OPTION_LUCKGRAM_SAVE_TO_SAVED: {
+                ArrayList<MessageObject> toSave = new ArrayList<>();
+                if (selectedObjectGroup != null) {
+                    toSave.addAll(selectedObjectGroup.messages);
+                } else if (selectedObject != null) {
+                    toSave.add(selectedObject);
+                }
+                luckgramSaveToSaved(toSave);
+                break;
+            }
             case OPTION_LUCKGRAM_SELECT_ALL_FROM_SENDER: {
                 final MessageObject anchor = selectedObject;
                 AndroidUtilities.runOnUIThread(() -> luckgramStartSelectAll(anchor));
@@ -35039,6 +35064,55 @@ public class ChatActivity extends BaseFragment implements
         }
         luckgramSelectAllMode = false;
     }
+
+    // region Luckgram: save to Saved Messages in one tap (spec 15)
+
+    private boolean luckgramCanSaveToSaved() {
+        return chatMode != MODE_SCHEDULED && !isReport()
+            && org.telegram.luckgram.savedirect.SaveToSaved.availableInChat(currentAccount, dialog_id, currentChat, userInfo);
+    }
+
+    private void luckgramSaveSelectedToSaved() {
+        ArrayList<MessageObject> toSave = new ArrayList<>();
+        for (int a = 1; a >= 0; a--) {
+            for (int b = 0; b < selectedMessagesIds[a].size(); b++) {
+                MessageObject m = selectedMessagesIds[a].valueAt(b);
+                if (m != null) {
+                    toSave.add(m);
+                }
+            }
+            selectedMessagesIds[a].clear();
+            selectedMessagesCanCopyIds[a].clear();
+            selectedMessagesCanStarIds[a].clear();
+        }
+        hideActionMode();
+        updatePinnedMessageView(true);
+        updateVisibleRows();
+        luckgramSaveToSaved(toSave);
+    }
+
+    private void luckgramSaveToSaved(ArrayList<MessageObject> messages) {
+        if (getMessagesController().isFrozen()) {
+            AccountFrozenAlert.show(currentAccount);
+            return;
+        }
+        int sent = org.telegram.luckgram.savedirect.SaveToSaved.save(currentAccount, messages);
+        if (sent == 0) {
+            return;
+        }
+        final long self = getUserConfig().getClientUserId();
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.saved_messages,
+            org.telegram.luckgram.savedirect.SaveToSaved.savedText(),
+            org.telegram.luckgram.savedirect.SaveToSaved.viewText(),
+            () -> {
+                // The saved copy is the newest message there, so opening the chat lands on it.
+                Bundle args = new Bundle();
+                args.putLong("user_id", self);
+                presentFragment(new ChatActivity(args));
+            }).show();
+    }
+
+    // endregion
 
     /** Removes messages we may not delete from the selection; returns how many were removed. */
     private int luckgramDeselectUndeletable() {
@@ -46738,6 +46812,14 @@ public class ChatActivity extends BaseFragment implements
             items.add(sendMoneyIndex, getString(R.string.WalletSendMoney));
             options.add(sendMoneyIndex, OPTION_SEND_MONEY);
             icons.add(sendMoneyIndex, R.drawable.ic_gram);
+        }
+
+        if (options.contains(OPTION_FORWARD) && luckgramCanSaveToSaved() && org.telegram.luckgram.savedirect.SaveToSaved.canSave(primaryMessage != null ? primaryMessage : message)) {
+            // Luckgram (spec 15): "Save" right below Forward; only where Forward is offered.
+            int index = options.indexOf(OPTION_FORWARD) + 1;
+            items.add(index, org.telegram.luckgram.savedirect.SaveToSaved.menuTitle());
+            options.add(index, OPTION_LUCKGRAM_SAVE_TO_SAVED);
+            icons.add(index, R.drawable.msg_saved);
         }
 
         if (luckgramCanSelectAll(message)) {
