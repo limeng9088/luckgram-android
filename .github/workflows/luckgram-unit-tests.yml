@@ -53,10 +53,15 @@ jobs:
             LuckgramAudioSplitter.java \
             quickreplies/QuickRepliesLogic.java \
             roundvideo/RoundVideoGeometry.java \
-            unblock/StoreRestrictions.java; do
+            unblock/StoreRestrictions.java \
+            notes/UserNotesText.java \
+            translateout/TranslateOutLogic.java \
+            profileinfo/ProfileInfoLogic.java \
+            sharedactivity/SharedActivityLogic.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"
-          TESTS=$(find TMessagesProj/src/test/java/org/telegram/luckgram -name '*Test.java')
+          # KeywordMatcher imports android.text (highlighting), so its test cannot compile on plain javac.
+          TESTS=$(find TMessagesProj/src/test/java/org/telegram/luckgram -name '*Test.java' ! -name 'KeywordMatcherTest.java')
           javac -d "$RUNNER_TEMP/classes" -cp "$CP" $PURE $TESTS
           java -jar "$L/console.jar" execute --class-path "$RUNNER_TEMP/classes:$L/junit4.jar:$L/hamcrest.jar:$L/json.jar" --scan-class-path --details=tree --fail-if-no-tests
