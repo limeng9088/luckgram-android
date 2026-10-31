@@ -25,6 +25,10 @@ class StoreRestrictionsTest {
         return null;
     }
 
+    private static List<String[]> rules(String[]... entries) {
+        return Arrays.asList(entries);
+    }
+
     private static String[] entry(String platform, String text) {
         return new String[]{platform, text};
     }
@@ -46,7 +50,7 @@ class StoreRestrictionsTest {
 
     @Test
     void iosOnly() {
-        List<String[]> r = Arrays.asList(entry("ios", "ios rule"));
+        List<String[]> r = rules(entry("ios", "ios rule"));
         assertFalse(StoreRestrictions.ignore(false, "ios"));
         assertTrue(StoreRestrictions.ignore(true, "ios"));
         assertNull(firstReason(true, r));
@@ -54,7 +58,7 @@ class StoreRestrictionsTest {
 
     @Test
     void androidOnly() {
-        List<String[]> r = Arrays.asList(entry("android", "store rule"));
+        List<String[]> r = rules(entry("android", "store rule"));
         assertEquals("store rule", firstReason(false, r)); // switch off: can't open
         assertNull(firstReason(true, r));                  // switch on: opens
     }
@@ -67,15 +71,15 @@ class StoreRestrictionsTest {
 
     @Test
     void allPlatformsStays() {
-        List<String[]> r = Arrays.asList(entry("all", "banned"));
+        List<String[]> r = rules(entry("all", "banned"));
         assertEquals("banned", firstReason(false, r));
         assertEquals("banned", firstReason(true, r));
-        assertEquals("banned2", firstReason(true, Arrays.asList(entry("android-all", "banned2"))));
+        assertEquals("banned2", firstReason(true, rules(entry("android-all", "banned2"))));
     }
 
     @Test
     void allTogetherWithIos() {
-        List<String[]> r = Arrays.asList(entry("ios", "store rule"), entry("android", "store rule"), entry("all", "banned"));
+        List<String[]> r = rules(entry("ios", "store rule"), entry("android", "store rule"), entry("all", "banned"));
         assertEquals("store rule", firstReason(false, r));
         assertEquals("banned", firstReason(true, r)); // store entries skipped, the all-platform one still blocks
     }
