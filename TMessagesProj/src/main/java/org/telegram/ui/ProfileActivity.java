@@ -657,6 +657,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int noteRow;
     private int lgIdRow; // Luckgram: profile details (spec 07)
     private int lgRegRow;
+    private int luckNoteRow; // Luckgram: private notes (spec 05)
     private int locationRow;
     private int userInfoRow;
     private int channelInfoRow;
@@ -4660,6 +4661,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 lgCopy(lgDisplayId(), org.telegram.luckgram.profileinfo.ProfileInfoFeature.idCopied());
             } else if (position == lgRegRow) {
                 // informational only
+            } else if (position == luckNoteRow) {
+                openLuckNoteEditor();
             } else if (position == noteRow) {
                 editNotes(view, position);
             } else {
@@ -5047,6 +5050,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     return true;
                 } else if (position == lgIdRow) {
                     lgShowIdOptions(view);
+                    return true;
+                } else if (position == luckNoteRow) {
+                    openLuckNoteEditor();
                     return true;
                 } else if (position == noteRow) {
                     editNotes(view, position);
@@ -9582,7 +9588,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             setParentActivityTitle(LocaleController.getString(R.string.Settings));
         }
 
-        if (listAdapter != null && (lgIdRow != -1) != lgProfileDetailsAvailable()) {
+        if (listAdapter != null && ((lgIdRow != -1) != lgProfileDetailsAvailable() || (luckNoteRow != -1) != luckNotesAvailable())) {
             updateListAnimated(false);
         }
         updateProfileData(true);
@@ -10497,6 +10503,35 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         o.show();
     }
 
+    // ---- Luckgram: private notes (spec 05) ----
+
+    private long luckNotePeerId() {
+        if (userId != 0) {
+            return userId;
+        }
+        if (chatId != 0) {
+            return -chatId;
+        }
+        return 0;
+    }
+
+    private boolean luckNotesAvailable() {
+        if (!org.telegram.luckgram.notes.UserNotesStore.isEnabled() || isTopic || myProfile || imageUpdater != null) {
+            return false;
+        }
+        if (userId != 0) {
+            return userId != getUserConfig().getClientUserId();
+        }
+        return chatId != 0;
+    }
+
+    private void openLuckNoteEditor() {
+        final long peerId = luckNotePeerId();
+        if (peerId != 0) {
+            presentFragment(new org.telegram.luckgram.notes.UserNoteEditActivity(peerId));
+        }
+    }
+
     private void updateRowsIds() {
         updateNotifications(false);
 
@@ -10574,6 +10609,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         noteRow = -1;
         lgIdRow = -1;
         lgRegRow = -1;
+        luckNoteRow = -1;
         userInfoRow = -1;
         locationRow = -1;
         channelInfoRow = -1;
@@ -10767,6 +10803,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (userInfo != null && !TextUtils.isEmpty(userInfo.about)) {
                     userInfoRow = rowCount++;
                 }
+                if (luckNotesAvailable()) {
+                    luckNoteRow = rowCount++;
+                }
                 if (user != null && username != null) {
                     usernameRow = rowCount++;
                 }
@@ -10935,7 +10974,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     usernameRow = rowCount++;
                 }
             }
-            if (currentChat != null && lgProfileDetailsAvailable()) {
+            final boolean lgChatId = currentChat != null && lgProfileDetailsAvailable();
+            if (lgChatId || luckNotesAvailable()) {
                 if (emptyRow < 0 && emptyRow2 < 0) {
                     if (hasMusic || peerColor != null || actionsView == null) {
                         emptyRow2 = rowCount++;
@@ -10943,7 +10983,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         emptyRow = rowCount++;
                     }
                 }
-                lgIdRow = rowCount++;
+                if (lgChatId) {
+                    lgIdRow = rowCount++;
+                }
+                if (luckNotesAvailable()) {
+                    luckNoteRow = rowCount++;
+                }
             }
             if (emptyRow < 0 && emptyRow2 < 0) {
                 if (hasMusic || peerColor != null || actionsView == null) {
@@ -13580,6 +13625,14 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         }
                         isFragmentPhoneNumber = phoneNumber != null && phoneNumber.matches("888\\d{8}");
                         detailCell.setTextAndValue(text, LocaleController.getString(isFragmentPhoneNumber ? R.string.AnonymousNumber : R.string.PhoneMobile), false);
+                    } else if (position == luckNoteRow) {
+                        final String luckNote = org.telegram.luckgram.notes.UserNotesStore.getNote(currentAccount, luckNotePeerId());
+                        detailCell.setTextAndValue(
+                            luckNote != null ? luckNote : org.telegram.luckgram.notes.UserNotesStrings.addNote(),
+                            org.telegram.luckgram.notes.UserNotesStrings.rowTitle(),
+                            org.telegram.luckgram.notes.UserNotesStrings.onlyYou(),
+                            false
+                        );
                     } else if (position == noteRow) {
                         final TLRPC.UserFull userInfo = getMessagesController().getUserFull(userId);
                         if (userInfo == null) return;
@@ -14400,7 +14453,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 return VIEW_TYPE_TEXT_DETAIL;
             } else if (position == usernameRow || position == setUsernameRow) {
                 return VIEW_TYPE_TEXT_DETAIL_MULTILINE;
-            } else if (position == noteRow) {
+            } else if (position == noteRow || position == luckNoteRow) {
                 return VIEW_TYPE_TEXT_DETAIL_MULTILINE_2;
             } else if (position == userInfoRow || position == channelInfoRow || position == bioRow) {
                 return VIEW_TYPE_ABOUT_LINK;
@@ -15798,6 +15851,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, noteRow, sparseIntArray);
             put(++pointer, lgIdRow, sparseIntArray);
             put(++pointer, lgRegRow, sparseIntArray);
+            put(++pointer, luckNoteRow, sparseIntArray);
             put(++pointer, locationRow, sparseIntArray);
             put(++pointer, userInfoRow, sparseIntArray);
             put(++pointer, channelInfoRow, sparseIntArray);
