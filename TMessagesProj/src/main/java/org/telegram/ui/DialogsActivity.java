@@ -2138,6 +2138,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             super.requestLayout();
         }
 
+        // Luckgram 12 (hidden chats): pulling the list down past a threshold opens the hidden chats
+        // (like the archive pull; only when the archive pull is not in use).
+        private float luckgramPullStartY = -1f;
+        private boolean luckgramPullArmed;
+
         private void toggleArchiveHidden(boolean action, DialogCell dialogCell) {
             SharedConfig.toggleArchiveHidden();
             final UndoView undoView = getUndoView();
@@ -2183,6 +2188,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             int action = e.getAction();
             if (action == MotionEvent.ACTION_DOWN) {
                 setOverScrollMode(View.OVER_SCROLL_ALWAYS);
+                luckgramPullStartY = e.getY();
+                luckgramPullArmed = parentPage.dialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect && folderId == 0 && !hasHiddenArchive()
+                        && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.canPullDown(currentAccount)
+                        && ((LinearLayoutManager) getLayoutManager()).findFirstCompletelyVisibleItemPosition() == 0;
             }
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 if (!parentPage.itemTouchhelper.isIdle() && parentPage.swipeController.swipingFolder) {
@@ -2241,6 +2250,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             }
             boolean result = super.onTouchEvent(e);
+            if (luckgramPullArmed && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
+                luckgramPullArmed = false;
+                if (action == MotionEvent.ACTION_UP && e.getY() - luckgramPullStartY > dp(160) && ((LinearLayoutManager) getLayoutManager()).findFirstCompletelyVisibleItemPosition() == 0) {
+                    try {
+                        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
+                    } catch (Exception ignored) {}
+                    org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.open(DialogsActivity.this);
+                }
+            }
             if (parentPage.dialogsType == DIALOGS_TYPE_DEFAULT && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) && parentPage.archivePullViewState == ARCHIVE_ITEM_STATE_HIDDEN && hasHiddenArchive()) {
                 LinearLayoutManager layoutManager = (LinearLayoutManager) getLayoutManager();
                 int currentPosition = layoutManager.findFirstVisibleItemPosition();
@@ -3502,6 +3520,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             if (folderId != 0) {
                 actionBar.setTitle(getString(R.string.ArchivedChats));
+            } else if (initialDialogsType == DIALOGS_TYPE_LUCKGRAM_HIDDEN) {
+                actionBar.setBackButtonDrawable(backDrawable = new BackDrawable(false));
+                actionBar.setTitle(org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.titleText());
             } else if (communityId != 0) {
                 actionBar.setTitle(DialogObject.getName(community));
                 actionBar.setAdditionalTextLeft(dp(28));
@@ -8453,6 +8474,30 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         return null;
     }
 
+    /** Luckgram 12: hides or unhides a chat with an undo toast; the first time, says how to find hidden chats. */
+    private void luckgramSetHidden(long dialogId, boolean hidden) {
+        org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.setHidden(currentAccount, dialogId, hidden);
+        if (!BulletinFactory.canShowBulletin(this)) {
+            return;
+        }
+        String text = hidden ? org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hiddenToastText() : org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.unhiddenToastText();
+        String subtitle = hidden && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.takeFirstHint() ? org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hintText() : null;
+        Runnable undo = () -> org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.setHidden(currentAccount, dialogId, !hidden);
+        if (subtitle != null) {
+            BulletinFactory.of(this).createUndoBulletin(text, subtitle, undo, null).show();
+        } else {
+            BulletinFactory.of(this).createUndoBulletin(text, undo, null).show();
+        }
+    }
+
+    /** Luckgram 12: the search left out hidden chats that match; offers to search them. */
+    public void luckgramOnHiddenSearchMatches(DialogsSearchAdapter adapter, int count) {
+        if (count <= 0 || adapter == null || !BulletinFactory.canShowBulletin(this)) {
+            return;
+        }
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.filter_reorder, org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.searchMatchesText(count), org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.searchHiddenText(), adapter::luckgramSearchHidden).show();
+    }
+
     public boolean showChatPreview(DialogCell cell) {
         final boolean isCommunityCell = cell.isDialogCommunity();
         if (isCommunityCell) {
@@ -8789,6 +8834,19 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 finishPreviewFragment();
             });
             previewMenu[0].addView(muteItem);
+        }
+
+        // Luckgram 12 (hidden chats): hide / unhide
+        if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isEnabled() && !isCommunityCell && !DialogObject.isFolderDialogId(dialogId)) {
+            final boolean luckgramHidden = org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, dialogId);
+            ActionBarMenuSubItem hideItem = new ActionBarMenuSubItem(getParentActivity(), false, false);
+            hideItem.setTextAndIcon(luckgramHidden ? org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.unhideText() : org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hideText(), luckgramHidden ? R.drawable.msg_archive_show : R.drawable.msg_archive_hide);
+            hideItem.setMinimumWidth(160);
+            hideItem.setOnClickListener(e -> {
+                luckgramSetHidden(dialogId, !luckgramHidden);
+                finishPreviewFragment();
+            });
+            previewMenu[0].addView(hideItem);
         }
 
         if (!isCommunityCell) {
@@ -10985,6 +11043,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     public static final int DIALOGS_TYPE_START_ATTACH_BOT = 14;
     public static final int DIALOGS_TYPE_BOT_REQUEST_PEER = 15;
     public static final int DIALOGS_TYPE_BOT_SELECT_VERIFY = 16;
+    public static final int DIALOGS_TYPE_LUCKGRAM_HIDDEN = 40; // Luckgram 12: the hidden chats list
 
     private ArrayList<TLRPC.Dialog> botShareDialogs;
 
@@ -10993,6 +11052,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (frozen && frozenDialogsList != null) {
             return frozenDialogsList;
         }
+        // Luckgram 12 (hidden chats): hidden chats appear only in their own list.
+        if (dialogsType == DIALOGS_TYPE_LUCKGRAM_HIDDEN) {
+            return org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hiddenDialogs(currentAccount);
+        }
+        return org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.filter(currentAccount, getDialogsArrayInternal(currentAccount, dialogsType, folderId));
+    }
+
+    private ArrayList<TLRPC.Dialog> getDialogsArrayInternal(int currentAccount, int dialogsType, int folderId) {
         MessagesController messagesController = AccountInstance.getInstance(currentAccount).getMessagesController();
         if (dialogsType == DIALOGS_TYPE_DEFAULT) {
             return messagesController.getDialogs(folderId);
