@@ -31,7 +31,7 @@ public final class LuckgramFeatureCell {
             NotificationsCheckCell cell = (NotificationsCheckCell) view;
             LuckgramFeature f = (LuckgramFeature) item.object;
             cell.setDrawLine(f.subpage != null);
-            cell.setTextAndValueAndCheck(f.title(), f.description(), f.isEnabled(), 0, true, divider);
+            cell.setTextAndValueAndCheck(f.title(), f.description(), f.isLocallyEnabled(), 0, true, divider);
         }
 
         @Override
@@ -48,7 +48,7 @@ public final class LuckgramFeatureCell {
             UItem item = UItem.ofFactory(Factory.class);
             item.id = id;
             item.object = feature;
-            item.checked = feature.isEnabled();
+            item.checked = feature.isLocallyEnabled();
             return item;
         }
     }

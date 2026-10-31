@@ -35,6 +35,8 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
 
     private static final int ID_FEATURE_BASE = 1000;
     private static final int ID_AI_CONSENT = 10;
+    private static final int ID_ACCOUNT = 11;
+    private static final int ID_PRO = 12;
     private static final int ID_PLACEHOLDER_BASE = 20;
     private static final int ID_DEBUG_MOCK = 30;
     private static final int ID_DEBUG_SELFTEST = 31;
@@ -112,6 +114,15 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
         for (LuckgramFeature.Group group : PAGE_GROUPS) {
             items.add(UItem.asHeader(LuckgramStrings.group(group)));
             List<LuckgramFeature> features = visibleFeatures(group);
+            boolean hasRows = !features.isEmpty();
+            if (group == LuckgramFeature.Group.ACCOUNT_PRIVACY) {
+                // S6 account linking; S7 Pro only while billing.enabled (remote config, default off).
+                items.add(UItem.asButton(ID_ACCOUNT, new org.telegram.luckgram.account.AccountLogic.Texts(LuckgramStrings.isChinese()).accountTitle()));
+                if (LuckgramSettings.remoteConfig().getBool("billing.enabled", false)) {
+                    items.add(UItem.asButton(ID_PRO, "Luckgram Pro"));
+                }
+                hasRows = true;
+            }
             for (LuckgramFeature f : features) {
                 items.add(LuckgramFeatureCell.Factory.of(ID_FEATURE_BASE + all.indexOf(f), f));
             }
@@ -120,7 +131,7 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
                     LuckgramAI.getInstance().hasConsent() ? LuckgramStrings.get("已同意", "Allowed") : LuckgramStrings.get("未同意", "Not allowed")));
                 items.add(UItem.asShadow(LuckgramAI.getInstance().hasConsent() ? LuckgramStrings.aiConsentGranted() : LuckgramStrings.aiConsentNotGranted()));
             } else {
-                if (features.isEmpty()) {
+                if (!hasRows) {
                     items.add(UItem.asButton(ID_PLACEHOLDER_BASE + group.ordinal(), LuckgramStrings.comingSoon()).setEnabled(false));
                 }
                 items.add(UItem.asShadow(null));
@@ -148,7 +159,7 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
             LuckgramFeature f = (LuckgramFeature) item.object;
             boolean onSwitch = f.subpage == null || (LocaleController.isRTL ? x <= dp(76) : x >= view.getMeasuredWidth() - dp(76));
             if (onSwitch) {
-                boolean value = !f.isEnabled();
+                boolean value = !f.isLocallyEnabled();
                 NotificationsCheckCell cell = (NotificationsCheckCell) view;
                 if (value && f.confirmEnable != null) {
                     // Off -> on needs confirmation (#58); the switch stays off until done(true).
@@ -170,6 +181,12 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
             return;
         }
         switch (item.id) {
+            case ID_ACCOUNT:
+                presentFragment(new org.telegram.luckgram.account.LuckgramAccountActivity());
+                break;
+            case ID_PRO:
+                presentFragment(new org.telegram.luckgram.account.LuckgramProActivity());
+                break;
             case ID_AI_CONSENT:
                 if (LuckgramAI.getInstance().hasConsent()) {
                     showDialog(new AlertDialog.Builder(getParentActivity())
