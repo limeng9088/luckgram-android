@@ -50,6 +50,9 @@ public final class LuckgramFeatures {
         // ---- 媒体、通话与存储 / Media, Calls & Storage
 
         // ---- 资料与整理 / Profiles & Organization
+        add(toggle(org.telegram.luckgram.profileinfo.ProfileInfoFeature.FEATURE_KEY, PROFILE_ORGANIZE, true,
+            "资料详情", "Profile details",
+            "资料页显示 ID、大致注册时间，简介里的链接可以点开", "Show ID and approximate registration date; links in bios are clickable"));
 
         // ---- AI
 
