@@ -36,6 +36,7 @@ public final class AiWritingFeatures {
 
         registerDebugDemo();
         // ---- other features register here (20 AI reply, 24 AI post) ----
+        AiWritingRegistry.register(org.telegram.luckgram.reply.AiReplyFeature.menuItem());
     }
 
     private static void effect(String effect, String zh, String en, int icon, int order, String doneZh, String doneEn) {
@@ -52,7 +53,7 @@ public final class AiWritingFeatures {
      * writes into the field with undo. Only with the debug tools on.
      */
     private static void registerDebugDemo() {
-        AiWritingRegistry.register(new AiWritingRegistry.MenuItem("debug_panel", "测试面板", "Test panel", R.drawable.msg_bots, 0)
+        AiWritingRegistry.register(new AiWritingRegistry.MenuItem("debug_panel", "测试面板", "Test panel", R.drawable.msg_bots, -1)
             .allowEmptyText()
             .visibleWhen(host -> LuckgramSettings.isDebugToolsVisible() && host.getChatActivity() != null
                 && host.getChatActivity().getCurrentChat() != null && org.telegram.messenger.ChatObject.isChannelAndNotMegaGroup(host.getChatActivity().getCurrentChat()))
