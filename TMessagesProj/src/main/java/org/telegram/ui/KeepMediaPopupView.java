@@ -12,6 +12,7 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AutoDeleteMediaTask;
 import org.telegram.messenger.CacheByChatsController;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
@@ -38,6 +39,8 @@ public class KeepMediaPopupView extends ActionBarPopupWindow.ActionBarPopupWindo
     ActionBarMenuSubItem oneDay;
     ActionBarMenuSubItem twoDay;
     ActionBarMenuSubItem oneMinute;
+    ActionBarMenuSubItem oneHour;
+    ActionBarMenuSubItem threeDay;
     ArrayList<CheckItem> checkItems = new ArrayList<>();
 
     ExceptionsView exceptionsView;
@@ -59,15 +62,20 @@ public class KeepMediaPopupView extends ActionBarPopupWindow.ActionBarPopupWindo
 //            oneMinute = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete, LocaleController.formatPluralString("Minutes", 1), false, null);
 //            checkItems.add(new CheckItem(oneMinute, CacheByChatsController.KEEP_MEDIA_ONE_MINUTE));
 //        }
-        oneDay = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete_1d, LocaleController.formatPluralString("Days", 1), false, null);
-        twoDay = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete_2d, LocaleController.formatPluralString("Days", 2), false, null);
-        oneWeek = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete_1w, LocaleController.formatPluralString("Weeks", 1), false, null);
-        oneMonth = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete_1m, LocaleController.formatPluralString("Months", 1), false, null);
-        forever = ActionBarMenuItem.addItem(this, R.drawable.msg_cancel, LocaleController.getString(R.string.AutoDeleteMediaNever), false, null);
+        // Luckgram 08 (cache): 1 hour / 1 day / 3 days / 1 week / 1 month / forever (stories keep 1d / 2d / 1w)
+        oneHour = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete, CacheByChatsController.getKeepMediaString(CacheByChatsController.KEEP_MEDIA_ONE_HOUR), false, null);
+        oneDay = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete_1d, CacheByChatsController.getKeepMediaString(CacheByChatsController.KEEP_MEDIA_ONE_DAY), false, null);
+        twoDay = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete_2d, CacheByChatsController.getKeepMediaString(CacheByChatsController.KEEP_MEDIA_TWO_DAY), false, null);
+        threeDay = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete, CacheByChatsController.getKeepMediaString(CacheByChatsController.KEEP_MEDIA_THREE_DAY), false, null);
+        oneWeek = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete_1w, CacheByChatsController.getKeepMediaString(CacheByChatsController.KEEP_MEDIA_ONE_WEEK), false, null);
+        oneMonth = ActionBarMenuItem.addItem(this, R.drawable.msg_autodelete_1m, CacheByChatsController.getKeepMediaString(CacheByChatsController.KEEP_MEDIA_ONE_MONTH), false, null);
+        forever = ActionBarMenuItem.addItem(this, R.drawable.msg_cancel, CacheByChatsController.getKeepMediaString(CacheByChatsController.KEEP_MEDIA_FOREVER), false, null);
         delete = ActionBarMenuItem.addItem(this, R.drawable.msg_delete, LocaleController.getString(R.string.DeleteException), false, null);
         delete.setColors(Theme.getColor(Theme.key_text_RedRegular), Theme.getColor(Theme.key_text_RedRegular));
+        checkItems.add(new CheckItem(oneHour, CacheByChatsController.KEEP_MEDIA_ONE_HOUR));
         checkItems.add(new CheckItem(oneDay, CacheByChatsController.KEEP_MEDIA_ONE_DAY));
         checkItems.add(new CheckItem(twoDay, CacheByChatsController.KEEP_MEDIA_TWO_DAY));
+        checkItems.add(new CheckItem(threeDay, CacheByChatsController.KEEP_MEDIA_THREE_DAY));
         checkItems.add(new CheckItem(oneWeek, CacheByChatsController.KEEP_MEDIA_ONE_WEEK));
         checkItems.add(new CheckItem(oneMonth, CacheByChatsController.KEEP_MEDIA_ONE_MONTH));
         checkItems.add(new CheckItem(forever, CacheByChatsController.KEEP_MEDIA_FOREVER));
@@ -151,6 +159,7 @@ public class KeepMediaPopupView extends ActionBarPopupWindow.ActionBarPopupWindo
                         callback.onKeepMediaChange(currentType, keepMedia);
                     }
                 }
+                AutoDeleteMediaTask.runNow();
             });
         }
 
@@ -171,12 +180,16 @@ public class KeepMediaPopupView extends ActionBarPopupWindow.ActionBarPopupWindo
         currentType = type;
         if (type == KEEP_MEDIA_TYPE_STORIES) {
             twoDay.setVisibility(View.VISIBLE);
+            oneHour.setVisibility(View.GONE);
+            threeDay.setVisibility(View.GONE);
             oneMonth.setVisibility(View.GONE);
             gap.setVisibility(View.GONE);
             exceptionsView.setVisibility(View.GONE);
             description.setVisibility(View.GONE);
         } else {
             twoDay.setVisibility(View.GONE);
+            oneHour.setVisibility(View.VISIBLE);
+            threeDay.setVisibility(View.VISIBLE);
             oneMonth.setVisibility(View.VISIBLE);
             gap.setVisibility(View.VISIBLE);
             exceptionsView.setVisibility(View.VISIBLE);
@@ -206,6 +219,10 @@ public class KeepMediaPopupView extends ActionBarPopupWindow.ActionBarPopupWindo
 
     public void updateForDialog(boolean addedRecently) {
         currentType = -1;
+        twoDay.setVisibility(View.GONE);
+        oneHour.setVisibility(View.VISIBLE);
+        threeDay.setVisibility(View.VISIBLE);
+        oneMonth.setVisibility(View.VISIBLE);
         gap.setVisibility(View.VISIBLE);
         delete.setVisibility(addedRecently ? View.GONE : View.VISIBLE);
         description.setVisibility(View.VISIBLE);

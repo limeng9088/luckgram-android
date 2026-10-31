@@ -16,9 +16,65 @@ public class AutoDeleteMediaTask {
 
     public static Set<String> usingFilePaths = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
+    // Luckgram 08 (cache): with an hourly keep-media option or a cache size limit the check runs
+    // every hour (and right after the settings change) instead of once a day.
+    private static final int CHECK_INTERVAL_DEFAULT = 24 * 60 * 60;
+    private static final int CHECK_INTERVAL_FREQUENT = 60 * 60;
+    private static final Runnable periodicCheck = AutoDeleteMediaTask::run;
+
+    public static long cacheLimitBytes(int gigabytes) {
+        return gigabytes * 1024L * 1024L * 1024L;
+    }
+
+    /** Runs the cleanup now, ignoring the last check time. Call after changing cache settings. */
+    public static void runNow() {
+        AndroidUtilities.runOnUIThread(() -> {
+            SharedConfig.lastKeepMediaCheckTime = 0;
+            run();
+        });
+    }
+
+    private static int checkInterval() {
+        if (SharedConfig.getPreferences().getInt("cache_limit", Integer.MAX_VALUE) != Integer.MAX_VALUE) {
+            return CHECK_INTERVAL_FREQUENT;
+        }
+        for (int i = 0; i < 4; i++) {
+            if (SharedConfig.getPreferences().getInt("keep_media_type_" + i, CacheByChatsController.getDefault(i)) == CacheByChatsController.KEEP_MEDIA_ONE_HOUR) {
+                return CHECK_INTERVAL_FREQUENT;
+            }
+        }
+        for (int account = 0; account < UserConfig.MAX_ACCOUNT_COUNT; account++) {
+            if (!UserConfig.getInstance(account).isClientActivated()) {
+                continue;
+            }
+            android.util.LongSparseArray<CacheByChatsController.KeepMediaException> exceptions = UserConfig.getInstance(account).getMessagesController().getCacheByChatsController().getKeepMediaExceptionsByDialogs();
+            for (int k = 0; k < exceptions.size(); k++) {
+                if (exceptions.valueAt(k).keepMedia == CacheByChatsController.KEEP_MEDIA_ONE_HOUR) {
+                    return CHECK_INTERVAL_FREQUENT;
+                }
+            }
+        }
+        return CHECK_INTERVAL_DEFAULT;
+    }
+
+    /** Partially downloaded files: never removed while they may still be in progress. */
+    private static boolean isDownloadInProgress(File file) {
+        String name = file.getName();
+        if (name.endsWith(".temp") || name.endsWith(".pt") || name.endsWith(".iv") || name.endsWith(".preload")) {
+            return System.currentTimeMillis() - file.lastModified() < 24L * 60 * 60 * 1000;
+        }
+        return false;
+    }
+
     public static void run() {
         int time = (int) (System.currentTimeMillis() / 1000);
-        if (Math.abs(time - SharedConfig.lastKeepMediaCheckTime) < 24 * 60 * 60) {
+        int interval = checkInterval();
+        AndroidUtilities.cancelRunOnUIThread(periodicCheck);
+        if (interval == CHECK_INTERVAL_FREQUENT) {
+            int sinceLast = Math.abs(time - SharedConfig.lastKeepMediaCheckTime);
+            AndroidUtilities.runOnUIThread(periodicCheck, Math.max(60, interval - (sinceLast < interval ? sinceLast : 0)) * 1000L);
+        }
+        if (Math.abs(time - SharedConfig.lastKeepMediaCheckTime) < interval) {
             return;
         }
         SharedConfig.lastKeepMediaCheckTime = time;
@@ -81,7 +137,7 @@ public class AutoDeleteMediaTask {
                         ArrayList<CacheByChatsController.KeepMediaFile> keepMediaFiles = new ArrayList<>();
                         if (files != null) {
                             for (int i = 0; i < files.length; i++) {
-                                if (files[i].isDirectory() || usingFilePaths.contains(files[i].getAbsolutePath())) {
+                                if (files[i].isDirectory() || usingFilePaths.contains(files[i].getAbsolutePath()) || isDownloadInProgress(files[i])) {
                                     continue;
                                 }
                                 keepMediaFiles.add(new CacheByChatsController.KeepMediaFile(files[i]));
@@ -141,17 +197,13 @@ public class AutoDeleteMediaTask {
 
             int maxCacheGb = SharedConfig.getPreferences().getInt("cache_limit", Integer.MAX_VALUE);
             if (maxCacheGb != Integer.MAX_VALUE) {
-                long maxCacheSize;
-                if (maxCacheGb == 1) {
-                    maxCacheSize = 1024L * 1024L * 300L;
-                } else {
-                    maxCacheSize = maxCacheGb * 1024L * 1024L * 1000L;
-                }
+                long maxCacheSize = cacheLimitBytes(maxCacheGb);
                 long totalSize = 0;
                 for (int a = 0; a < paths.size(); a++) {
                     totalSize += Utilities.getDirSize(paths.valueAt(a).getAbsolutePath(), 0, true);
                 }
                 if (totalSize > maxCacheSize) {
+                    final long sizeBeforeLimit = totalSize;
                     ArrayList<FileInfoInternal> allFiles = new ArrayList<>();
                     for (int a = 0; a < paths.size(); a++) {
                         File dir = paths.valueAt(a);
@@ -170,7 +222,10 @@ public class AutoDeleteMediaTask {
                     });
 
                     for (int i = 0; i < allFiles.size(); i++) {
-                        if (allFiles.get(i).keepMedia == CacheByChatsController.KEEP_MEDIA_FOREVER) {
+                        // Luckgram 08 (cache): the size limit applies to every chat, including ones kept
+                        // "forever" (that setting only controls time-based cleanup). Only Saved Messages
+                        // and in-progress downloads (filtered out in fillFilesRecursive) are kept.
+                        if (allFiles.get(i).isProtected) {
                             continue;
                         }
                         if (allFiles.get(i).lastUsageDate <= 0) {
@@ -192,6 +247,7 @@ public class AutoDeleteMediaTask {
                             break;
                         }
                     }
+                    FileLog.d("luckgram cache limit " + AndroidUtilities.formatFileSize(maxCacheSize) + ": before " + AndroidUtilities.formatFileSize(sizeBeforeLimit) + " (" + sizeBeforeLimit + " B), after " + AndroidUtilities.formatFileSize(totalSize) + " (" + totalSize + " B)");
                 }
             }
 
@@ -229,7 +285,7 @@ public class AutoDeleteMediaTask {
                 if (fileEntry.getName().equals(".nomedia")) {
                     continue;
                 }
-                if (usingFilePaths.contains(fileEntry.getAbsolutePath())) {
+                if (usingFilePaths.contains(fileEntry.getAbsolutePath()) || isDownloadInProgress(fileEntry)) {
                     continue;
                 }
                 fileInfoList.add(new FileInfoInternal(fileEntry));
