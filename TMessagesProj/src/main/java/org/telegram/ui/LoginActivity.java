@@ -361,6 +361,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     private RadialProgressView radialProgressView;
 
     private ImageView proxyButtonView;
+    // Luckgram 10: "Restore from backup" on the phone number page
+    private TextView luckgramRestoreView;
     private ProxyDrawable proxyDrawable;
 
     // Open animation stuff
@@ -772,6 +774,16 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         proxyButtonView.setVisibility(View.GONE);
         sizeNotifierFrameLayout.addView(proxyButtonView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 16, 16));
         updateProxyButton(false, true);
+
+        luckgramRestoreView = new TextView(context);
+        luckgramRestoreView.setText(org.telegram.luckgram.backup.LuckgramBackup.restoreText());
+        luckgramRestoreView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+        luckgramRestoreView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+        luckgramRestoreView.setGravity(Gravity.CENTER_VERTICAL);
+        luckgramRestoreView.setPadding(dp(8), 0, dp(8), 0);
+        luckgramRestoreView.setOnClickListener(v -> presentFragment(new org.telegram.luckgram.backup.LuckgramBackupActivity(true)));
+        sizeNotifierFrameLayout.addView(luckgramRestoreView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 56, 16));
+        luckgramUpdateRestoreButton();
 
         radialProgressView = new RadialProgressView(context);
         radialProgressView.setSize(AndroidUtilities.dp(20));
@@ -1533,6 +1545,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             final SlideView newView = views[page];
             currentViewNum = page;
             backButtonView.setVisibility(newView.needBackButton() || newAccount ? View.VISIBLE : View.GONE);
+            luckgramUpdateRestoreButton();
 
             newView.setParams(params, false);
             setParentActivityTitle(newView.getHeaderName());
@@ -1565,6 +1578,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             views[currentViewNum].setVisibility(View.GONE);
             views[currentViewNum].onHide();
             currentViewNum = page;
+            luckgramUpdateRestoreButton();
             views[page].setParams(params, false);
             views[page].setVisibility(View.VISIBLE);
             setParentActivityTitle(views[page].getHeaderName());
@@ -1641,6 +1655,16 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         TLRPC.TL_auth_authorization res = new TLRPC.TL_auth_authorization();
         res.user = UserConfig.getInstance(0).getCurrentUser();
         onAuthSuccess(res);
+    }
+
+    /** Luckgram 10: the restore entry is shown on the phone number page of a normal login. */
+    private void luckgramUpdateRestoreButton() {
+        if (luckgramRestoreView == null) {
+            return;
+        }
+        boolean show = activityMode == MODE_LOGIN && currentViewNum == VIEW_PHONE_INPUT
+                && org.telegram.luckgram.LuckgramSettings.isEnabled(org.telegram.luckgram.backup.LuckgramBackup.FEATURE_KEY);
+        luckgramRestoreView.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private void onAuthSuccess(TLRPC.TL_auth_authorization res) {
