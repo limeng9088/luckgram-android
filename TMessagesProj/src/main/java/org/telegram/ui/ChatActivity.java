@@ -10991,6 +10991,28 @@ public class ChatActivity extends BaseFragment implements
                 - dp(ChatInputViewsContainer.INPUT_BUBBLE_BOTTOM + 7);
             suggestEmojiPanel.setTranslationY(baseTranslationY2);
         }
+        if (luckgramInputPanelContainer != null) {
+            luckgramInputPanelContainer.setTranslationY(-windowInsetsStateHolder.getAnimatedMaxBottomInset()
+                - chatInputViewsContainer.getInputBubbleHeight()
+                - dp(ChatInputViewsContainer.INPUT_BUBBLE_BOTTOM + 6));
+        }
+    }
+
+    // ------------------------------------------------------------ Luckgram: panel above the input field (feature 21)
+
+    private FrameLayout luckgramInputPanelContainer;
+
+    /** spec 21 需求 6: container for panels above the message field (AI writing undo hint, 20, 24). */
+    public FrameLayout getLuckgramInputPanelContainer() {
+        if (luckgramInputPanelContainer == null && contentView != null && getContext() != null) {
+            luckgramInputPanelContainer = new FrameLayout(getContext());
+            luckgramInputPanelContainer.setBackground(Theme.createRoundRectDrawable(dp(16), getThemedColor(Theme.key_windowBackgroundWhite)));
+            luckgramInputPanelContainer.setElevation(dp(2));
+            luckgramInputPanelContainer.setVisibility(View.GONE);
+            contentView.addView(luckgramInputPanelContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.BOTTOM, 8, 0, 8, 0));
+            updatePagedownButtonsPosition();
+        }
+        return luckgramInputPanelContainer;
     }
 
     private void updateReactionsMentionButton(boolean animated) {

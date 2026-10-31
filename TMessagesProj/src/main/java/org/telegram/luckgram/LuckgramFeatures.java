@@ -39,6 +39,8 @@ public final class LuckgramFeatures {
     public static final String FREE_TRANSCRIBE = "free_transcribe";
     public static final String DICTATION = "dictation";
     public static final String DICTATION_AI_TIDY = "dictation_ai_tidy";
+    /** spec 21 */
+    public static final String AI_WRITING = "ai_writing";
 
     private static final ArrayList<LuckgramFeature> ALL = new ArrayList<>();
 
@@ -56,6 +58,9 @@ public final class LuckgramFeatures {
         // ---- 资料与整理 / Profiles & Organization
 
         // ---- AI
+        add(toggle(AI_WRITING, AI, true,
+            "AI 写作", "AI writing",
+            "输入框里的 ✦ 按钮：润色、更正式、更友好、更简短、修正语法", "The ✦ button in the message field: polish, formal, friendly, shorter, grammar"));
         add(toggle(FREE_TRANSCRIBE, AI, true,
             "免费语音转文字", "Free voice-to-text",
             "不需要会员，把语音消息和圆形视频转成文字", "Transcribe voice and video messages without Premium"));

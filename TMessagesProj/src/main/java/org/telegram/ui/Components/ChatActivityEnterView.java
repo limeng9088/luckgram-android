@@ -2835,6 +2835,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
             createQuickRepliesButton(context);
             createDictationButton(context);
+            createAiWritingButton(context);
 
             attachButton = new ImageView(context) {
                 @Override
@@ -5993,6 +5994,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 if (ignorePrevTextChange) {
                     return;
                 }
+                updateAiWritingButton();
                 if (prevText != null) {
                     ignorePrevTextChange = true;
                     editable.replace(0, editable.length(), prevText);
@@ -6243,6 +6245,61 @@ public class ChatActivityEnterView extends FrameLayout implements
             TranslateOutController.saveLanguage(currentAccount, dialogId, code);
             translateOut(code);
         }).show();
+    }
+
+    // ------------------------------------------------------------ Luckgram: AI writing (feature 21)
+
+    private ImageView aiWritingButton;
+    private org.telegram.luckgram.writing.AiWritingController aiWritingController;
+
+    /** The AI writing host of this field (also used by features 20 and 24 through the registry). */
+    public org.telegram.luckgram.writing.AiWritingController getAiWritingController() {
+        if (aiWritingController == null && parentFragment != null) {
+            createMessageEditText();
+            if (messageEditText != null) {
+                aiWritingController = new org.telegram.luckgram.writing.AiWritingController(parentFragment, messageEditText, currentAccount, dialog_id);
+            }
+        }
+        return aiWritingController;
+    }
+
+    private void createAiWritingButton(Context context) {
+        if (parentFragment == null || attachLayout == null) {
+            return;
+        }
+        aiWritingButton = new ImageView(context);
+        aiWritingButton.setImageResource(R.drawable.luckgram_ai);
+        aiWritingButton.setScaleType(ImageView.ScaleType.CENTER);
+        aiWritingButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+        aiWritingButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector)));
+        aiWritingButton.setContentDescription(org.telegram.luckgram.LuckgramStrings.get("AI 写作", "AI writing"));
+        aiWritingButton.setOnClickListener(v -> {
+            org.telegram.luckgram.writing.AiWritingController c = getAiWritingController();
+            if (c != null) {
+                c.showMenu(v);
+            }
+        });
+        aiWritingButton.setVisibility(GONE);
+        attachLayout.addView(aiWritingButton, LayoutHelper.createLinear(DEFAULT_HEIGHT, DEFAULT_HEIGHT));
+    }
+
+    private void updateAiWritingButton() {
+        if (aiWritingButton == null) {
+            return;
+        }
+        boolean show = org.telegram.luckgram.writing.AiWritingController.isEnabled() && editingMessageObject == null;
+        if (show) {
+            org.telegram.luckgram.writing.AiWritingController c = getAiWritingController();
+            show = c != null && c.shouldShowButton();
+        }
+        final int visibility = show ? VISIBLE : GONE;
+        if (aiWritingButton.getVisibility() != visibility) {
+            aiWritingButton.setVisibility(visibility);
+            if (scheduledButton != null) {
+                scheduledButton.setTranslationX(scheduledButton.getTranslationX());
+            }
+            updateFieldRight(lastAttachVisible);
+        }
     }
 
     // ------------------------------------------------------------ Luckgram: voice input (feature 17)
@@ -6828,6 +6885,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void onDestroy() {
+        if (aiWritingController != null) {
+            aiWritingController.destroy();
+        }
         if (audioTimelineView != null) {
             audioTimelineView.destroy();
         }
@@ -6968,6 +7028,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     public void onResume() {
         updateQuickRepliesButton();
         updateDictationButton();
+        updateAiWritingButton();
         isPaused = false;
         if (hideKeyboardRunnable != null) {
             AndroidUtilities.cancelRunOnUIThread(hideKeyboardRunnable);
@@ -9124,6 +9185,9 @@ public class ChatActivityEnterView extends FrameLayout implements
             }
             if (dictationButton != null && dictationButton.getVisibility() == VISIBLE) {
                 layoutParams.rightMargin += dp(DEFAULT_HEIGHT); // Luckgram: voice input button in attachLayout
+            }
+            if (aiWritingButton != null && aiWritingButton.getVisibility() == VISIBLE) {
+                layoutParams.rightMargin += dp(DEFAULT_HEIGHT); // Luckgram: AI writing button in attachLayout
             }
         } else {
             if (scheduledButton != null && scheduledButton.getTag() != null) {
