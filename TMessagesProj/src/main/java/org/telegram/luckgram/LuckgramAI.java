@@ -349,7 +349,9 @@ public final class LuckgramAI {
             try {
                 byte[] payload = body != null ? body.toString().getBytes(StandardCharsets.UTF_8) : null;
                 Map<String, String> extra = new LinkedHashMap<>();
-                extra.put("X-Luckgram-App-Version", BuildConfig.BUILD_VERSION_STRING);
+                if (BuildConfig.BUILD_VERSION_STRING != null && BuildConfig.BUILD_VERSION_STRING.matches("\\d+(\\.\\d+){0,3}")) {
+                    extra.put("X-Luckgram-App-Version", BuildConfig.BUILD_VERSION_STRING);
+                }
                 try (HttpResponse res = authorized(req, method, path, payload != null ? "application/json" : null, payload, "application/json", extra)) {
                     if (res.status >= 300) {
                         throw new ApiException(errorFrom(res));
