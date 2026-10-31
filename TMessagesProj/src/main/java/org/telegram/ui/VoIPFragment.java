@@ -182,6 +182,7 @@ public class VoIPFragment implements
     private TextView callingUserTitle;
 
     private VoIPStatusTextView statusTextView;
+    private org.telegram.luckgram.callrec.CallRecButton callRecButton; // Luckgram: call recording
     private ConferenceParticipantsView participantsView;
     private ImageView backIcon;
     private ImageView addIcon;
@@ -1044,6 +1045,10 @@ public class VoIPFragment implements
         statusTextView = new VoIPStatusTextView(context, backgroundProvider);
         ViewCompat.setImportantForAccessibility(statusTextView, ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         statusLayout.addView(statusTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 0, 0, 6));
+
+        // Luckgram: call recording button (one-on-one calls only; hides itself otherwise).
+        callRecButton = new org.telegram.luckgram.callrec.CallRecButton(context);
+        statusLayout.addView(callRecButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 32, Gravity.CENTER_HORIZONTAL, 0, 4, 0, 6));
 
         if (state != null && state.getUser() != null && state.isConference() && state.getGroupCall() != null) {
             participantsView = new ConferenceParticipantsView(context);
@@ -2097,6 +2102,9 @@ public class VoIPFragment implements
 
         if (showTimer) {
             statusTextView.showTimer(animated);
+        }
+        if (callRecButton != null) {
+            callRecButton.update(); // Luckgram: call recording
         }
 
         statusTextView.showReconnect(showReconnecting, animated);
