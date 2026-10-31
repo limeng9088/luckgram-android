@@ -338,6 +338,37 @@ public final class LuckgramAI {
         return authorized(new Request(), "GET", path, null, null, "application/json", extraHeaders);
     }
 
+    /**
+     * Authenticated JSON request for the account endpoints (S6 link, S7 billing, S8 announcements).
+     * Registers the device if needed but never asks for AI consent: nothing but the device's own
+     * state is sent. {@code body} may be null. The callback runs on the UI thread.
+     */
+    public Request requestJson(String method, String path, JSONObject body, Callback<JSONObject> callback) {
+        Request req = new Request();
+        executor.execute(() -> {
+            try {
+                byte[] payload = body != null ? body.toString().getBytes(StandardCharsets.UTF_8) : null;
+                Map<String, String> extra = new LinkedHashMap<>();
+                extra.put("X-Luckgram-App-Version", BuildConfig.BUILD_VERSION_STRING);
+                try (HttpResponse res = authorized(req, method, path, payload != null ? "application/json" : null, payload, "application/json", extra)) {
+                    if (res.status >= 300) {
+                        throw new ApiException(errorFrom(res));
+                    }
+                    String text = readString(res.body);
+                    JSONObject j = text.isEmpty() ? new JSONObject() : new JSONObject(text);
+                    AndroidUtilities.runOnUIThread(() -> {
+                        if (!req.cancelled) callback.onResult(j);
+                    });
+                }
+            } catch (ApiException e) {
+                if (!req.cancelled) deliverError(callback::onError, e.error);
+            } catch (Exception e) {
+                if (!req.cancelled) deliverError(callback::onError, new LuckgramAIError(e instanceof IOException ? LuckgramAIError.NETWORK_ERROR : LuckgramAIError.UPSTREAM_UNAVAILABLE, 0));
+            }
+        });
+        return req;
+    }
+
     public Request chat(Context context, String task, List<Message> messages, boolean stream, ChatListener listener) {
         Request req = new Request();
         int chars = 0;
