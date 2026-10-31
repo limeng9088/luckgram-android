@@ -1699,6 +1699,8 @@ public class ChatActivity extends BaseFragment implements
     private final static int view_as_topics = 59;
 
     private final static int search = 40;
+    /** Luckgram: "总结聊天" (feature 19). */
+    private final static int luckgram_summary = 0x4C4719;
 
     private final static int topic_close = 60;
     private final static int open_forum = 61;
@@ -3417,6 +3419,9 @@ public class ChatActivity extends BaseFragment implements
 
     @Override
     public void onFragmentDestroy() {
+        if (luckgramSummaryUi != null) {
+            luckgramSummaryUi.destroy();
+        }
         super.onFragmentDestroy();
         if (messageMetricsView != null) {
             messageMetricsView.finish();
@@ -4033,6 +4038,11 @@ public class ChatActivity extends BaseFragment implements
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/help", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
                 } else if (id == bot_settings) {
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/settings", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
+                } else if (id == luckgram_summary) {
+                    org.telegram.luckgram.summary.ChatSummaryUi ui = luckgramSummary();
+                    if (ui != null) {
+                        ui.showRangePicker();
+                    }
                 } else if (id == search) {
                     openSearchWithText(isSupportedTags() ? "" : null);
                 } else if (id == translate) {
@@ -4198,6 +4208,10 @@ public class ChatActivity extends BaseFragment implements
 
         topPanelLayout = new ChatActivityTopPanelLayout(context);
         luckNoteBar = null;
+        if (luckgramSummaryUi != null) { // Luckgram: chat summary (feature 19) is bound to the old panel
+            luckgramSummaryUi.destroy();
+            luckgramSummaryUi = null;
+        }
         topPanelLayout.setOnAnimatedHeightChangedListener(() -> {
             invalidateChatListViewTopPadding();
             invalidateMessagesVisiblePart();
@@ -4490,6 +4504,9 @@ public class ChatActivity extends BaseFragment implements
 
             if (searchItem != null) {
                 headerItem.lazilyAddSubItem(search, R.drawable.msg_search, LocaleController.getString(R.string.Search));
+            }
+            if (org.telegram.luckgram.summary.ChatSummaryUi.isEnabled() && chatMode == 0 && !DialogObject.isEncryptedDialog(dialog_id)) {
+                headerItem.lazilyAddSubItem(luckgram_summary, R.drawable.luckgram_ai, org.telegram.luckgram.LuckgramStrings.get("总结聊天", "Summarize chat"));
             }
             if (ChatObject.isBoostSupported(currentChat) && (getUserConfig().isPremium() || ChatObject.isBoosted(chatInfo) || ChatObject.hasAdminRights(currentChat))) {
                 RLottieDrawable drawable = new RLottieDrawable(R.raw.boosts, dp(24), dp(24));
@@ -9056,6 +9073,7 @@ public class ChatActivity extends BaseFragment implements
         ViewCompat.setOnApplyWindowInsetsListener(fragmentView, this::onApplyWindowInsets);
         Timer.finish(t);
 
+        AndroidUtilities.runOnUIThread(this::checkLuckgramSummaryBar, 300);
         return fragmentView;
     }
 
@@ -9763,6 +9781,37 @@ public class ChatActivity extends BaseFragment implements
         luckNoteBar.updateColors();
         luckNoteBar.setNote(note, org.telegram.luckgram.notes.UserNotesStore.isBarExpanded(currentAccount, peerId));
         topPanelLayout.setViewVisible(luckNoteBar, true, animated);
+    }
+
+    // ------------------------------------------------------------ Luckgram: chat summary (feature 19)
+
+    private org.telegram.luckgram.summary.ChatSummaryUi luckgramSummaryUi;
+
+    private org.telegram.luckgram.summary.ChatSummaryUi luckgramSummary() {
+        if (luckgramSummaryUi == null && org.telegram.luckgram.summary.ChatSummaryUi.isEnabled()) {
+            createTopPanel();
+            if (topPanelLayout != null) {
+                luckgramSummaryUi = new org.telegram.luckgram.summary.ChatSummaryUi(this, topPanelLayout, dialog_id, isThreadChat() ? getThreadId() : 0);
+            }
+        }
+        return luckgramSummaryUi;
+    }
+
+    /** Shows "N 条未读消息 · 总结" when the chat was opened with many unread messages. */
+    private void checkLuckgramSummaryBar() {
+        if (chatMode != 0 || isThreadChat() || DialogObject.isEncryptedDialog(dialog_id) || !org.telegram.luckgram.summary.ChatSummaryUi.isEnabled()) {
+            return;
+        }
+        TLRPC.Dialog dialog = getMessagesController().dialogs_dict.get(dialog_id);
+        int unreadCount = dialog != null ? dialog.unread_count : 0;
+        if (unreadCount >= org.telegram.luckgram.summary.ChatSummaryUi.BAR_MIN_UNREAD) {
+            org.telegram.luckgram.summary.ChatSummaryUi ui = luckgramSummary();
+            if (ui != null) {
+                ui.setUnread(unreadCount);
+            }
+        } else if (luckgramSummaryUi != null) {
+            luckgramSummaryUi.setUnread(unreadCount);
+        }
     }
 
     private void createTopPanel() {
