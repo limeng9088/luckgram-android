@@ -27,6 +27,16 @@ public final class LuckgramFeature {
     /** Opens the feature's own settings page, or null if it has none. */
     public Utilities.Callback0Return<BaseFragment> subpage;
     public boolean debugOnly;
+    /** Optional check before the switch goes from off to on (e.g. a legal notice); see {@link #confirmEnable}. */
+    public ConfirmEnable confirmEnable;
+
+    /**
+     * Called before a feature is switched on from the settings page. Call {@code done.run(true)} to
+     * switch it on, {@code done.run(false)} to leave it off (issue #58). Not called when switching off.
+     */
+    public interface ConfirmEnable {
+        void confirm(BaseFragment fragment, Utilities.Callback<Boolean> done);
+    }
 
     private LuckgramFeature(String key, Group group, boolean defaultValue, String titleZh, String titleEn, String descZh, String descEn) {
         this.key = key;
@@ -48,6 +58,11 @@ public final class LuckgramFeature {
 
     public LuckgramFeature subpage(Utilities.Callback0Return<BaseFragment> subpage) {
         this.subpage = subpage;
+        return this;
+    }
+
+    public LuckgramFeature confirmEnable(ConfirmEnable confirm) {
+        this.confirmEnable = confirm;
         return this;
     }
 

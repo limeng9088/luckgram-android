@@ -20,6 +20,13 @@ import java.util.List;
  *     .subpage(QuickRepliesSettingsActivity::new));
  * </pre>
  *
+ * A feature that must ask before it is switched on (e.g. a legal notice, #58):
+ * <pre>
+ * add(toggle("call_recording", MEDIA_CALLS_STORAGE, false, …)
+ *     .subpage(CallRecSettingsActivity::new)
+ *     .confirmEnable((fragment, done) -&gt; CallRecSettingsActivity.requestEnable(fragment, done)));
+ * </pre>
+ *
  * Read a switch anywhere with {@code LuckgramSettings.isEnabled("quick_replies")}.
  */
 public final class LuckgramFeatures {

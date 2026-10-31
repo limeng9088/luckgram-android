@@ -11,7 +11,6 @@ import org.telegram.messenger.NotificationCenter;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -132,58 +131,61 @@ public final class LuckgramSettings {
     // ---------------------------------------------------------------- remote config (GET /v1/config, task S4)
 
     private static final String KEY_REMOTE_CONFIG = "_remote_config";
-    private static JSONObject remoteConfig;
+    private static LuckgramRemoteConfig remoteConfig;
 
     /**
-     * Merges the body of {@code GET /v1/config} (a flat JSON object of {@code client: true} keys,
-     * e.g. {@code "features.quick_replies": true}, {@code "ai.transcribe_max_mb": 25}) and caches it.
-     * Fetching and TTL handling are task S4.
+     * Applies the body of {@code GET /v1/config} exactly as the server returns it:
+     * {@code {"version","ttl","values":{…},"features":{"<key>": bool}}} (issue #56). The response is
+     * the full set, so it replaces the previous one; it is cached for offline starts. Fetching,
+     * {@code If-None-Match} with {@link #remoteConfigVersion()} and TTL refresh are task S4.
      */
-    public static synchronized void mergeRemoteConfig(JSONObject config) {
-        if (config == null) {
+    public static void mergeRemoteConfig(JSONObject response) {
+        if (response == null) {
             return;
         }
-        JSONObject merged = remoteConfig();
-        Iterator<String> it = config.keys();
-        while (it.hasNext()) {
-            String k = it.next();
-            try {
-                merged.put(k, config.get(k));
-            } catch (Exception ignore) {
-            }
+        LuckgramRemoteConfig parsed = LuckgramRemoteConfig.fromResponse(response, System.currentTimeMillis());
+        synchronized (LuckgramSettings.class) {
+            remoteConfig = parsed;
         }
-        remoteConfig = merged;
-        prefs().edit().putString(KEY_REMOTE_CONFIG, merged.toString()).apply();
+        prefs().edit().putString(KEY_REMOTE_CONFIG, parsed.serialize()).apply();
         notifyChanged(null);
     }
 
-    private static synchronized JSONObject remoteConfig() {
+    public static synchronized LuckgramRemoteConfig remoteConfig() {
         if (remoteConfig == null) {
-            try {
-                remoteConfig = new JSONObject(prefs().getString(KEY_REMOTE_CONFIG, "{}"));
-            } catch (Exception e) {
-                remoteConfig = new JSONObject();
-            }
+            remoteConfig = LuckgramRemoteConfig.deserialize(prefs().getString(KEY_REMOTE_CONFIG, null));
         }
         return remoteConfig;
     }
 
-    /** Whether the server allows the feature ({@code features.<key>}); true when unknown. */
-    public static boolean isRemotelyAllowed(String featureKey) {
-        Object v = remoteConfig().opt("features." + featureKey);
-        if (v instanceof Boolean) {
-            return (Boolean) v;
+    /** HTTP 304 for /v1/config: keep the cached values, restart its TTL. */
+    public static void touchRemoteConfig() {
+        LuckgramRemoteConfig touched;
+        synchronized (LuckgramSettings.class) {
+            touched = remoteConfig().withFetchedAt(System.currentTimeMillis());
+            remoteConfig = touched;
         }
-        if (v instanceof JSONObject) {
-            return ((JSONObject) v).optBoolean("enabled", true);
-        }
-        return true;
+        prefs().edit().putString(KEY_REMOTE_CONFIG, touched.serialize()).apply();
     }
 
-    /** A {@code client: true} number from /v1/config, or {@code def} (the built-in default with the same name). */
+    /** {@code version} of the cached /v1/config, for {@code If-None-Match}; null if none. */
+    public static String remoteConfigVersion() {
+        return remoteConfig().version;
+    }
+
+    /** Whether the cached /v1/config is older than its {@code ttl} (or missing). */
+    public static boolean isRemoteConfigExpired() {
+        return remoteConfig().isExpired(System.currentTimeMillis());
+    }
+
+    /** Whether the server allows the feature (per-device {@code features.<key>}); true when unknown. */
+    public static boolean isRemotelyAllowed(String featureKey) {
+        return remoteConfig().isAllowed(featureKey);
+    }
+
+    /** A {@code client: true} number from /v1/config {@code values}, or {@code def} (the built-in default with the same name). */
     public static long remoteLong(String key, long def) {
-        Object v = remoteConfig().opt(key);
-        return v instanceof Number ? ((Number) v).longValue() : def;
+        return remoteConfig().getLong(key, def);
     }
 
     // ---------------------------------------------------------------- debug tools
