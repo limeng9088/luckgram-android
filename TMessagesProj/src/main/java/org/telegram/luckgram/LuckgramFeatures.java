@@ -35,6 +35,7 @@ public final class LuckgramFeatures {
     }
 
     public static final String DEBUG_DEMO = "debug_demo";
+    public static final String ROUND_VIDEO_FROM_GALLERY = "round_video_from_gallery";
 
     private static final ArrayList<LuckgramFeature> ALL = new ArrayList<>();
 
@@ -48,6 +49,9 @@ public final class LuckgramFeatures {
         // ---- 消息与语言 / Messages & Language
 
         // ---- 媒体、通话与存储 / Media, Calls & Storage
+        add(toggle(ROUND_VIDEO_FROM_GALLERY, MEDIA_CALLS_STORAGE, true,
+            "相册视频发成圆形视频", "Gallery video as round video",
+            "附件菜单里选一个视频，可作为圆形视频发送", "Send a video from the gallery as a round video message"));
 
         // ---- 资料与整理 / Profiles & Organization
 
