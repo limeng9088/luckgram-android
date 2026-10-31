@@ -78,6 +78,19 @@ public class LuckgramAccountsActivity extends UniversalFragment implements Notif
         ArrayList<Integer> order = new ArrayList<>();
         for (UItem item : reordered) {
             if (item.instanceOf(SettingsActivity.AccountCell.Factory.class)) {
+                order.add(item.intValue);
+            }
+        }
+        LuckgramAccounts.setOrder(order);
+        // Notification rows below follow the same order.
+        if (listView != null) {
+            listView.post(() -> listView.adapter.update(true));
+        }
+    }
+
+    @Override
+    protected void onClick(UItem item, View view, int position, float x, float y) {
+        if (item.instanceOf(SettingsActivity.AccountCell.Factory.class)) {
             final int account = item.intValue;
             final String current = LuckgramAccounts.getAlias(account);
             ItemOptions options = ItemOptions.makeOptions(this, view)
