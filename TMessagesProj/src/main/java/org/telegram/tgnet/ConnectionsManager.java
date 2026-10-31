@@ -1021,6 +1021,9 @@ public class ConnectionsManager extends BaseController {
     public static native int native_getCurrentPingTime(int currentAccount);
     public static native int native_getCurrentDatacenterId(int currentAccount);
     public static native long native_getCurrentAuthKeyId(int currentAccount);
+    // Luckgram 10 (account backup): int32 dc id + int64 server salt (little endian) + 256-byte permanent key
+    public static native byte[] native_luckgramExportAuth(int currentAccount);
+    public static native void native_luckgramImportAuth(int currentAccount, int datacenterId, byte[] authKey, long salt);
     public static native int native_getTimeDifference(int currentAccount);
     public static native void native_sendRequest(int currentAccount, long object, int flags, int datacenterId, int connectionType, boolean immediate, int requestToken, int downloadSize);
     public static native void native_cancelRequest(int currentAccount, int token, boolean notifyServer);

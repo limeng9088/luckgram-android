@@ -54,6 +54,10 @@ public final class LuckgramFeatures {
 
     static {
         // ---- 账号与隐私 / Accounts & Privacy
+        add(toggle(org.telegram.luckgram.backup.LuckgramBackup.FEATURE_KEY, ACCOUNT_PRIVACY, true,
+            "账号备份", "Account backup",
+            "把账号导出为加密文件，换手机后导入", "Export accounts to an encrypted file and import them on a new phone")
+            .subpage(org.telegram.luckgram.backup.LuckgramBackupActivity::new));
 
         // ---- 消息与语言 / Messages & Language
         add(toggle(org.telegram.luckgram.selectall.SelectAllFromSender.SETTING_KEY, MESSAGES_LANGUAGE, true,

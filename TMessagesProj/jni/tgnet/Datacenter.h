@@ -55,6 +55,11 @@ public:
     bool hasAuthKey(ConnectionType connectionTyoe, int32_t allowPendingKey);
     bool hasPermanentAuthKey();
     int64_t getPermanentAuthKeyId();
+    // Luckgram 10 (account backup): copy of the permanent auth key (caller deletes and wipes it),
+    // and import of a backed-up permanent key.
+    ByteArray *luckgramCopyPermAuthKey();
+    int64_t luckgramServerSalt();
+    void luckgramImportPermAuthKey(ByteArray *authKey, int64_t salt, int32_t now);
     bool isExportingAuthorization();
     bool hasMediaAddress();
     void resetInitVersion();

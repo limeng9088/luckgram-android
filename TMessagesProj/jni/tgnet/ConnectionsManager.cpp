@@ -4003,3 +4003,38 @@ void ConnectionsManager::reconnect(int32_t dcId, int32_t connectionType) {
 }
 
 #endif
+
+// Luckgram 10 (account backup): the permanent auth key of the main datacenter, for an encrypted
+// backup file. Returns a copy the caller wipes and deletes; nullptr when the account has no key.
+ByteArray *ConnectionsManager::luckgramExportAuth(uint32_t *datacenterId, int64_t *salt) {
+    // Read like getCurrentAuthKeyId(): the key only changes on login, logout and import.
+    ByteArray *result = nullptr;
+    Datacenter *datacenter = getDatacenterWithId(DEFAULT_DATACENTER_ID);
+    if (datacenter != nullptr) {
+        *datacenterId = datacenter->getDatacenterId();
+        *salt = datacenter->luckgramServerSalt();
+        result = datacenter->luckgramCopyPermAuthKey();
+    }
+    return result;
+}
+
+// Luckgram 10 (account backup): makes datacenterId the main datacenter of this (empty) account
+// slot and installs the backed-up permanent key. Takes ownership of authKey.
+void ConnectionsManager::luckgramImportAuth(uint32_t datacenterId, ByteArray *authKey, int64_t salt) {
+    scheduleTask([&, datacenterId, authKey, salt] {
+        Datacenter *datacenter = getDatacenterWithId(datacenterId);
+        if (datacenter == nullptr) {
+            if (LOGS_ENABLED) DEBUG_E("account%u luckgram: unknown dc%u in backup", instanceNum, datacenterId);
+            memset(authKey->bytes, 0, authKey->length);
+            delete authKey;
+            return;
+        }
+        currentDatacenterId = datacenterId;
+        movingToDatacenterId = DEFAULT_DATACENTER_ID;
+        datacenter->luckgramImportPermAuthKey(authKey, salt, getCurrentTime());
+        saveConfig();
+        datacenter->recreateSessions(HandshakeTypeAll);
+        clearRequestsForDatacenter(datacenter, HandshakeTypeAll);
+        processRequestQueue(AllConnectionTypes, datacenterId);
+    });
+}

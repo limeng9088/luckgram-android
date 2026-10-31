@@ -1583,3 +1583,42 @@ TL_help_configSimple *Datacenter::decodeSimpleConfig(NativeByteBuffer *buffer) {
     BIO_free(keyBio);
     return result;
 }
+
+// Luckgram 10 (account backup)
+
+ByteArray *Datacenter::luckgramCopyPermAuthKey() {
+    if (authKeyPerm == nullptr || authKeyPerm->length == 0) {
+        return nullptr;
+    }
+    return new ByteArray(authKeyPerm);
+}
+
+int64_t Datacenter::luckgramServerSalt() {
+    if (serverSalts.empty()) {
+        return 0;
+    }
+    return serverSalts.front()->salt;
+}
+
+void Datacenter::luckgramImportPermAuthKey(ByteArray *authKey, int64_t salt, int32_t now) {
+    clearAuthKey(HandshakeTypeAll);
+    // auth_key_id: the lower 64 bits of SHA1(auth_key), as at the end of a handshake.
+    uint8_t digest[SHA_DIGEST_LENGTH];
+    SHA1(authKey->bytes, authKey->length, digest);
+    int64_t keyId;
+    memcpy(&keyId, digest + SHA_DIGEST_LENGTH - 8, 8);
+    memset(digest, 0, sizeof(digest));
+    authKeyPerm = authKey;
+    authKeyPermId = keyId;
+    if (salt != 0) {
+        std::unique_ptr<TL_future_salt> serverSalt = std::unique_ptr<TL_future_salt>(new TL_future_salt());
+        serverSalt->valid_since = now - 60;
+        serverSalt->valid_until = now + 30 * 60;
+        serverSalt->salt = salt;
+        addServerSalt(serverSalt, false);
+    }
+    if (LOGS_ENABLED) DEBUG_D("dc%u account%u luckgram: permanent key imported", datacenterId, instanceNum);
+    if (!isCdnDatacenter && PFS_ENABLED) {
+        beginHandshake(HandshakeTypeAll, false);
+    }
+}
