@@ -7,12 +7,28 @@ on:
         description: 'ABI 列表（空格分隔），例如 "arm64-v8a" 或 "armeabi-v7a arm64-v8a x86 x86_64"'
         required: false
         default: 'arm64-v8a'
+      qa:
+        description: 'QA 测试包：登录页显示「Test Backend」开关（Telegram 测试服务器）。模拟器测试用 abis=x86_64'
+        type: boolean
+        required: false
+        default: false
+  # QA E2E workflow 复用本 workflow 出测试包
+  workflow_call:
+    inputs:
+      abis:
+        type: string
+        required: false
+        default: 'arm64-v8a'
+      qa:
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [master]
     paths-ignore: ['**.md']
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.ref }}${{ inputs.qa && '-qa' || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -24,7 +40,8 @@ jobs:
     timeout-minutes: 300
     env:
       NDK_VERSION: 27.2.12479018
-      ABIS: ${{ github.event.inputs.abis || 'arm64-v8a' }}
+      ABIS: ${{ inputs.abis || 'arm64-v8a' }}
+      QA: ${{ inputs.qa && 'true' || 'false' }}
     steps:
       # 原生依赖（ffmpeg/td/boringssl 等）体积大，先腾出磁盘空间
       - name: Free disk space
@@ -107,7 +124,45 @@ jobs:
           grep -n abiFilters TMessagesProj_App/build.gradle
 
       - name: Build afat release APK
-        run: ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace -Porg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+        run: ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace -PLUCKGRAM_QA=$QA -Porg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+
+      # 正式包必须 QA_BUILD=false（不带测试服务器开关），QA 包必须为 true
+      - name: Verify QA flag
+        run: |
+          F=$(find TMessagesProj/build/generated -path '*release*' -name BuildConfig.java -path '*org/telegram/messenger*' | head -1)
+          grep -n QA_BUILD "$F"
+          grep -q "QA_BUILD = $QA;" "$F" || { echo "::error::QA_BUILD does not match QA=$QA"; exit 1; }
+
+      # 从最终 APK 的 dex 里读 BuildConfig（luckgram-qa/ci/apk-buildconfig.py，w-1014）：
+      # 正式包 QA_BUILD 必须为 False、API 是正式地址；QA 包 QA_BUILD 必须为 True、API 必须是 api-dev（字段不存在时跳过 API 检查）。
+      - name: Checkout luckgram-qa (APK checks)
+        uses: actions/checkout@v4
+        with:
+          repository: limeng9088/luckgram-qa
+          ref: master
+          ssh-key: ${{ secrets.QA_REPO_DEPLOY_KEY }}
+          path: .qa
+
+      - name: Verify BuildConfig in APK
+        run: |
+          APK=TMessagesProj_App/build/outputs/apk/afat/release/app.apk
+          python3 .qa/ci/apk-buildconfig.py "$APK" | tee /tmp/buildconfig.txt
+          python3 - <<'PY'
+          import os, re, sys
+          vals = dict(re.findall(r"^(\w+) = (.*)$", open("/tmp/buildconfig.txt").read(), re.M))
+          qa = os.environ["QA"] == "true"
+          if vals.get("QA_BUILD") != ("True" if qa else "False"):
+              sys.exit(f"::error::QA_BUILD in APK is {vals.get('QA_BUILD')!r}, expected {qa} (QA={os.environ['QA']})")
+          url = vals.get("LUCKGRAM_API_URL")
+          if url is not None:
+              url = url.strip("'")
+              if not qa and url != "https://api.luckgram.cc":
+                  sys.exit(f"::error::release APK points to {url}, expected https://api.luckgram.cc")
+              if qa and url != "https://api-dev.luckgram.cc":
+                  # QA 规则：不碰 prod。QA 包跑 AI 自检会打到这个地址
+                  sys.exit(f"::error::QA APK points to {url}; QA builds must use https://api-dev.luckgram.cc")
+          print("BuildConfig OK")
+          PY
 
       - name: Verify signing certificate
         env:
@@ -125,17 +180,18 @@ jobs:
           AAPT=$(ls "$ANDROID_HOME"/build-tools/36.0.0/aapt2)
           "$AAPT" dump badging "$APK" | grep -E "^package:|application-label:"
           "$AAPT" dump badging "$APK" | grep -q "package: name='com.luckgram.messenger'"
-          mkdir -p out && cp "$APK" "out/luckgram-$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)-${ABIS// /_}.apk"
+          SUFFIX=""; [ "$QA" = true ] && SUFFIX="-qa"
+          mkdir -p out && cp "$APK" "out/luckgram-$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)-${ABIS// /_}${SUFFIX}.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: luckgram-android-${{ github.run_number }}
+          name: luckgram-android-${{ env.QA == 'true' && 'qa-' || '' }}${{ github.run_number }}
           path: out/*.apk
           if-no-files-found: error
 
       - name: GitHub release
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master' && env.QA != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
