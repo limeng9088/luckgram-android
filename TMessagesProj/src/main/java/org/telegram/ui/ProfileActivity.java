@@ -655,6 +655,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int infoEndRowEmpty;
     private int phoneRow;
     private int noteRow;
+    private int lgIdRow; // Luckgram: profile details (spec 07)
+    private int lgRegRow;
     private int luckNoteRow; // Luckgram: private notes (spec 05)
     private int locationRow;
     private int userInfoRow;
@@ -4655,6 +4657,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (cell.hasImage()) {
                     onTextDetailCellImageClicked(cell.getImageView());
                 }
+            } else if (position == lgIdRow) {
+                lgCopy(lgDisplayId(), org.telegram.luckgram.profileinfo.ProfileInfoFeature.idCopied());
+            } else if (position == lgRegRow) {
+                // informational only
             } else if (position == luckNoteRow) {
                 openLuckNoteEditor();
             } else if (position == noteRow) {
@@ -5041,6 +5047,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     } catch (Exception e) {
                         FileLog.e(e);
                     }
+                    return true;
+                } else if (position == lgIdRow) {
+                    lgShowIdOptions(view);
                     return true;
                 } else if (position == luckNoteRow) {
                     openLuckNoteEditor();
@@ -9579,7 +9588,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             setParentActivityTitle(LocaleController.getString(R.string.Settings));
         }
 
-        if (listAdapter != null && (luckNoteRow != -1) != luckNotesAvailable()) {
+        if (listAdapter != null && ((lgIdRow != -1) != lgProfileDetailsAvailable() || (luckNoteRow != -1) != luckNotesAvailable())) {
             updateListAnimated(false);
         }
         updateProfileData(true);
@@ -10455,6 +10464,45 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         return chatId != 0;
     }
 
+    // ---- Luckgram: profile details (spec 07) ----
+
+    private boolean lgProfileDetailsAvailable() {
+        return org.telegram.luckgram.profileinfo.ProfileInfoFeature.isEnabled() && !isTopic && imageUpdater == null;
+    }
+
+    private int lgPeerType() {
+        if (userId != 0) {
+            return org.telegram.luckgram.profileinfo.ProfileInfoLogic.PEER_USER;
+        }
+        return ChatObject.isChannel(currentChat) ? org.telegram.luckgram.profileinfo.ProfileInfoLogic.PEER_CHANNEL : org.telegram.luckgram.profileinfo.ProfileInfoLogic.PEER_LEGACY_GROUP;
+    }
+
+    private String lgDisplayId() {
+        return org.telegram.luckgram.profileinfo.ProfileInfoLogic.displayId(lgPeerType(), userId != 0 ? userId : chatId);
+    }
+
+    private void lgCopy(String text, String toast) {
+        if (text == null) {
+            return;
+        }
+        AndroidUtilities.addToClipboard(text);
+        if (AndroidUtilities.shouldShowClipboardToast()) {
+            BulletinFactory.of(this).createCopyBulletin(toast, resourcesProvider).show();
+        }
+    }
+
+    private void lgShowIdOptions(View view) {
+        final String link = org.telegram.luckgram.profileinfo.ProfileInfoLogic.userLink(lgPeerType(), userId != 0 ? userId : chatId);
+        ItemOptions o = ItemOptions.makeOptions(this, view);
+        o.setScrimViewBackground(listView.getClipBackground(view));
+        o.setLongPressSelectionEnabled(false);
+        o.add(R.drawable.msg_copy, org.telegram.luckgram.profileinfo.ProfileInfoFeature.copyId(), () -> lgCopy(lgDisplayId(), org.telegram.luckgram.profileinfo.ProfileInfoFeature.idCopied()));
+        if (link != null) {
+            o.add(R.drawable.msg_link2, org.telegram.luckgram.profileinfo.ProfileInfoFeature.copyLink(), () -> lgCopy(link, org.telegram.luckgram.profileinfo.ProfileInfoFeature.linkCopied()));
+        }
+        o.show();
+    }
+
     // ---- Luckgram: private notes (spec 05) ----
 
     private long luckNotePeerId() {
@@ -10559,6 +10607,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         infoEndRowEmpty = -1;
         phoneRow = -1;
         noteRow = -1;
+        lgIdRow = -1;
+        lgRegRow = -1;
         luckNoteRow = -1;
         userInfoRow = -1;
         locationRow = -1;
@@ -10759,6 +10809,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 if (user != null && username != null) {
                     usernameRow = rowCount++;
                 }
+                if (user != null && lgProfileDetailsAvailable()) {
+                    lgIdRow = rowCount++;
+                    if (!isBot && org.telegram.luckgram.profileinfo.ProfileInfoFeature.registrationText(user.id) != null) {
+                        lgRegRow = rowCount++;
+                    }
+                }
                 if (userInfo != null) {
                     if (userInfo.birthday != null) {
                         birthdayRow = rowCount++;
@@ -10918,7 +10974,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     usernameRow = rowCount++;
                 }
             }
-            if (luckNotesAvailable()) {
+            final boolean lgChatId = currentChat != null && lgProfileDetailsAvailable();
+            if (lgChatId || luckNotesAvailable()) {
                 if (emptyRow < 0 && emptyRow2 < 0) {
                     if (hasMusic || peerColor != null || actionsView == null) {
                         emptyRow2 = rowCount++;
@@ -10926,7 +10983,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         emptyRow = rowCount++;
                     }
                 }
-                luckNoteRow = rowCount++;
+                if (lgChatId) {
+                    lgIdRow = rowCount++;
+                }
+                if (luckNotesAvailable()) {
+                    luckNoteRow = rowCount++;
+                }
             }
             if (emptyRow < 0 && emptyRow2 < 0) {
                 if (hasMusic || peerColor != null || actionsView == null) {
@@ -13542,6 +13604,11 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
 
                             containsGift = !myProfile && today && !getMessagesController().premiumPurchaseBlocked();
                         }
+                    } else if (position == lgIdRow) {
+                        detailCell.setTextAndValue(lgDisplayId(), org.telegram.luckgram.profileinfo.ProfileInfoFeature.idTitle(), false);
+                    } else if (position == lgRegRow) {
+                        String reg = org.telegram.luckgram.profileinfo.ProfileInfoFeature.registrationText(userId);
+                        detailCell.setTextAndValue(reg != null ? reg : "—", org.telegram.luckgram.profileinfo.ProfileInfoFeature.registeredTitle(), org.telegram.luckgram.profileinfo.ProfileInfoFeature.registeredInfo(), false);
                     } else if (position == phoneRow) {
                         String text;
                         TLRPC.User user = getMessagesController().getUser(userId);
@@ -13718,7 +13785,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     AboutLinkCell aboutLinkCell = (AboutLinkCell) holder.itemView;
                     if (position == userInfoRow) {
                         TLRPC.User user = userInfo.user != null ? userInfo.user : getMessagesController().getUser(userInfo.id);
-                        boolean addlinks = isBot || (user != null && user.premium && userInfo.about != null);
+                        // Luckgram 07: links, @usernames and #hashtags in every bio are clickable while profile_details is on.
+                        boolean addlinks = isBot || (user != null && user.premium && userInfo.about != null) || org.telegram.luckgram.profileinfo.ProfileInfoFeature.isEnabled();
                         aboutLinkCell.setTextAndValue(userInfo.about, LocaleController.getString(R.string.UserBio), addlinks);
                     } else if (position == channelInfoRow) {
                         String text = chatInfo.about;
@@ -14381,7 +14449,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             if (position == infoHeaderRow || position == membersHeaderRow || position == settingsSectionRow2 ||
                     position == numberSectionRow || position == helpHeaderRow || position == debugHeaderRow || position == botPermissionsHeader) {
                 return VIEW_TYPE_HEADER;
-            } else if (position == phoneRow || position == locationRow || position == numberRow || position == birthdayRow) {
+            } else if (position == phoneRow || position == locationRow || position == numberRow || position == birthdayRow || position == lgIdRow || position == lgRegRow) {
                 return VIEW_TYPE_TEXT_DETAIL;
             } else if (position == usernameRow || position == setUsernameRow) {
                 return VIEW_TYPE_TEXT_DETAIL_MULTILINE;
@@ -15781,6 +15849,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, infoEndRowEmpty, sparseIntArray);
             put(++pointer, phoneRow, sparseIntArray);
             put(++pointer, noteRow, sparseIntArray);
+            put(++pointer, lgIdRow, sparseIntArray);
+            put(++pointer, lgRegRow, sparseIntArray);
             put(++pointer, luckNoteRow, sparseIntArray);
             put(++pointer, locationRow, sparseIntArray);
             put(++pointer, userInfoRow, sparseIntArray);

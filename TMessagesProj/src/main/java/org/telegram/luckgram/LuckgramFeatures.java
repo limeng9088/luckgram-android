@@ -57,6 +57,9 @@ public final class LuckgramFeatures {
         add(toggle(org.telegram.luckgram.keywordfolders.KeywordFolderController.SETTING_KEY, PROFILE_ORGANIZE, true,
             "关键词文件夹", "Keyword folders",
             "按关键词自动归类聊天（只在本机）", "Group chats by keyword (this device only)"));
+        add(toggle(org.telegram.luckgram.profileinfo.ProfileInfoFeature.FEATURE_KEY, PROFILE_ORGANIZE, true,
+            "资料详情", "Profile details",
+            "资料页显示 ID、大致注册时间，简介里的链接可以点开", "Show ID and approximate registration date; links in bios are clickable"));
 
         // ---- AI
 
