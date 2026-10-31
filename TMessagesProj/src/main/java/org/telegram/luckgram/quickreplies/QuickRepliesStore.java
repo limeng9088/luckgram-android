@@ -11,6 +11,7 @@ import android.content.SharedPreferences;
 import android.text.TextUtils;
 
 import org.json.JSONArray;
+import org.telegram.luckgram.LuckgramSettings;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 
@@ -19,14 +20,12 @@ import java.util.List;
 
 public final class QuickRepliesStore {
 
-    /** Switch key, registered in the Luckgram feature registry ("消息与语言" group). Default: on. */
+    /** Switch key, registered in LuckgramFeatures ("消息与语言" group, default on). */
     public static final String FEATURE_KEY = "quick_replies";
-    public static final boolean FEATURE_DEFAULT = true;
 
     public static final int MAX_COUNT = QuickRepliesLogic.MAX_COUNT;
     public static final int MAX_LENGTH = QuickRepliesLogic.MAX_LENGTH;
 
-    private static final String DEVICE_PREFS = "luckgram_settings";
     private static final String ACCOUNT_PREFS_PREFIX = "luckgram_quick_replies_";
     private static final String KEY_ITEMS = "items";
     private static final String KEY_SEEDED = "seeded";
@@ -36,15 +35,12 @@ public final class QuickRepliesStore {
     private QuickRepliesStore() {
     }
 
-    /** Device level switch shared by all accounts (same storage as LuckgramSettings, feature 00). */
+    /**
+     * Local switch on "Settings -> Luckgram features" and not switched off remotely
+     * (LuckgramSettings, feature 00). Default comes from the registry.
+     */
     public static boolean isEnabled() {
-        try {
-            return ApplicationLoader.applicationContext
-                .getSharedPreferences(DEVICE_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(FEATURE_KEY, FEATURE_DEFAULT);
-        } catch (Exception e) {
-            return FEATURE_DEFAULT;
-        }
+        return LuckgramSettings.isEnabled(FEATURE_KEY);
     }
 
     private static SharedPreferences prefs(int account) {

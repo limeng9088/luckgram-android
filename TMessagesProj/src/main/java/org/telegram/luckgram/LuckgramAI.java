@@ -329,6 +329,48 @@ public final class LuckgramAI {
 
     // ---------------------------------------------------------------- public API
 
+    /**
+     * Blocking authenticated GET for non-AI endpoints (remote config, task S4). Registers the device
+     * if needed but never asks for AI consent: no user content is sent. Call off the main thread;
+     * the caller closes the response.
+     */
+    public HttpResponse getBlocking(String path, Map<String, String> extraHeaders) throws Exception {
+        return authorized(new Request(), "GET", path, null, null, "application/json", extraHeaders);
+    }
+
+    /**
+     * Authenticated JSON request for the account endpoints (S6 link, S7 billing, S8 announcements).
+     * Registers the device if needed but never asks for AI consent: nothing but the device's own
+     * state is sent. {@code body} may be null. The callback runs on the UI thread.
+     */
+    public Request requestJson(String method, String path, JSONObject body, Callback<JSONObject> callback) {
+        Request req = new Request();
+        executor.execute(() -> {
+            try {
+                byte[] payload = body != null ? body.toString().getBytes(StandardCharsets.UTF_8) : null;
+                Map<String, String> extra = new LinkedHashMap<>();
+                if (BuildConfig.BUILD_VERSION_STRING != null && BuildConfig.BUILD_VERSION_STRING.matches("\\d+(\\.\\d+){0,3}")) {
+                    extra.put("X-Luckgram-App-Version", BuildConfig.BUILD_VERSION_STRING);
+                }
+                try (HttpResponse res = authorized(req, method, path, payload != null ? "application/json" : null, payload, "application/json", extra)) {
+                    if (res.status >= 300) {
+                        throw new ApiException(errorFrom(res));
+                    }
+                    String text = readString(res.body);
+                    JSONObject j = text.isEmpty() ? new JSONObject() : new JSONObject(text);
+                    AndroidUtilities.runOnUIThread(() -> {
+                        if (!req.cancelled) callback.onResult(j);
+                    });
+                }
+            } catch (ApiException e) {
+                if (!req.cancelled) deliverError(callback::onError, e.error);
+            } catch (Exception e) {
+                if (!req.cancelled) deliverError(callback::onError, new LuckgramAIError(e instanceof IOException ? LuckgramAIError.NETWORK_ERROR : LuckgramAIError.UPSTREAM_UNAVAILABLE, 0));
+            }
+        });
+        return req;
+    }
+
     public Request chat(Context context, String task, List<Message> messages, boolean stream, ChatListener listener) {
         Request req = new Request();
         int chars = 0;
@@ -589,12 +631,17 @@ public final class LuckgramAI {
 
     /** Sends an authenticated request; registers first if needed and re-registers once on invalid_token. */
     private HttpResponse authorized(Request req, String method, String path, String contentType, byte[] body, String accept) throws Exception {
+        return authorized(req, method, path, contentType, body, accept, null);
+    }
+
+    private HttpResponse authorized(Request req, String method, String path, String contentType, byte[] body, String accept, Map<String, String> extraHeaders) throws Exception {
         for (int attempt = 0; ; attempt++) {
             String t = ensureToken(req);
             Map<String, String> headers = new LinkedHashMap<>();
             headers.put("Authorization", "Bearer " + t);
             headers.put("Accept", accept);
             if (contentType != null) headers.put("Content-Type", contentType);
+            if (extraHeaders != null) headers.putAll(extraHeaders);
             HttpResponse res = send(req, method, path, headers, body);
             if (res.status == 401 && attempt == 0) {
                 res.close();

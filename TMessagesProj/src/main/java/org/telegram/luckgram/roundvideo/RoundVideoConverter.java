@@ -66,11 +66,9 @@ public class RoundVideoConverter {
                 } catch (Throwable ignore) {
                 }
             }
-            if (m.rotation == 90 || m.rotation == 270) {
-                int t = m.width;
-                m.width = m.height;
-                m.height = t;
-            }
+            int[] display = RoundVideoGeometry.displaySize(m.width, m.height, m.rotation);
+            m.width = display[0];
+            m.height = display[1];
             MediaExtractor extractor = new MediaExtractor();
             try {
                 extractor.setDataSource(path);
@@ -123,7 +121,7 @@ public class RoundVideoConverter {
      * @param endMs     end of the selected range (exclusive)
      */
     public void start(float cropX, float cropY, float cropSide, long startMs, long endMs, Listener listener) {
-        final int side = Math.max(240, MessagesController.getInstance(account).roundVideoSize);
+        final int side = RoundVideoGeometry.outputSide(MessagesController.getInstance(account).roundVideoSize);
         final int bitrate = Math.max(300, MessagesController.getInstance(account).roundVideoBitrate) * 1024;
 
         outputFile = new File(FileLoader.getDirectory(FileLoader.MEDIA_DIR_CACHE),
@@ -152,9 +150,10 @@ public class RoundVideoConverter {
         info.avatarStartTime = -1;
 
         // Map the chosen square of the (display-oriented) source onto the output square.
+        float[] map = RoundVideoGeometry.cropToOutput(cropX, cropY, cropSide, side);
         Matrix matrix = new Matrix();
-        matrix.postTranslate(-cropX, -cropY);
-        matrix.postScale(side / cropSide, side / cropSide);
+        matrix.setScale(map[0], map[0]);
+        matrix.postTranslate(map[1], map[2]);
         info.cropState = new MediaController.CropState();
         info.cropState.useMatrix = matrix;
 

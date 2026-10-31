@@ -1,0 +1,63 @@
+name: Luckgram unit tests
+
+# Plain-JVM tests of the Android-independent Luckgram classes
+# (TMessagesProj/src/test/java/org/telegram/luckgram/**). No Android SDK / Gradle build:
+# javac + JUnit, a few seconds. JUnit 5 (Jupiter) and JUnit 4 (Vintage) tests both run.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'TMessagesProj/src/main/java/org/telegram/luckgram/**'
+      - 'TMessagesProj/src/test/java/org/telegram/luckgram/**'
+      - '.github/workflows/luckgram-unit-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      JUNIT_VERSION: 1.11.4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          M=https://repo1.maven.org/maven2
+          L="$RUNNER_TEMP/lib"
+          mkdir -p "$L" "$RUNNER_TEMP/classes"
+          curl -fsSL -o "$L/console.jar" "$M/org/junit/platform/junit-platform-console-standalone/$JUNIT_VERSION/junit-platform-console-standalone-$JUNIT_VERSION.jar"
+          curl -fsSL -o "$L/junit4.jar" "$M/junit/junit/4.13.2/junit-4.13.2.jar"
+          curl -fsSL -o "$L/hamcrest.jar" "$M/org/hamcrest/hamcrest-core/1.3/hamcrest-core-1.3.jar"
+          # org.json is part of Android; on the JVM use the reference implementation.
+          curl -fsSL -o "$L/json.jar" "$M/org/json/json/20240303/json-20240303.jar"
+          sha256sum "$L"/*.jar
+          CP="$L/console.jar:$L/junit4.jar:$L/hamcrest.jar:$L/json.jar"
+          # Pure classes (only java.* / org.json.*, and no use of Android-dependent Luckgram classes),
+          # listed explicitly; add a line when a feature adds one. Missing files are skipped, so
+          # the list can name classes that only exist on some branches.
+          SRC=TMessagesProj/src/main/java/org/telegram/luckgram
+          PURE=""
+          for f in \
+            LuckgramRemoteConfig.java \
+            LuckgramRemoteConfigLogic.java \
+            LuckgramAudioSplitter.java \
+            quickreplies/QuickRepliesLogic.java \
+            roundvideo/RoundVideoGeometry.java \
+            unblock/StoreRestrictions.java \
+            account/AccountLogic.java; do
+            if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
+          done
+          echo "pure classes:"; echo "$PURE"
+          TESTS=$(find TMessagesProj/src/test/java/org/telegram/luckgram -name '*Test.java')
+          javac -d "$RUNNER_TEMP/classes" -cp "$CP" $PURE $TESTS
+          java -jar "$L/console.jar" execute --class-path "$RUNNER_TEMP/classes:$L/junit4.jar:$L/hamcrest.jar:$L/json.jar" --scan-class-path --details=tree --fail-if-no-tests
