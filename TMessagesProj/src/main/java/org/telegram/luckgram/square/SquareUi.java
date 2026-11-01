@@ -304,6 +304,17 @@ public final class SquareUi {
         EditText bio = field(ctx, tx.bio(), SquareLogic.PROFILE_BIO_MAX, true);
         bio.setText(cur != null ? cur.optString("bio", "") : "");
         box.addView(bio, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 0));
+        final String avatar = avatarBase64(f.getCurrentAccount(), me);
+        final boolean[] useAvatar = {avatar != null && (cur == null || !cur.has("avatar_url") || !cur.optString("avatar_url", "").isEmpty())};
+        if (avatar != null) {
+            org.telegram.ui.Cells.CheckBoxCell photo = new org.telegram.ui.Cells.CheckBoxCell(ctx, 1);
+            photo.setText(tx.useTelegramAvatar(), "", useAvatar[0], false);
+            photo.setOnClickListener(v -> {
+                useAvatar[0] = !useAvatar[0];
+                photo.setChecked(useAvatar[0], true);
+            });
+            box.addView(photo, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, -22, 8, -22, 0));
+        }
         final boolean[] showUsername = {cur != null ? !cur.optString("username", "").isEmpty() : false};
         if (!TextUtils.isEmpty(myUsername)) {
             org.telegram.ui.Cells.CheckBoxCell check = new org.telegram.ui.Cells.CheckBoxCell(ctx, 1);
@@ -325,6 +336,8 @@ public final class SquareUi {
                         .put("display_name", n)
                         .put("bio", bio.getText().toString().trim())
                         .put("username", showUsername[0] && myUsername != null ? myUsername : "");
+                    // S11: avatar is base64 JPEG; omitted = keep, "" = remove.
+                    if (avatar != null) body.put("avatar", useAvatar[0] ? avatar : "");
                     LuckgramAI.getInstance().requestJson("PUT", "/v1/square/profile", body, new LuckgramAI.Callback<JSONObject>() {
                         @Override
                         public void onResult(JSONObject result) {
@@ -344,6 +357,19 @@ public final class SquareUi {
             })
             .setNegativeButton(tx.cancel(), null)
             .show();
+    }
+
+    /** The account's small profile photo (already downloaded, ~160 px JPEG) as base64, or null. Same limit as 25. */
+    static String avatarBase64(int account, TLRPC.User me) {
+        try {
+            if (me == null || me.photo == null || me.photo.photo_small == null) return null;
+            java.io.File f = org.telegram.messenger.FileLoader.getInstance(account).getPathToAttach(me.photo.photo_small, true);
+            if (f == null || !f.exists() || f.length() == 0 || f.length() > org.telegram.luckgram.nearby.NearbyLogic.AVATAR_MAX_BYTES * 3 / 4) return null;
+            return android.util.Base64.encodeToString(SquareVideos.readAll(f), android.util.Base64.NO_WRAP);
+        } catch (Exception e) {
+            FileLog.e(e);
+            return null;
+        }
     }
 
     private static EditText field(Context ctx, String hint, int max, boolean multiline) {

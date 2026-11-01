@@ -579,6 +579,7 @@ public final class SquareLogic {
         public String publicUsername() { return t("公开用户名", "Public username"); }
         public String useMyUsername(String u) { return t("在广场显示 @" + u + "，其他人可以通过它给你发消息", "Show @" + u + " in Square so others can message you"); }
         public String showUsername() { return t("显示", "Show"); }
+        public String useTelegramAvatar() { return t("使用我的 Telegram 头像", "Use my Telegram photo"); }
         public String hideUsername() { return t("不显示", "Don't show"); }
         public String save() { return t("保存", "Save"); }
         public String saved() { return t("已保存", "Saved"); }
