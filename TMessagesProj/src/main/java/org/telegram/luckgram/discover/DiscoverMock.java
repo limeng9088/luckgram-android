@@ -168,13 +168,12 @@ public final class DiscoverMock {
 
     // ---------------------------------------------------------------- helpers
 
+    /** Decimal places of a coordinate as sent; exponent notation ("1e-05") counts as too precise. */
     static int decimals(String number) {
+        if (number.toLowerCase(Locale.US).indexOf('e') >= 0) return 99;
         int dot = number.indexOf('.');
         if (dot < 0) return 0;
-        String frac = number.substring(dot + 1);
-        int e = frac.toLowerCase(Locale.US).indexOf('e');
-        if (e >= 0) return 99;
-        return frac.length();
+        return number.length() - dot - 1;
     }
 
     private static JSONObject json(byte[] body) throws Exception {

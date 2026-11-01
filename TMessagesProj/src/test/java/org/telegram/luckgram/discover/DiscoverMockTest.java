@@ -62,5 +62,7 @@ public class DiscoverMockTest {
         assertEquals(2, DiscoverMock.decimals("31.23"));
         assertEquals(0, DiscoverMock.decimals("31"));
         assertEquals(99, DiscoverMock.decimals("1.0E-5"));
+        assertEquals(99, DiscoverMock.decimals("1e-05"));
+        assertEquals(99, DiscoverMock.decimals("1E5"));
     }
 }
