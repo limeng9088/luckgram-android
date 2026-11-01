@@ -150,14 +150,16 @@ public final class SilentLink {
     }
 
     /**
-     * The bot conversation is cleaned up so the user isn't bothered by it, now and again a little
-     * later: the server records the link before the bot replies, so the reply may land after the
-     * first delete (review P2).
+     * The bot conversation is removed from the chat list so no trace of the link is left (spec 26
+     * item 2): the whole dialog is deleted, not just its history, which would leave a
+     * "History was cleared" row at the top (acceptance P1). Done now and again a little later:
+     * the server records the link before the bot replies, so the reply may land after the first
+     * delete (review P2).
      */
     private static void clearBotChat(int account, long botPeerId) {
         Runnable clear = () -> {
             try {
-                MessagesController.getInstance(account).deleteDialog(botPeerId, 1);
+                MessagesController.getInstance(account).deleteDialog(botPeerId, 0);
             } catch (Throwable e) {
                 FileLog.e(e);
             }
