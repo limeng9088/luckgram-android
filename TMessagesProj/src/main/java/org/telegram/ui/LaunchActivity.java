@@ -1550,6 +1550,18 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 return false;
             }
         }
+        if (intent.getBooleanExtra(org.telegram.luckgram.nearby.NearbyController.EXTRA_OPEN_NEARBY, false)) {
+            // Luckgram 25: "Visible nearby" expiry reminder -> open People Nearby
+            intent.removeExtra(org.telegram.luckgram.nearby.NearbyController.EXTRA_OPEN_NEARBY);
+            if (org.telegram.luckgram.nearby.NearbyController.isFeatureEnabled()) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    BaseFragment last = getLastFragment();
+                    if (last != null && !(last instanceof org.telegram.luckgram.nearby.NearbyActivity)) {
+                        last.presentFragment(new org.telegram.luckgram.nearby.NearbyActivity());
+                    }
+                }, 400);
+            }
+        }
         boolean pushOpened = false;
         long push_user_id = 0;
         long push_chat_id = 0;

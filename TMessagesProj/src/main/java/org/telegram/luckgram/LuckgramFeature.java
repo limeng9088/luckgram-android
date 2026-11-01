@@ -15,6 +15,8 @@ public final class LuckgramFeature {
         MESSAGES_LANGUAGE,
         MEDIA_CALLS_STORAGE,
         PROFILE_ORGANIZE,
+        /** 25 nearby, 26 square */
+        DISCOVER,
         AI,
         /** Only shown when {@link LuckgramSettings#isDebugToolsVisible()}. */
         DEBUG

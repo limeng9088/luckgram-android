@@ -68,7 +68,9 @@ jobs:
             callrec/CallRecText.java \
             writing/AiWritingEntities.java \
             account/AccountLogic.java \
-            announce/AnnouncementLogic.java; do
+            announce/AnnouncementLogic.java \
+            nearby/NearbyLogic.java \
+            discover/DiscoverMock.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"
