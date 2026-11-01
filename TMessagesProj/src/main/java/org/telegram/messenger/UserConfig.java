@@ -24,8 +24,9 @@ import java.util.Arrays;
 public class UserConfig extends BaseController {
 
     public static int selectedAccount;
-    public final static int MAX_ACCOUNT_DEFAULT_COUNT = 3;
-    public final static int MAX_ACCOUNT_COUNT = 4;
+    // Luckgram 09 (more accounts): 20 accounts for everyone, no Premium tier
+    public final static int MAX_ACCOUNT_COUNT = org.telegram.luckgram.accounts.LuckgramAccounts.MAX_ACCOUNTS;
+    public final static int MAX_ACCOUNT_DEFAULT_COUNT = MAX_ACCOUNT_COUNT;
 
     private final Object sync = new Object();
     private volatile boolean configLoaded;
@@ -122,7 +123,7 @@ public class UserConfig extends BaseController {
     }
 
     public static int getMaxAccountCount() {
-        return hasPremiumOnAccounts() ? 5 : 3;
+        return MAX_ACCOUNT_COUNT;
     }
 
     public int getNewMessageId() {
@@ -460,6 +461,9 @@ public class UserConfig extends BaseController {
 
     public void clearConfig() {
         getPreferences().edit().clear().apply();
+        if (clientUserId != 0) {
+            org.telegram.luckgram.accounts.LuckgramAccounts.onLogout(clientUserId);
+        }
 
         sharingMyLocationUntil = 0;
         lastMyLocationShareTime = 0;
