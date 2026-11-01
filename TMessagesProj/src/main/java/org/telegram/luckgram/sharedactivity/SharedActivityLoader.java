@@ -35,6 +35,19 @@ public final class SharedActivityLoader {
         return LuckgramSettings.isEnabled(SETTING_KEY);
     }
 
+    /**
+     * Whether a user's profile gets the "Activity" tab: switch on, a regular user (not you, not a
+     * bot, not deleted). Then the profile always shows the tab area, even without shared media or
+     * groups in common (the tab says so), spec 16 acceptance item 3.
+     */
+    public static boolean showsTab(int account, long userId) {
+        if (!isEnabled() || userId <= 0 || userId == org.telegram.messenger.UserConfig.getInstance(account).getClientUserId()) {
+            return false;
+        }
+        TLRPC.User user = MessagesController.getInstance(account).getUser(userId);
+        return user != null && !user.bot && !org.telegram.messenger.UserObject.isDeleted(user);
+    }
+
     public static final class Result {
         public final ArrayList<MessageObject> messages;
         public final int groupCount;
