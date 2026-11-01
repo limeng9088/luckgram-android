@@ -54,6 +54,12 @@ public final class LuckgramFeatures {
 
     static {
         // ---- 账号与隐私 / Accounts & Privacy
+        add(toggle(org.telegram.luckgram.unblock.StoreRestrictionsFeature.KEY, ACCOUNT_PRIVACY, false,
+            "受限频道", "Store-restricted channels",
+            "查看只在商店版 Telegram 中被隐藏的频道和群组；点进去可调整「显示 18+ 内容」",
+            "View channels and groups hidden only in store versions of Telegram; tap for the 18+ content setting")
+            .subpage(() -> new org.telegram.ui.ThemeActivity(org.telegram.ui.ThemeActivity.THEME_TYPE_BASIC))
+            .confirmEnable(org.telegram.luckgram.unblock.StoreRestrictionsFeature::confirmEnable));
 
         // ---- 消息与语言 / Messages & Language
         add(toggle(org.telegram.luckgram.selectall.SelectAllFromSender.SETTING_KEY, MESSAGES_LANGUAGE, true,
