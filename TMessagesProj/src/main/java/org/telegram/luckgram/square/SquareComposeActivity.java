@@ -69,6 +69,8 @@ public class SquareComposeActivity extends UniversalFragment {
     private EditTextBoldCursor editText;
     private String draft = "";
     private boolean preparing;
+    /** What {@link #preparing} is about: a video (transcode) or photos. */
+    private boolean preparingVideo;
     private float prepareProgress = -1f;
     private Runnable cancelPrepare;
     private boolean publishing;
@@ -85,6 +87,7 @@ public class SquareComposeActivity extends UniversalFragment {
     @Override
     public View createView(Context context) {
         View v = super.createView(context);
+        actionBar.setAllowOverlayTitle(false); // keep our title; the chat list shows the connection state
         ActionBarMenu menu = actionBar.createMenu();
         sendItem = menu.addItem(MENU_SEND, R.drawable.ic_ab_done);
         sendItem.setContentDescription(tx.publish());
@@ -153,7 +156,7 @@ public class SquareComposeActivity extends UniversalFragment {
             items.add(UItem.asCustom(ID_MEDIA, mediaView(ctx)));
         }
         if (preparing) {
-            String label = video == null && images.isEmpty() && prepareProgress >= 0 ? tx.preparingVideo() + " " + Math.round(prepareProgress * 100) + "%" : (prepareProgress >= 0 ? tx.preparingVideo() : tx.preparingImages());
+            String label = preparingVideo ? (prepareProgress >= 0 ? tx.preparingVideo() + " " + Math.round(prepareProgress * 100) + "%" : tx.preparingVideo()) : tx.preparingImages();
             items.add(UItem.asButtonLoadingValue(ID_PROGRESS, label).setEnabled(false));
         } else if (publishing) {
             items.add(UItem.asButtonLoadingValue(ID_PROGRESS, progressText != null ? progressText : tx.publishing()).setEnabled(false));
@@ -373,6 +376,7 @@ public class SquareComposeActivity extends UniversalFragment {
         }
         while (uris.size() > room) uris.remove(uris.size() - 1);
         preparing = true;
+        preparingVideo = false;
         prepareProgress = -1f;
         update();
         LuckgramAI.getInstance().runInBackground(() -> {
@@ -410,6 +414,7 @@ public class SquareComposeActivity extends UniversalFragment {
             return;
         }
         preparing = true;
+        preparingVideo = true;
         prepareProgress = -1f;
         update();
         LuckgramAI.getInstance().runInBackground(() -> {
@@ -423,7 +428,7 @@ public class SquareComposeActivity extends UniversalFragment {
                     return;
                 }
                 long max = SquareUi.maxVideoSeconds();
-                if (source.durationSeconds() > max) {
+                if (source.exceeds(max)) {
                     // Spec 26 item 3: too long → let the user trim (keep the first N seconds) or cancel.
                     if (getParentActivity() == null) {
                         preparing = false;
@@ -582,7 +587,17 @@ public class SquareComposeActivity extends UniversalFragment {
                                 LuckgramAI.getInstance().runInBackground(() -> {
                                     LuckgramAIError error = null;
                                     try {
-                                        int status = LuckgramAI.getInstance().putPresignedFileBlocking(req, videoUpload.url, SquareLogic.VIDEO_CONTENT_TYPE, video.mp4);
+                                        int status = LuckgramAI.getInstance().putPresignedFileBlocking(req, videoUpload.url, SquareLogic.VIDEO_CONTENT_TYPE, video.mp4, (sent, totalBytes) -> {
+                                            final int percent = totalBytes > 0 ? (int) Math.min(100, sent * 100 / totalBytes) : 0;
+                                            AndroidUtilities.runOnUIThread(() -> {
+                                                if (req.isCancelled() || !publishing) return;
+                                                String next = tx.uploadingVideo(percent);
+                                                if (!next.equals(progressText)) {
+                                                    progressText = next;
+                                                    update();
+                                                }
+                                            });
+                                        });
                                         if (status < 200 || status >= 300) error = new LuckgramAIError(LuckgramAIError.UPSTREAM_UNAVAILABLE, status);
                                     } catch (Exception e) {
                                         FileLog.e(e);

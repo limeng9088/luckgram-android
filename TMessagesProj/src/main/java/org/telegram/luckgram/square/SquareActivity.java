@@ -30,6 +30,7 @@ public class SquareActivity extends UniversalFragment {
     private static final int ID_LOAD_MORE = 1;
     private static final int ID_RETRY = 2;
     private static final int ID_POST = 1000;
+    private static final int ID_TABS = 3;
 
     private final SquareLogic.Texts tx = SquareUi.tx();
     private String tab = SquareLogic.TAB_LATEST;
@@ -41,6 +42,21 @@ public class SquareActivity extends UniversalFragment {
     private LuckgramAI.Request inFlight;
     /** Set by detail / compose pages so the feed reloads when it comes back. */
     public static boolean dirty;
+    private SquareTabsView tabs;
+
+    /** "Latest" / "Popular" as a plain tab bar with an underline (acceptance P2). One instance, reused across list updates. */
+    private SquareTabsView tabsView() {
+        if (tabs == null) {
+            tabs = new SquareTabsView(getContext(), new String[]{tx.latest(), tx.hot()}, SquareLogic.TAB_HOT.equals(tab) ? 1 : 0, which -> {
+                String next = which == 1 ? SquareLogic.TAB_HOT : SquareLogic.TAB_LATEST;
+                if (!next.equals(tab)) {
+                    tab = next;
+                    reload();
+                }
+            }, getResourceProvider());
+        }
+        return tabs;
+    }
 
     @Override
     protected CharSequence getTitle() {
@@ -50,6 +66,7 @@ public class SquareActivity extends UniversalFragment {
     @Override
     public View createView(Context context) {
         View v = super.createView(context);
+        actionBar.setAllowOverlayTitle(false); // keep our title; the chat list shows the connection state
         installPullToRefresh();
         ActionBarMenu menu = actionBar.createMenu();
         menu.addItem(MENU_REFRESH, R.drawable.msg_retry).setContentDescription(tx.refresh());
@@ -158,13 +175,7 @@ public class SquareActivity extends UniversalFragment {
 
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        items.add(UItem.asSlideView(new String[]{tx.latest(), tx.hot()}, SquareLogic.TAB_HOT.equals(tab) ? 1 : 0, which -> {
-            String next = which == 1 ? SquareLogic.TAB_HOT : SquareLogic.TAB_LATEST;
-            if (!next.equals(tab)) {
-                tab = next;
-                reload();
-            }
-        }));
+        items.add(UItem.asCustom(ID_TABS, tabsView()));
         for (int i = 0; i < posts.size(); i++) {
             items.add(UItem.asCustom(ID_POST + i, SquareUi.postView(getContext(), posts.get(i), false, actions)));
             items.add(UItem.asShadow(null));

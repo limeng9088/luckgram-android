@@ -153,6 +153,12 @@ public class SquareLogicTest {
         assertEquals("0:07", SquareLogic.formatDuration(7));
         assertEquals("1:00", SquareLogic.formatDuration(60));
         assertEquals("12:34", SquareLogic.formatDuration(754));
+        // durations are rounded down everywhere (compose page, feed badge, player)
+        assertEquals(75, SquareLogic.wholeSeconds(75_020));
+        assertEquals(40, SquareLogic.wholeSeconds(40_999));
+        assertEquals(60, SquareLogic.wholeSeconds(60_000));
+        assertEquals(0, SquareLogic.wholeSeconds(-5));
+        assertEquals("1:15", SquareLogic.formatDuration(SquareLogic.wholeSeconds(75_020)));
     }
 
     @Test

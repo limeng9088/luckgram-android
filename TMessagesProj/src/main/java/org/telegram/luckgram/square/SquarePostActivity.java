@@ -74,6 +74,7 @@ public class SquarePostActivity extends UniversalFragment {
     @Override
     public View createView(Context context) {
         View v = super.createView(context);
+        actionBar.setAllowOverlayTitle(false); // keep our title; the chat list shows the connection state
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
