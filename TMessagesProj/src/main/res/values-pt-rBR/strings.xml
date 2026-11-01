@@ -570,7 +570,7 @@
     <string name="SmartNotificationsInfo">%1$d / %2$s</string>
     <string name="SmartNotificationsDisabled">Desativar</string>
     <string name="SecretWebPage">Prévia de Links</string>
-    <string name="SecretWebPageInfo">A prévia de links será gerada nos servidores do Luckgram. Não armazenamos dados sobre os links que você envia.</string>
+    <string name="SecretWebPageInfo">A prévia de links será gerada nos servidores do Telegram. Não armazenamos dados sobre os links que você envia.</string>
     <string name="SecretChat">Chats Secretos</string>
     <string name="DirectShare">Compartilhamento Direto</string>
     <string name="DirectShareInfo">Mostra chats recentes no menu compartilhar.</string>
@@ -1131,7 +1131,7 @@
     <string name="NoPhoneFound">Não há conta do Luckgram com esse número de telefone.</string>
     <string name="NoFolderFound">Nenhuma pasta encontrada.</string>
     <string name="BotCantJoinGroups">Esse bot não pode entrar em grupos.</string>
-    <string name="SecretLinkPreviewAlert">Ativar a prévia estendida de links em Chats Secretos? Note que a prévia é gerada nos servidores do Luckgram.</string>
+    <string name="SecretLinkPreviewAlert">Ativar a prévia estendida de links em Chats Secretos? Note que a prévia é gerada nos servidores do Telegram.</string>
     <string name="SecretChatContextBotAlert">Os bots inline são fornecidos por desenvolvedores terceiros. Para o bot funcionar, os símbolos que você digita depois do nome de usuário do bot são enviados para o respectivo desenvolvedor.</string>
     <string name="EditMessageError">Desculpe, você não pode editar essa mensagem.</string>
     <string name="AllowReadCall">Permita o acesso às ligações ao Luckgram, assim podemos automaticamente adicionar o código para você.</string>
@@ -1170,7 +1170,7 @@
     <string name="PrivacyPolicyAndTerms">Política de Privacidade e Termos de Serviço</string>
     <string name="TosAgeText">Toque em Concordo para confirmar que você tem mais de %1$s anos.</string>
     <string name="TosUpdateDecline">Infelizmente, não há outras opções. Ao contrário de outros aplicativos, o Luckgram não usa dados do usuário para direcionamento de anúncios ou outros fins comerciais. O Luckgram armazena apenas as informações necessárias para funcionar como um serviço de nuvem rico em recursos. Você pode ajustar como seus dados são usados nas configurações de Privacidade e Segurança.\n\nSe você não se sentir confortável com as necessidades modestas do Luckgram, não será possível fornecermos a você esse serviço.</string>
-    <string name="TosDeclineDeleteAccount">Atenção, isso apagará irreversivelmente sua conta do Luckgram e todos os dados armazenados na nuvem do Luckgram.\n\nImportante: em vez de perder tudo, você pode Cancelar agora e exportar seus dados primeiro. (Para fazer isso, abra o Telegram Desktop atualizado e vá em Configurações &gt; Exportar Dados do Luckgram.)</string>
+    <string name="TosDeclineDeleteAccount">Atenção, isso apagará irreversivelmente sua conta do Luckgram e todos os dados armazenados na nuvem do Telegram.\n\nImportante: em vez de perder tudo, você pode Cancelar agora e exportar seus dados primeiro. (Para fazer isso, abra o Telegram Desktop atualizado e vá em Configurações &gt; Exportar Dados do Luckgram.)</string>
     <!--permissions-->
     <string name="PermissionStorageWithHint">O **Luckgram** precisa de acesso ao armazenamento para enviar e salvar fotos, vídeos, músicas e outros documentos. Toque em Configurações &gt; Permissões e ative **Arquivos e mídia**.</string>
     <string name="PermissionNoAudioWithHint">O **Luckgram** precisa de acesso ao seu microfone para enviar mensagens de voz. Toque em Configurações &gt; Permissões, e ative **Microfone**.</string>
@@ -1200,7 +1200,7 @@
     <string name="Page6Title">Baseado em Nuvem</string>
     <string name="Page1Message">O aplicativo de mensagem mais **rápido** do mundo.\nÉ **gratuito** e **seguro**.</string>
     <string name="Page2Message">O **Luckgram** entrega mensagens mais rápido que qualquer outro app.</string>
-    <string name="Page3Message">O **Luckgram** oferece espaço em\nnuvem ilimitado e gratuito para\nchats e mídias.</string>
+    <string name="Page3Message">O **Telegram** oferece espaço em\nnuvem ilimitado e gratuito para\nchats e mídias.</string>
     <string name="Page4Message">O **Luckgram** mantém suas mensagens\nseguras contra ataques de hackers.</string>
     <string name="Page5Message">O **Luckgram** não tem limites no\ntamanho das suas mídias e chats.</string>
     <string name="Page6Message">O **Luckgram** permite que você\nacesse suas mensagens\nem vários dispositivos.</string>

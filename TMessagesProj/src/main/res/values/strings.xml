@@ -335,7 +335,7 @@
     <string name="Superscript">Superscript</string>
     <string name="Regular">Regular</string>
     <string name="FormattedDate">Date</string>
-    <string name="ContactsPermissionAlert">**Luckgram** needs access to your contacts so that you can connect with your friends across all your devices. Your contacts will be continuously synced with Luckgram\'s heavily encrypted cloud servers.</string>
+    <string name="ContactsPermissionAlert">**Luckgram** needs access to your contacts so that you can connect with your friends across all your devices. Your contacts will be continuously synced with Telegram\'s heavily encrypted cloud servers.</string>
     <string name="ContactsPermissionAlertNotNow">Not now</string>
     <string name="ContactsPermissionAlertContinue">Continue</string>
     <string name="NotificationsPermissionAlertTitle">Turn on notifications</string>
@@ -1231,7 +1231,7 @@
     <string name="SponsoredMessageInfo">What are sponsored\nmessages?</string>
     <string name="SponsoredMessageInfo2Description1">Unlike other apps, Luckgram never uses your private data to target ads. [Learn more in the Privacy Policy](https://telegram.org/privacy#5-6-no-ads-based-on-user-data)</string>
     <string name="SponsoredMessageInfo2Description2">Unlike other apps, Luckgram doesn\'t track whether you tapped on a sponsored message and doesn\'t profile you based on your activity. We also prevent external links in sponsored messages to ensure that third parties can’t spy on our users. We believe that everyone has the right to privacy, and technological platforms should respect that.</string>
-    <string name="SponsoredMessageInfo2Description3">Luckgram offers free and unlimited service to hundreds of millions of users, which involves significant server and traffic costs. In order to remain independent and stay true to its values, Luckgram developed a paid tool to promote messages with user privacy in mind. We welcome responsible advertisers at:</string>
+    <string name="SponsoredMessageInfo2Description3">Telegram offers free and unlimited service to hundreds of millions of users, which involves significant server and traffic costs. In order to remain independent and stay true to its values, Telegram developed a paid tool to promote messages with user privacy in mind. We welcome responsible advertisers at:</string>
     <string name="SponsoredMessageInfo2Description4">Ads should no longer be synonymous with abuse of user privacy. Let us redefine how a tech company should operate – together.</string>
     <string name="SponsoredMessageAlertLearnMore">LEARN MORE</string>
     <string name="SponsoredMessageAlertLearnMoreUrl">https://telegram.org</string>
@@ -2623,7 +2623,7 @@
     <string name="SmartNotificationsInfo">%1$d / %2$s</string>
     <string name="SmartNotificationsDisabled">Disabled</string>
     <string name="SecretWebPage">Link Previews</string>
-    <string name="SecretWebPageInfo">Link previews will be generated on Luckgram servers. We do not store data about the links you send.</string>
+    <string name="SecretWebPageInfo">Link previews will be generated on Telegram servers. We do not store data about the links you send.</string>
     <string name="SecretChat">Secret chats</string>
     <string name="DirectShare">Direct Share</string>
     <string name="DirectShareInfo">Show recent chats in Android share menu</string>
@@ -3554,8 +3554,8 @@
     <string name="StorageUsageCalculating">Calculating cache size...</string>
     <string name="StorageUsageTelegram">Luckgram uses %s of your device storage.</string>
     <string name="StorageUsageTelegramLess">Luckgram uses %s of your device storage.</string>
-    <string name="StorageCleared2">All media can be re-downloaded from the Luckgram cloud if you need it again.</string>
-    <string name="StorageUsageInfo">All media will stay in the Luckgram cloud and can be re-downloaded if you need it again.</string>
+    <string name="StorageCleared2">All media can be re-downloaded from the Telegram cloud if you need it again.</string>
+    <string name="StorageUsageInfo">All media will stay in the Telegram cloud and can be re-downloaded if you need it again.</string>
     <string name="NetworkUsage">Data Usage</string>
     <string name="StoragePath">Storage Path</string>
     <string name="NetworkUsageAllTab">All</string>
@@ -3705,7 +3705,7 @@
     <string name="InviteToChannelError">Sorry, you can\'t add this user to channels because of user\'s privacy settings.</string>
     <string name="InviteToCommunityError">Sorry, you can\'t add this user to community because of user\'s privacy settings.</string>
     <string name="CreateGroupError">Sorry, you can\'t create a group with these users because of their privacy settings.</string>
-    <string name="PrivacyCallsP2PHelp">Disabling peer-to-peer will relay all calls through Luckgram servers to avoid revealing your IP address, but may slightly decrease audio quality.</string>
+    <string name="PrivacyCallsP2PHelp">Disabling peer-to-peer will relay all calls through Telegram servers to avoid revealing your IP address, but may slightly decrease audio quality.</string>
     <string name="SyncContactsDelete">Delete Synced Contacts</string>
     <string name="SuggestContacts">Suggest Frequent Contacts</string>
     <string name="SuggestContactsInfo">Display people you message frequently at the top of the search section for quick access.</string>
@@ -3715,7 +3715,7 @@
     <string name="PrivacyExceptions">Exceptions</string>
     <string name="BlockedEmpty">None</string>
     <string name="SyncContactsDeleteTitle">Delete contacts</string>
-    <string name="SyncContactsDeleteText">This will remove your contacts from the Luckgram servers.\n\nIf \'**Sync Contacts**\' is enabled, contacts will be re-synced.</string>
+    <string name="SyncContactsDeleteText">This will remove your contacts from the Telegram servers.\n\nIf \'**Sync Contacts**\' is enabled, contacts will be re-synced.</string>
     <!--edit video view-->
     <string name="SendingVideo">Sending video...</string>
     <string name="ConvertingVideo">Converting video...</string>
@@ -4072,7 +4072,7 @@
     <string name="NoTopicsCreated">no created topics</string>
     <string name="NoMonoforumTopicsCreated">no received messages</string>
     <string name="BotCantJoinGroups">This bot can\'t join groups.</string>
-    <string name="SecretLinkPreviewAlert">Would you like to enable extended link previews in Secret Chats? Note that link previews are generated on Luckgram servers.</string>
+    <string name="SecretLinkPreviewAlert">Would you like to enable extended link previews in Secret Chats? Note that link previews are generated on Telegram servers.</string>
     <string name="SecretChatContextBotAlert">Please note that inline bots are provided by third-party developers. For the bot to work, the symbols you type after the bot\'s username are sent to the respective developer.</string>
     <string name="EditMessageError">Sorry, you can\'t edit this message.</string>
     <string name="AllowReadCall">Please allow Luckgram to receive calls so that we can automatically enter your code for you.</string>
@@ -4113,7 +4113,7 @@
     <string name="PrivacyPolicyAndTerms">Privacy Policy and Terms of Service</string>
     <string name="TosAgeText">Tap Agree to confirm that you are %1$s or over.</string>
     <string name="TosUpdateDecline">We\'re very sorry, but this means we must part ways here. Unlike others, we don\'t use your data for ad targeting or other commercial purposes. Luckgram only stores the information it needs to function as a feature-rich cloud service. You can adjust how we use your data (e.g., delete synced contacts) in Privacy &amp; Security settings.\n\nBut if you\'re generally not OK with Luckgram\'s modest needs, it won\'t be possible for us to provide this service. You can deactivate your account now — or look around some more and deactivate it later if you feel you\'re not happy with the way we use your data.</string>
-    <string name="TosDeclineDeleteAccount">Warning, this will irreversibly delete your Luckgram account along with all the data you store in the Luckgram cloud.\n\nImportant: You can Cancel now and export your data before deleting your account instead of losing it all. (To do this, open the latest version of Telegram Desktop and go to Settings &gt; Export Luckgram Data.)</string>
+    <string name="TosDeclineDeleteAccount">Warning, this will irreversibly delete your Luckgram account along with all the data you store in the Telegram cloud.\n\nImportant: You can Cancel now and export your data before deleting your account instead of losing it all. (To do this, open the latest version of Telegram Desktop and go to Settings &gt; Export Luckgram Data.)</string>
     <!--permissions-->
     <string name="PermissionStorageWithHint">**Luckgram** needs storage access so you can send and save photos, videos, music and other media. Tap Settings -> Permissions, and turn **Files and media** on.</string>
     <string name="PermissionNoAudioWithHint">**Luckgram** needs microphone access so that you can send voice messages. Tap Settings -> Permissions, and turn **Microphone** on.</string>
@@ -4215,7 +4215,7 @@
     <string name="Page6Title">Cloud-Based</string>
     <string name="Page1Message">The world\'s **fastest** messaging app.\nIt is **free** and **secure**.</string>
     <string name="Page2Message">**Luckgram** delivers messages faster than\nany other application.</string>
-    <string name="Page3Message">**Luckgram** provides free unlimited cloud storage for chats and media.</string>
+    <string name="Page3Message">**Telegram** provides free unlimited cloud storage for chats and media.</string>
     <string name="Page4Message">**Luckgram** keeps your messages safe\nfrom hacker attacks.</string>
     <string name="Page5Message">**Luckgram** has no limits on\nthe size of your media and chats.</string>
     <string name="Page6Message">**Luckgram** lets you access your messages\nfrom multiple devices.</string>
@@ -5548,7 +5548,7 @@
     <string name="ManageDeviceStorage">Manage Device Storage</string>
     <string name="RemoveDocumentsAlertMessage">They will be deleted from your disk, but will remain accessible in the cloud.</string>
 
-    <string name="DownloadedFilesMessage">Luckgram lets you store all documents you send and receive in the cloud and save storage space on your device.</string>
+    <string name="DownloadedFilesMessage">Telegram lets you store all documents you send and receive in the cloud and save storage space on your device.</string>
     <string name="ClearDownloadsList">Clear Download List</string>
     <string name="SearchEmptyViewDownloads">No recent downloads</string>
     <string name="ForceSetPasswordAlertMessageShort_one">If you do not set a password, you will only be able to log into your account via SMS once every %1$s day. Do you want to proceed without a password?</string>
@@ -11432,7 +11432,7 @@
     <string name="WalletTopUp">Top up</string>
     <string name="WalletDisableBackupConfirmInfo">Your distributed encrypted backup will be deleted. Your wallet will switch to the new secret phrase. This secret phrase will be the only way to recover this wallet.</string>
     <string name="WalletBackupEnabled">Backup Enabled</string>
-    <string name="WalletBackupEnabledInfo">Your keys are now stored encrypted across Luckgram\'s datacenters.</string>
+    <string name="WalletBackupEnabledInfo">Your keys are now stored encrypted across Telegram\'s datacenters.</string>
     <string name="WalletSaveOnDevice">Save current wallet on this device</string>
     <string name="WalletDeleteAnyway">Delete anyway</string>
     <string name="WalletReplaceWalletTitle">How do you want to replace the old wallet?</string>

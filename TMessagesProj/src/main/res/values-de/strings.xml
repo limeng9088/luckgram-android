@@ -496,7 +496,7 @@
     <string name="NotificationsPriorityUrgent">Dringend</string>
     <string name="RepeatNotificationsNever">Niemals</string>
     <string name="RepeatNotifications">Erneut benachrichtigen</string>
-    <string name="PhoneNumberHelp">Du kannst deine Telefonnummer hier ändern. Dein Konto und alle Daten in der Luckgram-Cloud, also Nachrichten, Medien, Kontakte, etc. werden auf das neue Konto übertragen.</string>
+    <string name="PhoneNumberHelp">Du kannst deine Telefonnummer hier ändern. Dein Konto und alle Daten in der Telegram-Cloud, also Nachrichten, Medien, Kontakte, etc. werden auf das neue Konto übertragen.</string>
     <string name="PhoneNumberAlert">Nutzer werden deine neue Nummer sehen, wenn sie diese in ihrem Adressbuch gespeichert haben oder deine Einstellungen es erlauben. Unter Einstellungen &gt; Privatsphäre und Sicherheit &gt; Telefonnummer kannst du es jederzeit anpassen.</string>
     <string name="PhoneNumberChange2">Nummer ändern</string>
     <string name="PhoneNumberChangeTitle">Nummer ändern</string>
@@ -528,7 +528,7 @@
     <string name="SmartNotificationsInfo">%1$d / %2$s</string>
     <string name="SmartNotificationsDisabled">Deaktiviert</string>
     <string name="SecretWebPage">Linkvorschau</string>
-    <string name="SecretWebPageInfo">Die Linkvorschau wird auf den Servern von Luckgram generiert. Wir speichern keine Daten über die von dir gesendeten Links.</string>
+    <string name="SecretWebPageInfo">Die Linkvorschau wird auf den Servern von Telegram generiert. Wir speichern keine Daten über die von dir gesendeten Links.</string>
     <string name="SecretChat">Geheime Chats</string>
     <string name="DirectShare">Direktes Teilen</string>
     <string name="DirectShareInfo">Letzte Chats im Teilen-Menü anzeigen</string>
@@ -1272,7 +1272,7 @@
     <string name="NoPhoneFound">Es gibt kein Konto bei Luckgram unter dieser Nummer.</string>
     <string name="NoFolderFound">Kein Chat-Ordner gefunden.</string>
     <string name="BotCantJoinGroups">Keine Gruppen mit diesem Bot möglich</string>
-    <string name="SecretLinkPreviewAlert">Möchtest du die erweiterte Linkvorschau in Geheimen Chats aktivieren? Die Vorschau wird auf den Luckgram Servern generiert.</string>
+    <string name="SecretLinkPreviewAlert">Möchtest du die erweiterte Linkvorschau in Geheimen Chats aktivieren? Die Vorschau wird auf den Telegram Servern generiert.</string>
     <string name="SecretChatContextBotAlert">Inline Bots werden von Drittentwicklern erstellt. Symbole, die du nach dem Botnamen eingibst, werden an den jeweiligen Entwickler geschickt, damit der Bot funktioniert.</string>
     <string name="EditMessageError">Du kannst diese Nachricht nicht bearbeiten.</string>
     <string name="AllowReadCall">Bitte erlaube Luckgram den Zugriff auf Anrufe, so dass wir den Code automatisch in der App eingeben können.</string>
@@ -1311,7 +1311,7 @@
     <string name="PrivacyPolicyAndTerms">Datenschutzerklärung und Nutzungsbedingungen</string>
     <string name="TosAgeText">Tippe auf Zustimmen, um zu bestätigen, dass du mindestens %1$s oder älter bist.</string>
     <string name="TosUpdateDecline">Leider gibt es keine anderen Alternativen. Im Gegensatz zu anderen Apps verwendet Luckgram die Nutzerdaten nicht für Werbezwecke oder andere kommerzielle Zwecke. Luckgram speichert nur die Informationen, die es braucht, um als funktionsreicher Clouddienst zu funktionieren. Du kannst in den Privatsphäre- und Sicherheitseinstellungen einstellen, wie deine Daten verwendet werden.\n\nWenn du mit diesen bescheidenen Anforderungen von Luckgram nicht einverstanden bist, ist es uns nicht möglich, dir den Dienst zur Verfügung zu stellen.</string>
-    <string name="TosDeclineDeleteAccount">Warnung! Das wird dein Konto mit all deinen Daten aus der Luckgram-Cloud unwiderruflich löschen.\n\nWichtig: Du kannst jetzt abbrechen und deine Daten vor der Löschung noch exportieren. (Öffne dazu die aktuellste Version von Telegram Desktop &gt; Einstellungen &gt; Erweitert &gt; Daten exportieren.)</string>
+    <string name="TosDeclineDeleteAccount">Warnung! Das wird dein Konto mit all deinen Daten aus der Telegram-Cloud unwiderruflich löschen.\n\nWichtig: Du kannst jetzt abbrechen und deine Daten vor der Löschung noch exportieren. (Öffne dazu die aktuellste Version von Telegram Desktop &gt; Einstellungen &gt; Erweitert &gt; Daten exportieren.)</string>
     <!--permissions-->
     <string name="PermissionStorageWithHint">**Luckgram** benötigt Zugriff auf deinen **Speicher**, damit du Bilder, Videos, Musik und weitere Medien senden und speichern kannst. Tippe unten auf Einstellungen -&gt; Berechtigungen und schalte den Zugriff ein.</string>
     <string name="PermissionNoAudioWithHint">**Luckgram** benötigt Zugriff auf dein **Mikrofon**, damit du Sprachnachrichten senden kannst. Tippe unten auf Einstellungen &gt; Berechtigungen und aktiviere den Zugriff.</string>
