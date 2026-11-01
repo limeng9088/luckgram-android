@@ -135,4 +135,14 @@ public class NearbyLogicTest {
         org.json.JSONObject body = NearbyLogic.cardBody(b.toString(), "", "u", 31.2, 121.4, null);
         assertEquals(64, body.getString("display_name").codePointCount(0, body.getString("display_name").length()));
     }
+
+    @Test
+    public void fallbackFixMustBeFresh() {
+        long now = 1_800_000_000_000L;
+        assertTrue(NearbyLogic.isFreshFix(now - 29 * 60 * 1000L, now));
+        assertTrue(NearbyLogic.isFreshFix(now - 30 * 60 * 1000L, now));
+        assertFalse(NearbyLogic.isFreshFix(now - 31 * 60 * 1000L, now));
+        assertFalse(NearbyLogic.isFreshFix(0, now));
+        assertFalse(NearbyLogic.isFreshFix(now + 10 * 60 * 1000L, now));
+    }
 }

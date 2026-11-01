@@ -191,6 +191,13 @@ public final class NearbyLogic {
     // ---------------------------------------------------------------- expiry
 
     /** When to show the "expires in 1 hour" reminder, or 0 if it is already too late. */
+    /** Oldest last-known fix accepted when a single location request times out. */
+    public static final long FALLBACK_MAX_AGE_MS = 30 * 60 * 1000L;
+
+    public static boolean isFreshFix(long fixTimeMs, long nowMs) {
+        return fixTimeMs > 0 && nowMs - fixTimeMs <= FALLBACK_MAX_AGE_MS && fixTimeMs <= nowMs + 60 * 1000L;
+    }
+
     public static long reminderAt(long expiresAtMs, long nowMs) {
         long at = expiresAtMs - REMIND_BEFORE_MS;
         return at > nowMs ? at : 0;
@@ -252,22 +259,24 @@ public final class NearbyLogic {
                     + "• 只有同样打开的 Luckgram 用户能看到你，看到的是距离档位，不是位置。\n"
                     + "• 24 小时后自动关闭，到期前 1 小时提醒你续期。\n"
                     + "• 随时可以关闭，关闭、退出登录或解绑后立即从服务端删除。\n"
-                    + "• 只在打开页面、下拉刷新、续期时定位一次，不会后台定位。",
+                    + "• 只在打开页面、刷新、续期时定位一次，不会后台定位。\n"
+                    + "• 浏览列表时（包括关闭可见时）也会用同样的模糊位置向服务端查询；为防止定位追踪，服务端会短期保留你上次查询所在的约 1 公里网格，但不保存名片。",
                 "• When \"Visible nearby\" is on, your card (name, photo, bio, username) and a blurred location (about a 1 km grid; the exact position never leaves your phone) are uploaded.\n"
                     + "• Only Luckgram users who also turned it on can see you, and they see a distance range, not a location.\n"
                     + "• It turns off after 24 hours; you get a reminder 1 hour before so you can renew.\n"
                     + "• Turn it off at any time. Turning it off, logging out or unlinking deletes your card from the server right away.\n"
-                    + "• Your location is read once when you open this page, pull to refresh or renew, never in the background.");
+                    + "• Your location is read once when you open this page, refresh or renew, never in the background.\n"
+                    + "• Browsing the list (also while not visible) sends the same blurred location to the server to find people; to prevent location tracking the server briefly keeps the ~1 km grid cell of your last search, but no card.");
         }
         public String introContinue() { return t("我知道了，继续", "Got it, continue"); }
 
         public String noPermission() { return t("没有定位权限，无法显示附近的人。可以在系统设置里允许 Luckgram 使用位置。", "No location permission, so nobody can be shown. Allow Luckgram to use your location in system settings."); }
         public String openSettings() { return t("打开系统设置", "Open settings"); }
-        public String locationFailed() { return t("暂时无法获取位置，请下拉重试", "Couldn't get your location. Pull down to try again."); }
+        public String locationFailed() { return t("暂时无法获取位置，请点「刷新」重试", "Couldn't get your location. Tap Refresh to try again."); }
         public String locationOff() { return t("系统定位已关闭，请先打开定位服务", "Location services are off. Turn them on first."); }
 
         public String visibleSwitch() { return t("在附近可见", "Visible nearby"); }
-        public String visibleOffInfo() { return t("关闭时只浏览，不上传你的位置，别人看不到你。", "While off you only browse: your location isn't uploaded and nobody can see you."); }
+        public String visibleOffInfo() { return t("关闭时只浏览：会用模糊位置查询附近的人，但不上传名片，别人看不到你。", "While off you only browse: a blurred location is used to search, but your card isn't uploaded and nobody can see you."); }
         public String visibleUntil(String time) { return t("可见到 " + time + "，到期前 1 小时提醒你续期。", "Visible until " + time + ". You'll be reminded 1 hour before."); }
         public String renew() { return t("续期 24 小时", "Renew for 24 hours"); }
         public String renewed() { return t("已续期 24 小时", "Renewed for 24 hours"); }
@@ -280,7 +289,7 @@ public final class NearbyLogic {
         public String cardSaved() { return t("名片已更新", "Card updated"); }
 
         public String listHeader() { return t("附近的人", "People nearby"); }
-        public String empty() { return t("附近暂时没有打开可见的人，稍后下拉刷新试试。", "Nobody nearby has turned it on yet. Pull down to refresh later."); }
+        public String empty() { return t("附近暂时没有打开可见的人，稍后刷新试试。", "Nobody nearby has turned it on yet. Try refreshing later."); }
         public String loading() { return t("正在查找附近的人…", "Looking for people nearby…"); }
         public String refresh() { return t("刷新", "Refresh"); }
 

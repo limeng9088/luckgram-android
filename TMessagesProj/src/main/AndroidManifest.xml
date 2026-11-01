@@ -582,7 +582,11 @@
 
         <receiver android:name=".WearReplyReceiver" android:enabled="true"/>
         <!-- Luckgram 25: "Visible nearby" expiry reminder -->
-        <receiver android:name="org.telegram.luckgram.nearby.NearbyController$ReminderReceiver" android:exported="false"/>
+        <receiver android:name="org.telegram.luckgram.nearby.NearbyController$ReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".WearAuthListenerService"
