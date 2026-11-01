@@ -65,7 +65,8 @@ jobs:
             post/AiPostText.java \
             callrec/CallRecMixer.java \
             callrec/CallRecText.java \
-            writing/AiWritingEntities.java; do
+            writing/AiWritingEntities.java \
+            account/AccountLogic.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"

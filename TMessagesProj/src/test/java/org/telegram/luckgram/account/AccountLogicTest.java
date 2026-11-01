@@ -41,7 +41,7 @@ public class AccountLogicTest {
             "{\"nonce\":\"abc\",\"url\":\"https://t.me/LuckgramBot?start=abc\",\"expires_at\":\"2026-11-01T00:10:00Z\"}"));
         assertEquals(1793491800000L, st.expiresAtMs);
         assertTrue(AccountLogic.isTelegramLink(st.url));
-        assertFalse(AccountLogic.isTelegramLink("https://evil.example/t.me/x"));
+        assertFalse(AccountLogic.isTelegramLink("https://evil.example.com/t.me/x"));
         assertFalse(AccountLogic.isTelegramLink("https://t.me/"));
         assertEquals(AccountLogic.parseTime("2026-11-01T08:10:00+08:00"), st.expiresAtMs);
         assertEquals(AccountLogic.parseTime("2026-11-01T00:10:00.123Z"), st.expiresAtMs);
