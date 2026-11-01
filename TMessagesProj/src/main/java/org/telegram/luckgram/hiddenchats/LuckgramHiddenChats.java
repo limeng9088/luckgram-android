@@ -57,12 +57,23 @@ public final class LuckgramHiddenChats {
         return LuckgramStrings.get("已隐藏", "Hidden");
     }
 
+    /** Multi-select: "3 chats hidden". */
+    public static String hiddenToastText(int count) {
+        if (count <= 1) return hiddenToastText();
+        return LuckgramStrings.get("已隐藏 " + count + " 个聊天", count + " chats hidden");
+    }
+
     public static String undoText() {
         return LuckgramStrings.get("撤销", "Undo");
     }
 
     public static String unhiddenToastText() {
         return LuckgramStrings.get("已取消隐藏", "Unhidden");
+    }
+
+    public static String unhiddenToastText(int count) {
+        if (count <= 1) return unhiddenToastText();
+        return LuckgramStrings.get("已取消隐藏 " + count + " 个聊天", count + " chats unhidden");
     }
 
     public static String hintText() {
@@ -105,6 +116,17 @@ public final class LuckgramHiddenChats {
 
     public static boolean isEnabled() {
         return LuckgramSettings.isEnabled(FEATURE_KEY);
+    }
+
+    /**
+     * The feature switch changed. While it is on and the user never picked a swipe gesture, a
+     * swipe hides the chat (see {@code SharedConfig.getChatSwipeAction}); when it goes off, an
+     * explicit "hide" gesture goes back to the default so the swipe keeps doing something.
+     */
+    public static void onToggled(boolean enabled) {
+        if (!enabled && SharedConfig.getChatSwipeActionRaw() == org.telegram.ui.Components.SwipeGestureSettingsView.SWIPE_GESTURE_HIDE) {
+            SharedConfig.updateChatListSwipeSetting(-1);
+        }
     }
 
     public static boolean isLockEnabled() {

@@ -665,6 +665,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
 
     private StaticLayout swipeMessageTextLayout;
     private int swipeMessageTextId;
+    /** Luckgram 12: cache keys for the swipe label when it isn't a string resource. */
+    private static final int LUCKGRAM_SWIPE_HIDE_TEXT_ID = -120_001;
+    private static final int LUCKGRAM_SWIPE_UNHIDE_TEXT_ID = -120_002;
     private int swipeMessageWidth;
     private int readOutboxMaxId = -1;
     private final DialogUpdateHelper updateHelper = new DialogUpdateHelper();
@@ -3909,6 +3912,17 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         } else {
                             swipeMessage = getString(swipeMessageStringId = R.string.SwipePin);
                             translationDrawable = Theme.dialogs_swipePinDrawable;
+                        }
+                    } else if (SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_HIDE) {
+                        // Luckgram 12: swipe hides the chat (unhides it inside the hidden list)
+                        if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, currentDialogId)) {
+                            swipeMessage = org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.unhideText();
+                            swipeMessageStringId = LUCKGRAM_SWIPE_UNHIDE_TEXT_ID;
+                            translationDrawable = Theme.dialogs_unpinArchiveDrawable;
+                        } else {
+                            swipeMessage = org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hideText();
+                            swipeMessageStringId = LUCKGRAM_SWIPE_HIDE_TEXT_ID;
+                            translationDrawable = Theme.dialogs_pinArchiveDrawable;
                         }
                     } else {
                         swipeMessage = getString(swipeMessageStringId = R.string.Archive);

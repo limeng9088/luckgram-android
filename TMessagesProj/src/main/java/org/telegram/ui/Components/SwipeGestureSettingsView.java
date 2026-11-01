@@ -31,6 +31,8 @@ public class SwipeGestureSettingsView extends FrameLayout {
     public static final int SWIPE_GESTURE_MUTE = 3;
     public static final int SWIPE_GESTURE_DELETE = 4;
     public static final int SWIPE_GESTURE_FOLDERS = 5;
+    /** Luckgram 12: swipe hides the chat from the list (only offered while hidden chats are on). */
+    public static final int SWIPE_GESTURE_HIDE = 6;
 
     Paint outlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     Paint filledPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -41,9 +43,11 @@ public class SwipeGestureSettingsView extends FrameLayout {
 
     private NumberPicker picker;
 
-    String[] strings = new String[6];
-    int[] backgroundKeys = new int[6];
-    RLottieDrawable[] icons = new RLottieDrawable[6];
+    String[] strings = new String[7];
+    int[] backgroundKeys = new int[7];
+    RLottieDrawable[] icons = new RLottieDrawable[7];
+    /** Picker row → gesture id (folders only with tabs, hide only with Luckgram hidden chats on). */
+    private int[] values;
 
     int currentIconIndex;
     RLottieImageView[] iconViews = new RLottieImageView[2];
@@ -64,6 +68,7 @@ public class SwipeGestureSettingsView extends FrameLayout {
         strings[SWIPE_GESTURE_MUTE] = LocaleController.getString(R.string.SwipeSettingsMute);
         strings[SWIPE_GESTURE_DELETE] = LocaleController.getString(R.string.SwipeSettingsDelete);
         strings[SWIPE_GESTURE_FOLDERS] = LocaleController.getString(R.string.SwipeSettingsFolders);
+        strings[SWIPE_GESTURE_HIDE] = org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hideText();
 
         backgroundKeys[SWIPE_GESTURE_PIN] = Theme.key_chats_archiveBackground;
         backgroundKeys[SWIPE_GESTURE_READ] = Theme.key_chats_archiveBackground;
@@ -71,6 +76,7 @@ public class SwipeGestureSettingsView extends FrameLayout {
         backgroundKeys[SWIPE_GESTURE_MUTE] = Theme.key_chats_archiveBackground;
         backgroundKeys[SWIPE_GESTURE_DELETE] = Theme.key_dialogSwipeRemove;
         backgroundKeys[SWIPE_GESTURE_FOLDERS] = Theme.key_chats_archivePinBackground;
+        backgroundKeys[SWIPE_GESTURE_HIDE] = Theme.key_chats_archiveBackground;
 
         outlinePaint.setStyle(Paint.Style.STROKE);
         outlinePaint.setStrokeWidth(AndroidUtilities.dp(1));
@@ -98,21 +104,31 @@ public class SwipeGestureSettingsView extends FrameLayout {
         picker.setMinValue(0);
         picker.setDrawDividers(false);
         hasTabs = !MessagesController.getInstance(currentAccount).dialogFilters.isEmpty();
-        picker.setMaxValue(hasTabs ? strings.length - 1 : strings.length - 2);
-        picker.setAllItemsCount(hasTabs ? strings.length : strings.length - 1);
+        java.util.ArrayList<Integer> rows = new java.util.ArrayList<>();
+        rows.add(SWIPE_GESTURE_PIN);
+        rows.add(SWIPE_GESTURE_READ);
+        rows.add(SWIPE_GESTURE_ARCHIVE);
+        rows.add(SWIPE_GESTURE_MUTE);
+        rows.add(SWIPE_GESTURE_DELETE);
+        if (hasTabs) rows.add(SWIPE_GESTURE_FOLDERS);
+        if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isEnabled()) rows.add(SWIPE_GESTURE_HIDE);
+        values = new int[rows.size()];
+        for (int i = 0; i < values.length; i++) values[i] = rows.get(i);
+        picker.setMaxValue(values.length - 1);
+        picker.setAllItemsCount(values.length);
         picker.setWrapSelectorWheel(true);
-        picker.setFormatter(value -> strings[value]);
+        picker.setFormatter(value -> strings[values[Math.max(0, Math.min(values.length - 1, value))]]);
         picker.setOnValueChangedListener((picker, oldVal, newVal) -> {
             swapIcons();
 
-            SharedConfig.updateChatListSwipeSetting(newVal);
+            SharedConfig.updateChatListSwipeSetting(values[Math.max(0, Math.min(values.length - 1, newVal))]);
             invalidate();
             try {
                 picker.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
             } catch (Exception ignored) {}
         });
         picker.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        picker.setValue(SharedConfig.getChatSwipeAction(currentAccount));
+        picker.setValue(rowOf(SharedConfig.getChatSwipeAction(currentAccount)));
 
         addView(picker, LayoutHelper.createFrame(132, LayoutHelper.MATCH_PARENT, Gravity.RIGHT, 21, 0, 21, 0));
 
@@ -124,7 +140,7 @@ public class SwipeGestureSettingsView extends FrameLayout {
             addView(iconViews[i], LayoutHelper.createFrame(28, 28, Gravity.CENTER_VERTICAL | Gravity.RIGHT, 0, 0,  132 + 21 + 21 + 10, 0));
         }
 
-        RLottieDrawable currentIcon = getIcon(picker.getValue());
+        RLottieDrawable currentIcon = getIcon(gesture());
         if (currentIcon != null) {
             iconViews[0].setImageDrawable(currentIcon);
             currentIcon.setCurrentFrame(currentIcon.getFramesCount() - 1);
@@ -132,18 +148,30 @@ public class SwipeGestureSettingsView extends FrameLayout {
         AndroidUtilities.updateViewVisibilityAnimated(iconViews[0], true, 0.5f, false);
         AndroidUtilities.updateViewVisibilityAnimated(iconViews[1], false, 0.5f, false);
 
-        progressToSwipeFolders = picker.getValue() == SWIPE_GESTURE_FOLDERS ? 1f : 0;
-        currentIconValue = picker.getValue();
+        progressToSwipeFolders = gesture() == SWIPE_GESTURE_FOLDERS ? 1f : 0;
+        currentIconValue = gesture();
 
     }
 
     int currentIconValue;
     Runnable swapIconRunnable;
+
+    /** The gesture id selected in the picker. */
+    private int gesture() {
+        return values[Math.max(0, Math.min(values.length - 1, picker.getValue()))];
+    }
+
+    private int rowOf(int gesture) {
+        for (int i = 0; i < values.length; i++) {
+            if (values[i] == gesture) return i;
+        }
+        return rowOf(SWIPE_GESTURE_ARCHIVE);
+    }
     private void swapIcons() {
         if (swapIconRunnable != null) {
             return;
         }
-        int newValue = picker.getValue();
+        int newValue = gesture();
         if (currentIconValue != newValue) {
             currentIconValue = newValue;
             int nextIconIndex = (currentIconIndex + 1) % 2;
@@ -177,7 +205,7 @@ public class SwipeGestureSettingsView extends FrameLayout {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        boolean changeFolder = picker.getValue() == SWIPE_GESTURE_FOLDERS;
+        boolean changeFolder = gesture() == SWIPE_GESTURE_FOLDERS;
 
         if (changeFolder && progressToSwipeFolders != 1f) {
             progressToSwipeFolders += 16 / 300f;
@@ -212,14 +240,14 @@ public class SwipeGestureSettingsView extends FrameLayout {
 
         int color;
         if (currentColorKey < 0) {
-            currentColorKey = backgroundKeys[picker.getValue()];
+            currentColorKey = backgroundKeys[gesture()];
             colorProgress = 1f;
             color = ColorUtils.blendARGB(Theme.getColor(Theme.key_windowBackgroundWhite), Theme.getColor(currentColorKey), 0.9f);
             fromColor = color;
-        } else if (backgroundKeys[picker.getValue()] != currentColorKey) {
+        } else if (backgroundKeys[gesture()] != currentColorKey) {
             fromColor = ColorUtils.blendARGB(fromColor, ColorUtils.blendARGB(Theme.getColor(Theme.key_windowBackgroundWhite), Theme.getColor(currentColorKey), 0.9f), colorProgress);
             colorProgress = 0;
-            currentColorKey = backgroundKeys[picker.getValue()];
+            currentColorKey = backgroundKeys[gesture()];
         }
 
         if (colorProgress != 1f) {
@@ -299,6 +327,9 @@ public class SwipeGestureSettingsView extends FrameLayout {
                 case SWIPE_GESTURE_FOLDERS:
                     rawId = R.raw.swipe_disabled;
                     break;
+                case SWIPE_GESTURE_HIDE:
+                    rawId = R.raw.chats_hide;
+                    break;
             }
             icons[i] = new RLottieDrawable(rawId, AndroidUtilities.dp(28), AndroidUtilities.dp(28), true, null);
             updateIconColor(i);
@@ -339,7 +370,7 @@ public class SwipeGestureSettingsView extends FrameLayout {
     public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
         super.onInitializeAccessibilityNodeInfo(info);
         info.setEnabled(true);
-        info.setContentDescription(strings[picker.getValue()]);
+        info.setContentDescription(strings[gesture()]);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, null));
         }
@@ -353,7 +384,7 @@ public class SwipeGestureSettingsView extends FrameLayout {
             if (newValue > picker.getMaxValue() || newValue < 0) {
                 newValue = 0;
             }
-            setContentDescription(strings[newValue]);
+            setContentDescription(strings[values[newValue]]);
             picker.changeValueByOne(true);
         }
     }

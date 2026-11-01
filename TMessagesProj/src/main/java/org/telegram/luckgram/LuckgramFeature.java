@@ -35,6 +35,8 @@ public final class LuckgramFeature {
     public ConfirmEnable confirmDisable;
     /** Optional: hide the row while this returns true (e.g. 11 hides itself in the second space). */
     public Utilities.Callback0Return<Boolean> hiddenWhen;
+    /** Optional: runs after the switch changed (e.g. 12 resets the swipe gesture when switched off). */
+    public Utilities.Callback<Boolean> onToggled;
 
     /**
      * Called before a feature is switched on from the settings page. Call {@code done.run(true)} to
@@ -79,6 +81,11 @@ public final class LuckgramFeature {
 
     public LuckgramFeature hiddenWhen(Utilities.Callback0Return<Boolean> hidden) {
         this.hiddenWhen = hidden;
+        return this;
+    }
+
+    public LuckgramFeature onToggled(Utilities.Callback<Boolean> onToggled) {
+        this.onToggled = onToggled;
         return this;
     }
 

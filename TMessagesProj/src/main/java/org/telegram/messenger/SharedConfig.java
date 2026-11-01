@@ -1571,12 +1571,24 @@ public class SharedConfig {
             if (chatSwipeAction == SwipeGestureSettingsView.SWIPE_GESTURE_FOLDERS && MessagesController.getInstance(currentAccount).dialogFilters.isEmpty()) {
                 return SwipeGestureSettingsView.SWIPE_GESTURE_ARCHIVE;
             }
+            if (chatSwipeAction == SwipeGestureSettingsView.SWIPE_GESTURE_HIDE && !org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isEnabled()) {
+                return SwipeGestureSettingsView.SWIPE_GESTURE_ARCHIVE;
+            }
             return chatSwipeAction;
+        } else if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isEnabled()) {
+            // Luckgram 12: with hidden chats on and no gesture chosen yet, a swipe hides the chat
+            // (the website promise); Settings → Chat Settings → Swipe still lets the user pick another.
+            return SwipeGestureSettingsView.SWIPE_GESTURE_HIDE;
         } else if (!MessagesController.getInstance(currentAccount).dialogFilters.isEmpty()) {
             return SwipeGestureSettingsView.SWIPE_GESTURE_FOLDERS;
 
         }
         return SwipeGestureSettingsView.SWIPE_GESTURE_ARCHIVE;
+    }
+
+    /** The stored choice: -1 when the user never picked a gesture. */
+    public static int getChatSwipeActionRaw() {
+        return chatSwipeAction;
     }
 
     public static void updateChatListSwipeSetting(int newAction) {

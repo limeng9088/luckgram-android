@@ -61,6 +61,10 @@ public final class LuckgramSettings {
 
     public static void setEnabled(String key, boolean enabled) {
         setBool(key, enabled);
+        LuckgramFeature f = LuckgramFeatures.find(key);
+        if (f != null && f.onToggled != null) {
+            f.onToggled.run(enabled);
+        }
     }
 
     // ---------------------------------------------------------------- generic values (device)
