@@ -64,6 +64,7 @@ public final class SquareUi {
 
     // ---------------------------------------------------------------- link (S6, silent)
 
+    private static final String KEY_USE_AVATAR = "square.use_avatar";
     private static Boolean linked;
     private static JSONObject profile;
     /** Author id of this device's user in Square (from the profile response), if known. */
@@ -305,7 +306,9 @@ public final class SquareUi {
         bio.setText(cur != null ? cur.optString("bio", "") : "");
         box.addView(bio, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 0));
         final String avatar = avatarBase64(f.getCurrentAccount(), me);
-        final boolean[] useAvatar = {avatar != null && (cur == null || !cur.has("avatar_url") || !cur.optString("avatar_url", "").isEmpty())};
+        // The checkbox follows the user's last choice (stored per account), so turning the photo off
+        // stays off the next time the profile is edited instead of re-uploading it.
+        final boolean[] useAvatar = {avatar != null && LuckgramSettings.getBoolForAccount(f.getCurrentAccount(), KEY_USE_AVATAR, true)};
         if (avatar != null) {
             org.telegram.ui.Cells.CheckBoxCell photo = new org.telegram.ui.Cells.CheckBoxCell(ctx, 1);
             photo.setText(tx.useTelegramAvatar(), "", useAvatar[0], false);
@@ -337,7 +340,10 @@ public final class SquareUi {
                         .put("bio", bio.getText().toString().trim())
                         .put("username", showUsername[0] && myUsername != null ? myUsername : "");
                     // S11: avatar is base64 JPEG; omitted = keep, "" = remove.
-                    if (avatar != null) body.put("avatar", useAvatar[0] ? avatar : "");
+                    if (avatar != null) {
+                        body.put("avatar", useAvatar[0] ? avatar : "");
+                        LuckgramSettings.setBoolForAccount(f.getCurrentAccount(), KEY_USE_AVATAR, useAvatar[0]);
+                    }
                     LuckgramAI.getInstance().requestJson("PUT", "/v1/square/profile", body, new LuckgramAI.Callback<JSONObject>() {
                         @Override
                         public void onResult(JSONObject result) {
