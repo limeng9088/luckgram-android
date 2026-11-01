@@ -131,6 +131,10 @@ public final class LuckgramFeatures {
         add(toggle(org.telegram.luckgram.nearby.NearbyLogic.FEATURE_KEY, DISCOVER, true,
             "附近的人", "People Nearby",
             "「联系人」顶部的入口：找到附近同样开启的 Luckgram 用户", "Entry at the top of Contacts: find Luckgram users nearby who turned it on"));
+        add(toggle(org.telegram.luckgram.square.SquareLogic.FEATURE_KEY, DISCOVER, true,
+            "广场", "Square",
+            "「联系人」顶部的入口：所有 Luckgram 用户的公开动态，发图文短帖、点赞、评论", "Entry at the top of Contacts: a public feed for all Luckgram users with short posts, likes and comments")
+            .subpage(org.telegram.luckgram.square.SquareActivity::new));
 
         // ---- AI
         add(toggle(AI_ASSISTANT, AI, true,

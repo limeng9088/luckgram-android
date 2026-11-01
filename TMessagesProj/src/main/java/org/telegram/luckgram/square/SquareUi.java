@@ -19,6 +19,7 @@ import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.luckgram.LuckgramSettings;
 import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.luckgram.account.LuckgramAccountActivity;
+import org.telegram.luckgram.discover.DiscoverBlocks;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
@@ -284,7 +285,10 @@ public final class SquareUi {
         });
     }
 
-    /** Blocks the author (shared with People Nearby, S10/S11) after a confirmation. */
+    /**
+     * Blocks the author after a confirmation, through the block list shared with People Nearby
+     * (S10/S11, {@link DiscoverBlocks}) so the "Blocked people" page knows the name.
+     */
     public static void block(BaseFragment f, SquareLogic.Author author, Runnable done) {
         requireLink(f, () -> {
             if (f.getParentActivity() == null) return;
@@ -292,24 +296,18 @@ public final class SquareUi {
             new AlertDialog.Builder(f.getParentActivity())
                 .setTitle(tx.block())
                 .setMessage(tx.blockConfirm(author.displayName))
-                .setPositiveButton(tx.block(), (d, w) -> {
-                    try {
-                        LuckgramAI.getInstance().requestJson("POST", "/v1/blocks", new JSONObject().put("user", author.id), new LuckgramAI.Callback<JSONObject>() {
-                            @Override
-                            public void onResult(JSONObject result) {
-                                BulletinFactory.of(f).createSimpleBulletin(R.raw.done, tx.blocked()).show();
-                                if (done != null) done.run();
-                            }
-
-                            @Override
-                            public void onError(LuckgramAIError error) {
-                                showError(f, error);
-                            }
-                        });
-                    } catch (Exception e) {
-                        FileLog.e(e);
+                .setPositiveButton(tx.block(), (d, w) -> DiscoverBlocks.block(author.id, author.displayName, new LuckgramAI.Callback<JSONObject>() {
+                    @Override
+                    public void onResult(JSONObject result) {
+                        BulletinFactory.of(f).createSimpleBulletin(R.raw.done, tx.blocked()).show();
+                        if (done != null) done.run();
                     }
-                })
+
+                    @Override
+                    public void onError(LuckgramAIError error) {
+                        showError(f, error);
+                    }
+                }))
                 .setNegativeButton(tx.cancel(), null)
                 .show();
         });

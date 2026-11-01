@@ -30,6 +30,8 @@ public final class SquareLogic {
     /** Long edge after client-side compression (spec 26 item 3). */
     public static final int IMAGE_MAX_EDGE = 2048;
     public static final int PROFILE_BIO_MAX = 70;
+    /** Built-in default for {@code square.max_posts_per_day}; the remote config value wins (spec 26 item 7). */
+    public static final long DEFAULT_MAX_POSTS_PER_DAY = 10;
 
     public static final String TAB_LATEST = "latest";
     public static final String TAB_HOT = "hot";
@@ -176,6 +178,31 @@ public final class SquareLogic {
         }
         page.nextCursor = str(j, "next_cursor");
         return page;
+    }
+
+    /** One presigned upload slot from {@code POST /v1/square/uploads}. */
+    public static final class Upload {
+        public String key = "";
+        public String url = "";
+    }
+
+    /** {@code {"uploads":[{"key","url"}]}}; entries without an https URL are dropped. */
+    public static List<Upload> parseUploads(JSONObject j) {
+        ArrayList<Upload> out = new ArrayList<>();
+        JSONArray arr = j == null ? null : j.optJSONArray("uploads");
+        if (arr == null) return out;
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject o = arr.optJSONObject(i);
+            if (o == null) continue;
+            String key = o.optString("key", "");
+            String url = httpsOrNull(str(o, "url"));
+            if (key.isEmpty() || url == null) continue;
+            Upload u = new Upload();
+            u.key = key;
+            u.url = url;
+            out.add(u);
+        }
+        return out;
     }
 
     static String normalizeStatus(String s) {
@@ -402,6 +429,16 @@ public final class SquareLogic {
         public String tooLong() { return t("内容太长", "Too long"); }
         public String needContent() { return t("写点文字或添加图片", "Add some text or images"); }
         public String imageFailed() { return t("有图片处理失败，请换一张", "An image couldn't be processed. Try another one."); }
+        public String preparingImages() { return t("正在处理图片…", "Preparing images…"); }
+        public String dailyLimitInfo(long perDay) { return t("每天最多发 " + perDay + " 条帖子。", "Up to " + perDay + " posts a day."); }
+
+        public String commentsLoading() { return t("正在加载评论…", "Loading comments…"); }
+        public String replyingTo(String name) { return t("正在回复 " + name, "Replying to " + name); }
+        public String cancelReply() { return t("取消回复", "Cancel reply"); }
+        public String commentSent() { return t("评论已发送", "Comment sent"); }
+        public String postGone() { return t("这条帖子已不存在", "This post is no longer available"); }
+        public String noPublicUsername() { return t("作者没有公开用户名，无法发消息", "This author has no public username, so you can't message them"); }
+        public String authorGone() { return t("找不到这位作者", "Author not found"); }
 
         public String profileTitle() { return t("广场名片", "Square profile"); }
         public String profileNeeded() { return t("发帖前先填写广场名片，别人会在你的帖子上看到它。", "Fill in your Square profile first; others see it on your posts."); }

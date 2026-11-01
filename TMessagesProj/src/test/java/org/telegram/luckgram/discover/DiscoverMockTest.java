@@ -58,6 +58,69 @@ public class DiscoverMockTest {
     }
 
     @Test
+    public void squareRoundTrip() throws Exception {
+        DiscoverMock m = new DiscoverMock();
+        // browsing works without a link; writes need it
+        m.setLinked(false);
+        JSONObject feed = m.handle("GET", "/v1/square/feed", "tab=latest", null).body;
+        assertEquals(20, feed.getJSONArray("items").length());
+        assertTrue(feed.has("next_cursor"));
+        JSONObject page2 = m.handle("GET", "/v1/square/feed", "tab=latest&cursor=" + feed.getString("next_cursor"), null).body;
+        assertEquals(5, page2.getJSONArray("items").length());
+        assertFalse(page2.has("next_cursor"));
+        assertEquals(403, m.handle("POST", "/v1/square/posts", "", b("{\"text\":\"hi\"}")).status);
+        assertEquals(403, m.handle("POST", "/v1/square/posts/p1/like", "", null).status);
+
+        m.setLinked(true);
+        // profile first, then uploads + post
+        assertEquals(403, m.handle("POST", "/v1/square/posts", "", b("{\"text\":\"hi\"}")).status);
+        assertEquals(200, m.handle("PUT", "/v1/square/profile", "", b("{\"display_name\":\"Me\",\"bio\":\"\",\"username\":\"\"}")).status);
+        JSONObject ups = m.handle("POST", "/v1/square/uploads", "", b("{\"count\":2,\"content_type\":\"image/jpeg\"}")).body;
+        assertEquals(2, ups.getJSONArray("uploads").length());
+        String key = ups.getJSONArray("uploads").getJSONObject(0).getString("key");
+        String url = ups.getJSONArray("uploads").getJSONObject(0).getString("url");
+        assertTrue(url.startsWith("https://" + DiscoverMock.MOCK_HOST + DiscoverMock.UPLOAD_PREFIX));
+        // a key that was never uploaded is rejected
+        assertEquals(400, m.handle("POST", "/v1/square/posts", "", b("{\"text\":\"hi\",\"image_keys\":[\"" + key + "\"]}")).status);
+        assertTrue(m.acceptUpload(DiscoverMock.UPLOAD_PREFIX + key, b("jpeg")));
+        DiscoverMock.Reply posted = m.handle("POST", "/v1/square/posts", "", b("{\"text\":\"hi\",\"image_keys\":[\"" + key + "\"]}"));
+        assertEquals(200, posted.status);
+        assertEquals("pending", posted.body.getString("status"));
+        String id = posted.body.getString("id");
+        // pending posts are visible to their author only
+        assertEquals("pending", m.handle("GET", "/v1/square/posts/" + id, "", null).body.getString("status"));
+
+        // like / comment / reply / delete
+        assertEquals(1, m.handle("POST", "/v1/square/posts/" + id + "/like", "", null).body.getInt("like_count"));
+        assertEquals(0, m.handle("DELETE", "/v1/square/posts/" + id + "/like", "", null).body.getInt("like_count"));
+        JSONObject c = m.handle("POST", "/v1/square/posts/" + id + "/comments", "", b("{\"text\":\"nice\"}")).body;
+        JSONObject r = m.handle("POST", "/v1/square/posts/" + id + "/comments", "", b("{\"text\":\"re\",\"parent_id\":\"" + c.getString("id") + "\"}")).body;
+        assertEquals(c.getString("id"), r.getString("parent_id"));
+        assertEquals(2, m.handle("GET", "/v1/square/posts/" + id + "/comments", "", null).body.getJSONArray("items").length());
+        assertEquals(2, m.handle("GET", "/v1/square/posts/" + id, "", null).body.getInt("comment_count"));
+        assertEquals(200, m.handle("DELETE", "/v1/square/comments/" + r.getString("id"), "", null).status);
+        assertEquals(403, m.handle("DELETE", "/v1/square/posts/p1", "", null).status); // not mine
+        assertEquals(200, m.handle("POST", "/v1/square/report", "", b("{\"target\":\"post\",\"id\":\"p1\",\"reason\":\"spam\"}")).status);
+
+        // comment rate limit: 5 per minute
+        for (int i = 0; i < 3; i++) m.handle("POST", "/v1/square/posts/" + id + "/comments", "", b("{\"text\":\"x\"}"));
+        DiscoverMock.Reply limited = m.handle("POST", "/v1/square/posts/" + id + "/comments", "", b("{\"text\":\"x\"}"));
+        assertEquals(429, limited.status);
+        assertTrue(limited.body.getJSONObject("error").getLong("retry_after_seconds") > 0);
+
+        // blocking hides the author's posts; deleting my data removes mine
+        assertEquals(200, m.handle("POST", "/v1/blocks", "", b("{\"user\":\"m1\"}")).status);
+        JSONArray items = m.handle("GET", "/v1/square/feed", "tab=hot", null).body.getJSONArray("items");
+        for (int i = 0; i < items.length(); i++) {
+            assertFalse("m1".equals(items.getJSONObject(i).getJSONObject("author").getString("id")));
+        }
+        assertEquals(404, m.handle("GET", "/v1/square/users/m1/posts", "", null).status);
+        assertEquals(200, m.handle("DELETE", "/v1/square/me", "", null).status);
+        assertEquals(404, m.handle("GET", "/v1/square/posts/" + id, "", null).status);
+        assertEquals(404, m.handle("GET", "/v1/square/profile", "", null).status);
+    }
+
+    @Test
     public void countsDecimals() {
         assertEquals(2, DiscoverMock.decimals("31.23"));
         assertEquals(0, DiscoverMock.decimals("31"));

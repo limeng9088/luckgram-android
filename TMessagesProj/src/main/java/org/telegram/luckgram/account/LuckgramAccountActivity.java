@@ -29,6 +29,7 @@ public class LuckgramAccountActivity extends UniversalFragment {
     private static final int ID_STATUS = 1;
     private static final int ID_LINK = 2;
     private static final int ID_UNLINK = 3;
+    private static final int ID_DELETE_SQUARE = 4;
 
     private final AccountLogic.Texts tx = new AccountLogic.Texts(LuckgramStrings.isChinese());
 
@@ -110,6 +111,36 @@ public class LuckgramAccountActivity extends UniversalFragment {
             info = tx.devices(status.devices, status.maxDevices) + "\n\n" + info;
         }
         items.add(UItem.asShadow(info));
+        if (status != null && status.linked && org.telegram.luckgram.square.SquareUi.isFeatureEnabled()) {
+            // 26 Square (spec item 8): one tap deletes all of this user's posts, comments and likes.
+            org.telegram.luckgram.square.SquareLogic.Texts sq = org.telegram.luckgram.square.SquareUi.tx();
+            items.add(UItem.asHeader(sq.title()));
+            items.add(UItem.asButton(ID_DELETE_SQUARE, sq.deleteMyData()).red().setEnabled(!busy));
+            items.add(UItem.asShadow(sq.deleteMyDataConfirm()));
+        }
+    }
+
+    private void deleteSquareData() {
+        org.telegram.luckgram.square.SquareLogic.Texts sq = org.telegram.luckgram.square.SquareUi.tx();
+        busy = true;
+        listView.adapter.update(true);
+        inFlight = LuckgramAI.getInstance().requestJson("DELETE", "/v1/square/me", null, new LuckgramAI.Callback<JSONObject>() {
+            @Override
+            public void onResult(JSONObject result) {
+                busy = false;
+                org.telegram.luckgram.square.SquareUi.clearCache();
+                org.telegram.luckgram.square.SquareActivity.dirty = true;
+                listView.adapter.update(true);
+                BulletinFactory.of(LuckgramAccountActivity.this).createSimpleBulletin(org.telegram.messenger.R.raw.done, sq.deletedMyData()).show();
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                busy = false;
+                listView.adapter.update(true);
+                org.telegram.luckgram.square.SquareUi.showError(LuckgramAccountActivity.this, error);
+            }
+        });
     }
 
     @Override
@@ -122,6 +153,14 @@ public class LuckgramAccountActivity extends UniversalFragment {
                 .setTitle(tx.unlinkConfirmTitle())
                 .setMessage(tx.unlinkConfirmText())
                 .setPositiveButton(tx.unlink(), (d, w) -> unlink())
+                .setNegativeButton(LuckgramStrings.cancel(), null)
+                .create());
+        } else if (item.id == ID_DELETE_SQUARE) {
+            org.telegram.luckgram.square.SquareLogic.Texts sq = org.telegram.luckgram.square.SquareUi.tx();
+            showDialog(new AlertDialog.Builder(getParentActivity())
+                .setTitle(sq.deleteMyData())
+                .setMessage(sq.deleteMyDataConfirm())
+                .setPositiveButton(sq.delete(), (d, w) -> deleteSquareData())
                 .setNegativeButton(LuckgramStrings.cancel(), null)
                 .create());
         }
@@ -203,6 +242,7 @@ public class LuckgramAccountActivity extends UniversalFragment {
             @Override
             public void onResult(JSONObject result) {
                 org.telegram.luckgram.nearby.NearbyController.onUnlinked(); // 25: the server deleted the nearby card
+                org.telegram.luckgram.square.SquareUi.clearCache(); // 26: link state / profile belong to the linked user
                 busy = false;
                 BulletinFactory.of(LuckgramAccountActivity.this).createSimpleBulletin(org.telegram.messenger.R.raw.done, tx.unlinkedNow()).show();
                 load();

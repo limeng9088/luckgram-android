@@ -72,6 +72,7 @@ jobs:
             update/UpdateLogic.java \
             nearby/NearbyLogic.java \
             discover/DiscoverMock.java \
+            square/SquareLogic.java \
             discover/BlockLogic.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done

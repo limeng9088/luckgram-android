@@ -50,6 +50,7 @@ public class SquareActivity extends UniversalFragment {
     @Override
     public View createView(Context context) {
         View v = super.createView(context);
+        installPullToRefresh();
         ActionBarMenu menu = actionBar.createMenu();
         menu.addItem(MENU_REFRESH, R.drawable.msg_retry).setContentDescription(tx.refresh());
         menu.addItem(MENU_COMPOSE, R.drawable.msg_edit).setContentDescription(tx.compose());
@@ -76,6 +77,27 @@ public class SquareActivity extends UniversalFragment {
         SquareUi.refreshLink(null);
         reload();
         return super.onFragmentCreate();
+    }
+
+    private void installPullToRefresh() {
+        // Pull down at the top of the list to refresh (spec 26 item 2); the menu button does the same.
+        listView.addOnItemTouchListener(new androidx.recyclerview.widget.RecyclerView.SimpleOnItemTouchListener() {
+            private float startY = -1f;
+
+            @Override
+            public boolean onInterceptTouchEvent(androidx.recyclerview.widget.RecyclerView rv, android.view.MotionEvent e) {
+                int action = e.getActionMasked();
+                if (action == android.view.MotionEvent.ACTION_DOWN) {
+                    startY = !rv.canScrollVertically(-1) ? e.getY() : -1f;
+                } else if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
+                    if (action == android.view.MotionEvent.ACTION_UP && startY >= 0 && !loading && e.getY() - startY > AndroidUtilities.dp(160) && !rv.canScrollVertically(-1)) {
+                        reload();
+                    }
+                    startY = -1f;
+                }
+                return false;
+            }
+        });
     }
 
     @Override
