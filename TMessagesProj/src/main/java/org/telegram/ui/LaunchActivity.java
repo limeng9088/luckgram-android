@@ -571,6 +571,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             .add(NotificationCenter.needShowAlert)
             .add(NotificationCenter.reloadInterface)
             .add(NotificationCenter.suggestedLangpack)
+            .add(NotificationCenter.luckgramUpdateChanged)
             .add(NotificationCenter.didSetNewTheme)
             .add(NotificationCenter.needSetDayNightTheme)
             .add(NotificationCenter.needCheckSystemBarColors)
@@ -6989,6 +6990,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         isResumed = true;
         org.telegram.luckgram.LuckgramRemoteConfigFetcher.refreshIfStale(); // Luckgram: remote config (S4)
         org.telegram.luckgram.announce.LuckgramAnnouncements.refreshIfStale(); // Luckgram: announcements (S8)
+        org.telegram.luckgram.update.LuckgramUpdates.checkIfDue(); // Luckgram: update check (S5)
+        org.telegram.luckgram.update.LuckgramUpdates.showForceIfNeeded(this);
         pipActivityHandler.onResume();
         if (onResumeStaticCallback != null) {
             onResumeStaticCallback.run();
@@ -7328,6 +7331,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 }
             }
             rebuildAllFragments(last);
+        } else if (id == NotificationCenter.luckgramUpdateChanged) {
+            org.telegram.luckgram.update.LuckgramUpdates.showForceIfNeeded(this); // Luckgram S5
         } else if (id == NotificationCenter.suggestedLangpack) {
             showLanguageAlert(false);
         } else if (id == NotificationCenter.openArticle) {
