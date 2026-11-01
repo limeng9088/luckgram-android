@@ -49,6 +49,8 @@ public final class LuckgramFeatures {
     public static final String AI_ASSISTANT = "ai_assistant";
     public static final String AI_ASSISTANT_ROW = "ai_assistant_row";
     public static final String ROUND_VIDEO_FROM_GALLERY = "round_video_from_gallery";
+    /** spec 19 */
+    public static final String AI_SUMMARY = "ai_summary";
 
     private static final ArrayList<LuckgramFeature> ALL = new ArrayList<>();
 
@@ -139,6 +141,9 @@ public final class LuckgramFeatures {
         add(toggle(DICTATION_AI_TIDY, AI, false,
             "语音输入 AI 整理", "Tidy voice input with AI",
             "去掉口头禅、补全标点，语言不变", "Remove filler words and add punctuation, same language"));
+        add(toggle(AI_SUMMARY, AI, true,
+            "聊天总结", "Chat summary",
+            "未读多时一键总结要点，点引用跳回原消息，还能就这些消息提问", "Summarize many unread messages, jump to the source, ask about them"));
 
         // ---- 调试 / Debug (debug builds or unlocked debug tools only)
         add(toggle(DEBUG_DEMO, DEBUG, false,
