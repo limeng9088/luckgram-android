@@ -237,6 +237,7 @@ public final class LuckgramSettings {
                 remoteConfig = null;
             }
             LuckgramAI.getInstance().resetLocalState();
+            org.telegram.luckgram.announce.LuckgramAnnouncements.clear();
         }
         notifyChanged(null);
     }
