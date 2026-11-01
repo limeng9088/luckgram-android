@@ -57,7 +57,15 @@ jobs:
             notes/UserNotesText.java \
             translateout/TranslateOutLogic.java \
             profileinfo/ProfileInfoLogic.java \
-            sharedactivity/SharedActivityLogic.java; do
+            sharedactivity/SharedActivityLogic.java \
+            voice/DictationAudio.java \
+            ai/LuckgramAiMarkdown.java \
+            summary/ChatSummaryLogic.java \
+            reply/AiReplyText.java \
+            post/AiPostText.java \
+            callrec/CallRecMixer.java \
+            callrec/CallRecText.java \
+            writing/AiWritingEntities.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"
