@@ -419,7 +419,16 @@ public final class LuckgramAI {
      * Like {@link #putPresignedBlocking} but streams {@code file} from disk (26 square videos, up to
      * 50 MB) instead of holding it in memory. The in-app mock gets the bytes, as it has no sockets.
      */
+    /** Upload progress on the worker thread: bytes sent so far and the total. */
+    public interface UploadProgress {
+        void onProgress(long sent, long total);
+    }
+
     public int putPresignedFileBlocking(Request req, String url, String contentType, java.io.File file) throws Exception {
+        return putPresignedFileBlocking(req, url, contentType, file, null);
+    }
+
+    public int putPresignedFileBlocking(Request req, String url, String contentType, java.io.File file, UploadProgress progress) throws Exception {
         if (url == null || !url.startsWith("https://")) {
             throw new IOException("not https");
         }
@@ -428,7 +437,9 @@ public final class LuckgramAI {
         }
         if (isUsingMock()) {
             try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
-                return putPresignedBlocking(req, url, contentType, readAllBytes(in));
+                int status = putPresignedBlocking(req, url, contentType, readAllBytes(in));
+                if (progress != null) progress.onProgress(file.length(), file.length());
+                return status;
             }
         }
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
@@ -443,10 +454,16 @@ public final class LuckgramAI {
         try (OutputStream os = c.getOutputStream(); java.io.FileInputStream in = new java.io.FileInputStream(file)) {
             byte[] buf = new byte[64 * 1024];
             int n;
+            long sent = 0;
+            final long total = file.length();
             while ((n = in.read(buf)) > 0) {
                 if (req != null && req.cancelled) throw new IOException("cancelled");
                 os.write(buf, 0, n);
+                sent += n;
+                if (progress != null) progress.onProgress(sent, total);
             }
+            os.flush();
+            if (progress != null) progress.onProgress(total, total);
         }
         try {
             return c.getResponseCode();

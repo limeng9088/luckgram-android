@@ -40,8 +40,14 @@ public final class SquareVideos {
             this.meta = meta;
         }
 
+        /** Whole seconds, rounded down (same as the feed badge; the server stores whole seconds too). */
         public int durationSeconds() {
-            return (int) ((meta.durationMs + 999) / 1000);
+            return SquareLogic.wholeSeconds(meta.durationMs);
+        }
+
+        /** True when the video runs past {@code maxSeconds}, judged on the exact length, not the rounded one. */
+        public boolean exceeds(long maxSeconds) {
+            return meta.durationMs > maxSeconds * 1000L;
         }
     }
 
@@ -202,7 +208,7 @@ public final class SquareVideos {
                     if (!cancelled[0]) listener.onError(tooBig);
                     return;
                 }
-                listener.onDone(new Prepared(output, coverJpeg, thumbnail, size[0], size[1], (int) ((endMs + 999) / 1000)));
+                listener.onDone(new Prepared(output, coverJpeg, thumbnail, size[0], size[1], SquareLogic.wholeSeconds(endMs)));
             });
         }, "LuckgramSquareVideo");
         thread.start();

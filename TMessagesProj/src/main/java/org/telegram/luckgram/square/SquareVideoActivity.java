@@ -2,12 +2,17 @@ package org.telegram.luckgram.square;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -20,16 +25,33 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RadialProgressView;
 import org.telegram.ui.Components.VideoPlayer;
 
-/** Full-screen playback of a Square video with sound (spec 26 item 3). Tap toggles pause. */
+/**
+ * Full-screen playback of a Square video with sound (spec 26 item 3). Bottom bar with play/pause,
+ * elapsed / total time and a draggable progress bar; a tap on the picture toggles pause (a large
+ * play icon shows while paused). Playback stops on the last frame and can be replayed
+ * (acceptance P1).
+ */
 public class SquareVideoActivity extends BaseFragment {
+
+    private static final int SEEK_MAX = 1000;
+    private static final int STATE_BUFFERING = 2;
+    private static final int STATE_ENDED = 4;
 
     private final SquareLogic.Video video;
     private VideoPlayer player;
     private TextureView texture;
     private RadialProgressView progress;
     private TextView error;
+    private ImageView centerIcon;
+    private ImageView playButton;
+    private TextView elapsed;
+    private TextView total;
+    private SeekBar seekBar;
     private int videoWidth;
     private int videoHeight;
+    private boolean ended;
+    private boolean dragging;
+    private boolean destroyed;
 
     public SquareVideoActivity(SquareLogic.Video video) {
         this.video = video;
@@ -41,7 +63,7 @@ public class SquareVideoActivity extends BaseFragment {
         actionBar.setBackgroundColor(0xFF000000);
         actionBar.setItemsColor(Color.WHITE, false);
         actionBar.setTitleColor(Color.WHITE);
-        actionBar.setTitle(SquareLogic.formatDuration(video.durationSeconds));
+        actionBar.setTitle(SquareUi.tx().videoTitle());
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
@@ -74,13 +96,160 @@ public class SquareVideoActivity extends BaseFragment {
         error.setVisibility(View.GONE);
         root.addView(error, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
 
-        root.setOnClickListener(v -> {
-            if (player == null) return;
-            if (player.isPlaying()) player.pause();
-            else player.play();
+        // Large play / replay icon in the middle while paused or finished.
+        centerIcon = new ImageView(context);
+        centerIcon.setScaleType(ImageView.ScaleType.CENTER);
+        centerIcon.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(0x80000000);
+        centerIcon.setBackground(circle);
+        centerIcon.setVisibility(View.GONE);
+        centerIcon.setOnClickListener(v -> togglePlay());
+        root.addView(centerIcon, LayoutHelper.createFrame(72, 72, Gravity.CENTER));
+
+        // Bottom bar: play/pause, elapsed, progress bar, total.
+        LinearLayout bar = new LinearLayout(context);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setBackgroundColor(0x99000000);
+        bar.setPadding(AndroidUtilities.dp(8), AndroidUtilities.dp(6), AndroidUtilities.dp(12), AndroidUtilities.dp(6));
+        bar.setClickable(true);
+
+        playButton = new ImageView(context);
+        playButton.setScaleType(ImageView.ScaleType.CENTER);
+        playButton.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        playButton.setBackground(Theme.createSelectorDrawable(0x33FFFFFF, Theme.RIPPLE_MASK_CIRCLE_20DP));
+        playButton.setContentDescription(SquareUi.tx().play());
+        playButton.setOnClickListener(v -> togglePlay());
+        bar.addView(playButton, LayoutHelper.createLinear(44, 44));
+
+        elapsed = timeLabel(context);
+        bar.addView(elapsed, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+
+        seekBar = new SeekBar(context);
+        seekBar.setMax(SEEK_MAX);
+        seekBar.getProgressDrawable().setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        seekBar.getThumb().setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
+        seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar sb, int value, boolean fromUser) {
+                if (fromUser) elapsed.setText(SquareLogic.formatDuration(SquareLogic.wholeSeconds(value * durationMs() / SEEK_MAX)));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar sb) {
+                dragging = true;
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar sb) {
+                dragging = false;
+                if (player == null) return;
+                long target = sb.getProgress() * durationMs() / SEEK_MAX;
+                try {
+                    player.seekTo(target);
+                    if (ended) {
+                        ended = false;
+                        player.play();
+                    }
+                } catch (Throwable e) {
+                    FileLog.e(e);
+                }
+                updateControls();
+            }
         });
+        bar.addView(seekBar, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
+
+        total = timeLabel(context);
+        total.setText(SquareLogic.formatDuration(video.durationSeconds));
+        bar.addView(total, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
+
+        root.addView(bar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
+
+        root.setOnClickListener(v -> togglePlay());
         start();
+        updateControls();
+        AndroidUtilities.runOnUIThread(tick, 250);
         return root;
+    }
+
+    private TextView timeLabel(Context context) {
+        TextView tv = new TextView(context);
+        tv.setTextColor(Color.WHITE);
+        tv.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+        tv.setTypeface(AndroidUtilities.bold());
+        tv.setMinWidth(AndroidUtilities.dp(36));
+        tv.setPadding(AndroidUtilities.dp(4), 0, AndroidUtilities.dp(4), 0);
+        tv.setGravity(Gravity.CENTER);
+        return tv;
+    }
+
+    private long durationMs() {
+        long d = 0;
+        try {
+            if (player != null) d = player.getDuration();
+        } catch (Throwable ignore) {
+        }
+        if (d <= 0 || d == Long.MIN_VALUE + 1 /* C.TIME_UNSET */) d = video.durationSeconds * 1000L;
+        return Math.max(1, d);
+    }
+
+    private void togglePlay() {
+        if (player == null) return;
+        try {
+            if (ended) {
+                ended = false;
+                player.seekTo(0);
+                player.play();
+            } else if (player.isPlaying()) {
+                player.pause();
+            } else {
+                player.play();
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+        updateControls();
+    }
+
+    private final Runnable tick = new Runnable() {
+        @Override
+        public void run() {
+            if (destroyed) return;
+            if (player != null && !dragging) {
+                long pos = 0;
+                try {
+                    pos = Math.max(0, player.getCurrentPosition());
+                } catch (Throwable ignore) {
+                }
+                long dur = durationMs();
+                if (ended) pos = dur;
+                seekBar.setProgress((int) Math.min(SEEK_MAX, pos * SEEK_MAX / dur));
+                elapsed.setText(SquareLogic.formatDuration(SquareLogic.wholeSeconds(pos)));
+                total.setText(SquareLogic.formatDuration(SquareLogic.wholeSeconds(dur)));
+            }
+            AndroidUtilities.runOnUIThread(this, 250);
+        }
+    };
+
+    private void updateControls() {
+        if (playButton == null) return;
+        boolean playing = false;
+        try {
+            playing = player != null && player.isPlaying() && !ended;
+        } catch (Throwable ignore) {
+        }
+        SquareLogic.Texts tx = SquareUi.tx();
+        playButton.setImageResource(playing ? R.drawable.ic_pause : R.drawable.ic_play);
+        playButton.setContentDescription(playing ? tx.pause() : (ended ? tx.replay() : tx.play()));
+        if (playing || error.getVisibility() == View.VISIBLE) {
+            centerIcon.setVisibility(View.GONE);
+        } else {
+            centerIcon.setImageResource(ended ? R.drawable.msg_retry : R.drawable.ic_play);
+            centerIcon.setContentDescription(ended ? tx.replay() : tx.play());
+            centerIcon.setVisibility(View.VISIBLE);
+        }
     }
 
     private void layoutTexture(int w, int h) {
@@ -109,7 +278,16 @@ public class SquareVideoActivity extends BaseFragment {
             player.setDelegate(new VideoPlayer.VideoPlayerDelegate() {
                 @Override
                 public void onStateChanged(boolean playWhenReady, int playbackState) {
-                    if (progress != null) progress.setVisibility(playbackState == 2 /* buffering */ ? View.VISIBLE : View.GONE);
+                    if (progress != null) progress.setVisibility(playbackState == STATE_BUFFERING ? View.VISIBLE : View.GONE);
+                    if (playbackState == STATE_ENDED && !ended) {
+                        // Stay on the last frame; the user can replay.
+                        ended = true;
+                        try {
+                            player.pause();
+                        } catch (Throwable ignore) {
+                        }
+                    }
+                    updateControls();
                 }
 
                 @Override
@@ -120,6 +298,7 @@ public class SquareVideoActivity extends BaseFragment {
                         error.setText(SquareUi.tx().videoFailed());
                         error.setVisibility(View.VISIBLE);
                     }
+                    updateControls();
                 }
 
                 @Override
@@ -132,11 +311,12 @@ public class SquareVideoActivity extends BaseFragment {
                 @Override
                 public void onRenderedFirstFrame() {
                     if (progress != null) progress.setVisibility(View.GONE);
+                    updateControls();
                 }
             });
             player.setTextureView(texture);
             player.setMute(false);
-            player.setLooping(true);
+            player.setLooping(false);
             player.preparePlayer(Uri.parse(video.url), "other");
             player.play();
         } catch (Throwable e) {
@@ -148,10 +328,13 @@ public class SquareVideoActivity extends BaseFragment {
     public void onPause() {
         super.onPause();
         if (player != null) player.pause();
+        updateControls();
     }
 
     @Override
     public void onFragmentDestroy() {
+        destroyed = true;
+        AndroidUtilities.cancelRunOnUIThread(tick);
         if (player != null) {
             try {
                 player.releasePlayer(false);

@@ -71,6 +71,7 @@ public class SquareAuthorActivity extends UniversalFragment {
     @Override
     public View createView(Context context) {
         View v = super.createView(context);
+        actionBar.setAllowOverlayTitle(false); // keep our title; the chat list shows the connection state
         ActionBarMenu menu = actionBar.createMenu();
         if (!isMe()) {
             ActionBarMenuItem more = menu.addItem(MENU_MORE, R.drawable.ic_ab_other);

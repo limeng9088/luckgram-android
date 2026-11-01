@@ -380,6 +380,11 @@ public final class SquareLogic {
         return sourceBitrate > 0 ? Math.min(target, sourceBitrate) : target;
     }
 
+    /** Whole seconds of a duration in milliseconds, rounded down (acceptance P3: 75.02 s is "1:15", not "1:16"). */
+    public static int wholeSeconds(long millis) {
+        return (int) Math.max(0, millis / 1000);
+    }
+
     /** "0:07", "1:00", "12:34". */
     public static String formatDuration(int seconds) {
         int s = Math.max(0, seconds);
@@ -561,6 +566,11 @@ public final class SquareLogic {
         public String publish() { return t("发布", "Post"); }
         public String publishing() { return t("正在发布…", "Posting…"); }
         public String uploadingVideo() { return t("正在上传视频…", "Uploading video…"); }
+        public String uploadingVideo(int percent) { return t("正在上传视频… " + percent + "%", "Uploading video… " + percent + "%"); }
+        public String videoTitle() { return t("视频", "Video"); }
+        public String play() { return t("播放", "Play"); }
+        public String pause() { return t("暂停", "Pause"); }
+        public String replay() { return t("重播", "Replay"); }
         public String published() { return t("已发布", "Posted"); }
         public String attachmentsInfo(long maxSeconds) {
             return t("最多 9 张图片，或 1 段不超过 " + maxSeconds + " 秒的视频。图片会压缩到长边 2048 像素，视频会转码为 1280p 以内的 MP4；位置等元数据都会去掉后再上传。",
