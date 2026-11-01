@@ -1,31 +1,20 @@
 /*
  * Luckgram: UI strings for call recording, in Chinese and English.
  *
- * Telegram's language packs have no official Chinese, so these strings follow the in-app language
- * when it is Chinese, otherwise the system language.
+ * Chinese or English is decided by {@link LuckgramStrings#isChinese()}, like all Luckgram strings.
  */
 package org.telegram.luckgram.callrec;
 
-import org.telegram.messenger.LocaleController;
-
-import java.util.Locale;
+import org.telegram.luckgram.LuckgramStrings;
 
 public final class CallRecStrings {
 
     private CallRecStrings() {
     }
 
+    /** Same rule as every Luckgram string (00 {@link LuckgramStrings#isChinese()}, specs #42). */
     public static boolean isChinese() {
-        try {
-            final LocaleController.LocaleInfo info = LocaleController.getInstance().getCurrentLocaleInfo();
-            if (info != null && info.pluralLangCode != null && info.pluralLangCode.toLowerCase(Locale.ROOT).startsWith("zh")) {
-                return true;
-            }
-            final Locale system = LocaleController.getInstance().getSystemDefaultLocale();
-            return system != null && "zh".equalsIgnoreCase(system.getLanguage());
-        } catch (Exception e) {
-            return "zh".equalsIgnoreCase(Locale.getDefault().getLanguage());
-        }
+        return LuckgramStrings.isChinese();
     }
 
     private static String s(String zh, String en) {
