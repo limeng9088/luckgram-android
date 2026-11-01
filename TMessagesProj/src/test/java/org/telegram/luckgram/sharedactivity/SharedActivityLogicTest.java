@@ -91,4 +91,23 @@ class SharedActivityLogicTest {
         assertEquals("Recent messages · 3 groups in common", SharedActivityLogic.header(3, false));
         assertEquals("Recent messages · 1 group in common", SharedActivityLogic.header(1, false));
     }
+
+    @Test
+    void floodWaitOnlyInsideTimeBudget() {
+        // A short wait early on is sat out.
+        assertTrue(SharedActivityLogic.canWaitFlood(3, 0));
+        // A wait that would end after the budget is not: show what we have instead (16 P1).
+        assertFalse(SharedActivityLogic.canWaitFlood(30, 0));
+        assertFalse(SharedActivityLogic.canWaitFlood(3, SharedActivityLogic.TIME_BUDGET_MS - 1000));
+        // Not a flood error / too long.
+        assertFalse(SharedActivityLogic.canWaitFlood(-1, 0));
+        assertFalse(SharedActivityLogic.canWaitFlood(SharedActivityLogic.MAX_FLOOD_WAIT_SECONDS + 1, 0));
+    }
+
+    @Test
+    void partialHeader() {
+        assertEquals("最近消息 · 3 个共同群组", SharedActivityLogic.header(3, false, true));
+        assertEquals("最近消息 · 3 个共同群组（部分群组未加载完，点「刷新」重试）", SharedActivityLogic.header(3, true, true));
+        assertEquals("Recent messages · 1 group in common (some groups didn't load, tap Refresh to retry)", SharedActivityLogic.header(1, true, false));
+    }
 }

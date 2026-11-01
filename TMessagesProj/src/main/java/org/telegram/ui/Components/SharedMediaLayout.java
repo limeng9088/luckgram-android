@@ -10541,7 +10541,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             switch (holder.getItemViewType()) {
                 case TYPE_HEADER: {
                     TextView title = (TextView) holder.itemView.getTag();
-                    title.setText(org.telegram.luckgram.sharedactivity.SharedActivityLoader.header(result == null ? 0 : result.groupCount));
+                    title.setText(org.telegram.luckgram.sharedactivity.SharedActivityLoader.header(result == null ? 0 : result.groupCount, result != null && result.partial));
                     break;
                 }
                 case TYPE_MESSAGE: {
@@ -10552,7 +10552,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                     break;
                 }
                 case TYPE_EMPTY: {
-                    ((TextView) holder.itemView).setText(result != null && result.groupCount == 0
+                    ((TextView) holder.itemView).setText(result != null && result.groupCount == 0 && !result.partial
                         ? org.telegram.luckgram.sharedactivity.SharedActivityLoader.emptyNoGroups()
                         : org.telegram.luckgram.sharedactivity.SharedActivityLoader.emptyNoMessages());
                     break;
