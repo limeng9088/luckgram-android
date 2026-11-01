@@ -74,6 +74,12 @@ public final class LuckgramAIMock implements LuckgramAI.Transport {
             query = path.substring(q + 1);
             path = path.substring(0, q);
         }
+        // 26: presigned image upload (S3 style: no Authorization, no payload-hash header).
+        if ("PUT".equals(method) && path.startsWith(org.telegram.luckgram.discover.DiscoverMock.UPLOAD_PREFIX)) {
+            String ct = headers.get("Content-Type");
+            boolean ok = ("image/jpeg".equals(ct) || "video/mp4".equals(ct)) && discover.acceptUpload(path, body);
+            return new LuckgramAI.HttpResponse(ok ? 200 : 403, "text/plain", new ByteArrayInputStream(new byte[0]), null);
+        }
         // CloudFront OAC: a request with a body and no / a wrong payload hash is rejected with 403.
         if (body != null && !LuckgramAI.sha256Hex(body).equals(headers.get("x-amz-content-sha256"))) {
             return new LuckgramAI.HttpResponse(403, "application/json", new ByteArrayInputStream("{\"message\":\"Forbidden\"}".getBytes(StandardCharsets.UTF_8)), null);

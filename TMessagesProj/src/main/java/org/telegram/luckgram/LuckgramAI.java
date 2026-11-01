@@ -395,6 +395,31 @@ public final class LuckgramAI {
         });
     }
 
+    /**
+     * PUT to a presigned upload URL returned by the API server (26 square images). No device token
+     * and no payload-hash header: the URL itself carries the authorization (S3). Runs on the
+     * worker thread; returns the HTTP status.
+     */
+    public int putPresignedBlocking(Request req, String url, String contentType, byte[] body) throws Exception {
+        if (url == null || !url.startsWith("https://")) {
+            throw new IOException("not https");
+        }
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("Content-Type", contentType);
+        if (req != null && req.cancelled) {
+            throw new IOException("cancelled");
+        }
+        try (HttpResponse res = transport().execute("PUT", url, headers, body)) {
+            if (req != null) req.connection = res;
+            return res.status;
+        }
+    }
+
+    /** Runs {@code work} on the client's worker thread. */
+    public void runInBackground(Runnable work) {
+        executor.execute(work);
+    }
+
     public Request chat(Context context, String task, List<Message> messages, boolean stream, ChatListener listener) {
         return chat(context, task, null, messages, stream, listener);
     }

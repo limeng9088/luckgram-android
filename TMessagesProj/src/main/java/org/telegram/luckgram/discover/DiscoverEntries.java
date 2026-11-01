@@ -4,6 +4,8 @@ import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.luckgram.nearby.NearbyActivity;
 import org.telegram.luckgram.nearby.NearbyController;
 import org.telegram.luckgram.nearby.NearbyLogic;
+import org.telegram.luckgram.square.SquareActivity;
+import org.telegram.luckgram.square.SquareUi;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.Cells.TextCell;
@@ -22,10 +24,12 @@ public final class DiscoverEntries {
     }
 
     public static final int NEARBY = 1;
+    public static final int SQUARE = 2;
 
     public static List<Integer> visible() {
         ArrayList<Integer> out = new ArrayList<>();
         if (NearbyController.isFeatureEnabled()) out.add(NEARBY);
+        if (SquareUi.isFeatureEnabled()) out.add(SQUARE);
         return out;
     }
 
@@ -33,12 +37,17 @@ public final class DiscoverEntries {
         if (entry == NEARBY) {
             cell.setTextAndValueAndColorfulIcon(new NearbyLogic.Texts(LuckgramStrings.isChinese()).title(), "", false,
                 R.drawable.msg_location, 0xFFF5A623, 0xFFE6862E, divider);
+        } else if (entry == SQUARE) {
+            cell.setTextAndValueAndColorfulIcon(SquareUi.tx().title(), "", false,
+                R.drawable.msg_discussion, 0xFF5AC8FA, 0xFF2F8BE6, divider);
         }
     }
 
     public static void open(BaseFragment from, int entry) {
         if (entry == NEARBY && NearbyController.isFeatureEnabled()) {
             from.presentFragment(new NearbyActivity());
+        } else if (entry == SQUARE && SquareUi.isFeatureEnabled()) {
+            from.presentFragment(new SquareActivity());
         }
     }
 }
