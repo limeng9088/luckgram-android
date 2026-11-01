@@ -582,7 +582,7 @@
     <string name="SmartNotificationsInfo">%1$d / %2$s</string>
     <string name="SmartNotificationsDisabled">Disattiva</string>
     <string name="SecretWebPage">Anteprime link</string>
-    <string name="SecretWebPageInfo">Le anteprime dei link saranno generate dai server di Luckgram. Non conserviamo alcun dato sui link che invii.</string>
+    <string name="SecretWebPageInfo">Le anteprime dei link saranno generate dai server di Telegram. Non conserviamo alcun dato sui link che invii.</string>
     <string name="SecretChat">Chat segrete</string>
     <string name="DirectShare">Condivisione diretta</string>
     <string name="DirectShareInfo">Mostra le chat recenti nel menu di condivisione</string>
@@ -1159,7 +1159,7 @@
     <string name="InviteToGroupError">Spiacenti, non puoi aggiungere questo utente al gruppo a causa delle sue impostazioni di privacy.</string>
     <string name="InviteToChannelError">Spiacenti, non puoi aggiungere questo utente al canale a causa delle sue impostazioni di privacy.</string>
     <string name="CreateGroupError">Spiacenti, non puoi creare un gruppo con questi utenti a causa delle loro impostazioni di privacy.</string>
-    <string name="PrivacyCallsP2PHelp">Disattivando il peer-to-peer, tutte le chiamate saranno inviate tramite i server di Luckgram per evitare di rivelare l\'indirizzo IP, ma la qualità audio e video potrebbe diminuire.</string>
+    <string name="PrivacyCallsP2PHelp">Disattivando il peer-to-peer, tutte le chiamate saranno inviate tramite i server di Telegram per evitare di rivelare l\'indirizzo IP, ma la qualità audio e video potrebbe diminuire.</string>
     <string name="SyncContactsDelete">Elimina i contatti sincronizzati</string>
     <string name="SuggestContacts">Suggerisci contatti frequenti</string>
     <string name="SuggestContactsInfo">Visualizza le persone che contatti di frequente nella parte superiore della sezione di ricerca per un accesso rapido.</string>
@@ -1169,7 +1169,7 @@
     <string name="PrivacyExceptions">Eccezioni</string>
     <string name="BlockedEmpty">Nessuno</string>
     <string name="SyncContactsDeleteTitle">Elimina contatti</string>
-    <string name="SyncContactsDeleteText">Questo rimuoverà i tuoi contatti dai server di Luckgram.\n\nSe \"**Sincronizza contatti**\" è attivo, la tua attuale rubrica sarà risincronizzata.</string>
+    <string name="SyncContactsDeleteText">Questo rimuoverà i tuoi contatti dai server di Telegram.\n\nSe \"**Sincronizza contatti**\" è attivo, la tua attuale rubrica sarà risincronizzata.</string>
     <!--edit video view-->
     <string name="SendingVideo">Invio video...</string>
     <string name="SendingGif">Invio GIF...</string>
@@ -1433,7 +1433,7 @@
     <string name="NoPhoneFound">Non esiste un account Luckgram con questo numero di telefono.</string>
     <string name="NoFolderFound">Nessuna cartella chat trovata.</string>
     <string name="BotCantJoinGroups">Questo bot non può unirsi ai gruppi.</string>
-    <string name="SecretLinkPreviewAlert">Attivare le anteprime estese per i link nelle Chat segrete? Ricorda che le anteprime dei link sono generate sui server di Luckgram.</string>
+    <string name="SecretLinkPreviewAlert">Attivare le anteprime estese per i link nelle Chat segrete? Ricorda che le anteprime dei link sono generate sui server di Telegram.</string>
     <string name="SecretChatContextBotAlert">Per favore ricorda che i bot inline sono forniti da sviluppatori di terze parti. Per far funzionare il bot, i caratteri che digiti dopo l\'username del bot sono inviati al rispettivo sviluppatore.</string>
     <string name="EditMessageError">Spiacenti, non puoi modificare questo messaggio.</string>
     <string name="AllowReadCall">Consenti a Luckgram di ricevere chiamate così potremo inserire in automatico il codice per te.</string>
@@ -1472,7 +1472,7 @@
     <string name="PrivacyPolicyAndTerms">Informativa sulla Privacy e Termini di Servizio</string>
     <string name="TosAgeText">Tocca Accetta per confermare di avere almeno %1$s anni.</string>
     <string name="TosUpdateDecline">Sfortunatamente, non ci sono altre opzioni. A differenza di altri, Luckgram non usa i tuoi dati per il targeting delle inserzioni o altri scopi commerciali. Luckgram conserva solo le informazioni di cui ha bisogno per funzionare come servizio cloud ricco di funzionalità. Puoi regolare il modo in cui utilizziamo i tuoi dati nelle impostazioni di Privacy e sicurezza.\n\nSe non ti senti a tuo agio con le modeste esigenze di Luckgram, non ci sarà possibile fornirti questo servizio.</string>
-    <string name="TosDeclineDeleteAccount">Attenzione, questo eliminerà irreversibilmente il tuo account Luckgram e tutti i dati che archivi nel cloud di Luckgram.\n\nImportante: Puoi annullare adesso ed esportare prima i tuoi dati invece che perdere tutto. (Per farlo, apri l\'ultima versione di Telegram Desktop e vai in Impostazioni &gt; Avanzate &gt; Esporta dati Luckgram.)</string>
+    <string name="TosDeclineDeleteAccount">Attenzione, questo eliminerà irreversibilmente il tuo account Luckgram e tutti i dati che archivi nel cloud di Telegram.\n\nImportante: Puoi annullare adesso ed esportare prima i tuoi dati invece che perdere tutto. (Per farlo, apri l\'ultima versione di Telegram Desktop e vai in Impostazioni &gt; Avanzate &gt; Esporta dati Luckgram.)</string>
     <!--permissions-->
     <string name="PermissionStorageWithHint">**Luckgram** deve accedere all\'archivio per poter inviare e salvare foto, video, musica e altri documenti. Tocca Impostazioni &gt; Permessi, e attiva **File e media**.</string>
     <string name="PermissionNoAudioWithHint">**Luckgram** deve accedere al microfono per poter inviare messaggi vocali. Tocca Impostazioni &gt; Permessi, e attiva **Microfono**.</string>

@@ -583,7 +583,7 @@
     <string name="SmartNotificationsInfo">%1$d / %2$s</string>
     <string name="SmartNotificationsDisabled">Uitgeschakeld</string>
     <string name="SecretWebPage">Voorbeelden van links</string>
-    <string name="SecretWebPageInfo">Voorbeelden van links worden op de Luckgram-servers gegenereerd. We slaan geen informatie op over de links die je verstuurt.</string>
+    <string name="SecretWebPageInfo">Voorbeelden van links worden op de Telegram-servers gegenereerd. We slaan geen informatie op over de links die je verstuurt.</string>
     <string name="SecretChat">Geheime chats</string>
     <string name="DirectShare">Snel delen</string>
     <string name="DirectShareInfo">Recente chats in snel delen weergeven</string>
@@ -1019,7 +1019,7 @@
     <string name="PrivacyPolicyAndTerms">Privacybeleid en gebruiksvoorwaarden</string>
     <string name="TosAgeText">Tik op Akkoord om te bevestigen dat je %1$s of ouder bent.</string>
     <string name="TosUpdateDecline">Er zijn helaas geen andere mogelijkheden. In tegenstelling tot veel andere apps, gebruik Luckgram de gegevens van onze gebruikers niet voor het tonen van gerichte advertenties of andere commerciële doeleinden. Luckgram slaat alleen de informatie op die het nodig heeft om te functioneren als een veelzijdige clouddienst. Je kunt zelf aanpassen hoe je gegevens worden gebruikt in de Privacy- en Beveiligingsinstellingen.\n\nAls je niet akkoord gaat met de beperkte vereisten van Luckgram, zullen we niet in staat zijn om je deze dienst aan te bieden.</string>
-    <string name="TosDeclineDeleteAccount">Waarschuwing: dit zal ervoor zorgen dat je Luckgram-account permanent wordt verwijderd, samen met alle data die je in de Luckgram-cloud hebt opgeslagen.\n\nBelangrijk: je kunt het proces nu annuleren en je gegevens exporteren voordat je jouw account verwijdert, zodat je niet alles kwijtraakt. (Om dit te doen, kun je de nieuwste versie van Telegram Desktop openen en naar Instellingen &gt; Geavanceerd &gt; Luckgram-gegevens Exporteren gaan.)</string>
+    <string name="TosDeclineDeleteAccount">Waarschuwing: dit zal ervoor zorgen dat je Luckgram-account permanent wordt verwijderd, samen met alle data die je in de Telegram-cloud hebt opgeslagen.\n\nBelangrijk: je kunt het proces nu annuleren en je gegevens exporteren voordat je jouw account verwijdert, zodat je niet alles kwijtraakt. (Om dit te doen, kun je de nieuwste versie van Telegram Desktop openen en naar Instellingen &gt; Geavanceerd &gt; Luckgram-gegevens Exporteren gaan.)</string>
     <!--permissions-->
     <string name="PermissionStorageWithHint">**Luckgram** heeft toegang tot je opslag nodig, zodat je foto\'s, video\'s, muziek en andere bestanden kunt verzenden en opslaan. Tik op Instellingen &gt; Machtigingen en schakel **Bestanden en media** aan.</string>
     <string name="PermissionNoAudioWithHint">**Luckgram** heeft toegang tot je microfoon nodig zodat je spraakberichten kunt versturen. Tik op Instellingen &gt; Machtigingen en schakel **Microfoon** aan.</string>
