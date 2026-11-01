@@ -122,4 +122,17 @@ public class NearbyLogicTest {
         assertTrue(zh.rateLimited(61).contains("2 分钟"));
         assertTrue(en.rateLimited(0).contains("1 min"));
     }
+
+    @Test
+    public void cardNameMatchesIosAndIsCapped() throws Exception {
+        assertEquals("Ann", NearbyLogic.cardName("Ann", "Lee", "ann"));
+        assertEquals("Lee", NearbyLogic.cardName(" ", "Lee", "ann"));
+        assertEquals("ann", NearbyLogic.cardName(null, null, "ann"));
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < 70; i++) b.append("\uD83D\uDE00");
+        String n = NearbyLogic.cardName(b.toString(), null, "u");
+        assertEquals(64, n.codePointCount(0, n.length()));
+        org.json.JSONObject body = NearbyLogic.cardBody(b.toString(), "", "u", 31.2, 121.4, null);
+        assertEquals(64, body.getString("display_name").codePointCount(0, body.getString("display_name").length()));
+    }
 }

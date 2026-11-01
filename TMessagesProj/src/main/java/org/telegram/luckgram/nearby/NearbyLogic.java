@@ -73,9 +73,26 @@ public final class NearbyLogic {
         return s;
     }
 
+    /** S10 limit for {@code display_name} (runes). */
+    public static final int NAME_MAX = 64;
+
+    /**
+     * Card name: first name, else last name, else the username — same as iOS
+     * {@code compactDisplayTitle} — capped at {@link #NAME_MAX} code points.
+     */
+    public static String cardName(String firstName, String lastName, String username) {
+        String s = firstName == null ? "" : firstName.replace('\n', ' ').trim();
+        if (s.isEmpty()) s = lastName == null ? "" : lastName.replace('\n', ' ').trim();
+        if (s.isEmpty()) s = username == null ? "" : username;
+        if (s.codePointCount(0, s.length()) > NAME_MAX) {
+            s = s.substring(0, s.offsetByCodePoints(0, NAME_MAX));
+        }
+        return s;
+    }
+
     public static JSONObject cardBody(String displayName, String bio, String username, double lat, double lon, String avatarBase64) throws Exception {
         JSONObject j = new JSONObject()
-            .put("display_name", displayName == null ? "" : displayName)
+            .put("display_name", cardName(displayName, null, username))
             .put("bio", cleanBio(bio))
             .put("username", username)
             // JSON numbers; coarsened again here so callers can't send the raw value by mistake.

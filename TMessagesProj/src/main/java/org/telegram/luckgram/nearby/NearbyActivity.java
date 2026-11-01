@@ -295,7 +295,7 @@ public class NearbyActivity extends UniversalFragment {
         if (me == null || TextUtils.isEmpty(username) || Double.isNaN(lat)) return;
         final JSONObject body;
         try {
-            body = NearbyLogic.cardBody(UserObject.getUserName(me), NearbyController.bio(), username, lat, lon,
+            body = NearbyLogic.cardBody(NearbyLogic.cardName(me.first_name, me.last_name, username), NearbyController.bio(), username, lat, lon,
                 NearbyController.showPhoto() ? avatarBase64(me) : "");
         } catch (Exception e) {
             FileLog.e(e);
