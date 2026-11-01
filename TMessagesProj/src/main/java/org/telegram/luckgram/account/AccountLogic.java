@@ -66,6 +66,31 @@ public final class AccountLogic {
     }
 
     /** Only links the bot itself opens: https://t.me/... */
+    /** Bot username from the {@code t.me/<bot>?start=<nonce>} link, or null (silent link, 25/26). */
+    public static String botUsername(String link) {
+        if (link == null) return null;
+        String s = link.trim();
+        int i = s.indexOf("t.me/");
+        if (i < 0) return null;
+        s = s.substring(i + 5);
+        int end = s.length();
+        for (int k = 0; k < s.length(); k++) {
+            char c = s.charAt(k);
+            if (c == '?' || c == '/' || c == '#') {
+                end = k;
+                break;
+            }
+        }
+        s = s.substring(0, end);
+        if (s.isEmpty() || !s.matches("[A-Za-z0-9_]{4,32}")) return null;
+        return s;
+    }
+
+    /** The message the app sends to the bot on the user's behalf. */
+    public static String startCommand(String nonce) {
+        return "/start " + nonce;
+    }
+
     public static boolean isTelegramLink(String url) {
         return url != null && url.startsWith("https://t.me/") && url.length() > "https://t.me/".length();
     }

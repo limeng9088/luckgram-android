@@ -7003,6 +7003,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         org.telegram.luckgram.LuckgramRemoteConfigFetcher.refreshIfStale(); // Luckgram: remote config (S4)
         org.telegram.luckgram.announce.LuckgramAnnouncements.refreshIfStale(); // Luckgram: announcements (S8)
         org.telegram.luckgram.update.LuckgramUpdates.checkIfDue(); // Luckgram: update check (S5)
+        org.telegram.luckgram.nearby.NearbyController.restoreReminder(); // Luckgram 25: re-arm after reboot / force-stop
         org.telegram.luckgram.update.LuckgramUpdates.showForceIfNeeded(this);
         pipActivityHandler.onResume();
         if (onResumeStaticCallback != null) {

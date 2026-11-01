@@ -114,6 +114,7 @@ public final class NearbyController {
      */
     public static void onLogout(int account) {
         DiscoverBlocks.clearLocal();
+        org.telegram.luckgram.account.SilentLink.clearCache();
         if (!isVisible() || LuckgramSettings.getInt(KEY_ACCOUNT, account) != account) return;
         clearLocal();
         LuckgramAI.getInstance().sendWithCurrentToken("DELETE", "/v1/nearby/me");
@@ -122,6 +123,7 @@ public final class NearbyController {
     /** S6 unlink: the server deletes the card itself; only forget it here. */
     public static void onUnlinked() {
         DiscoverBlocks.clearLocal();
+        org.telegram.luckgram.account.SilentLink.clearCache();
         clearLocal();
     }
 
@@ -137,6 +139,16 @@ public final class NearbyController {
     private static PendingIntent reminderIntent(Context ctx, int flags) {
         Intent i = new Intent(ctx, NearbyController.ReminderReceiver.class);
         return PendingIntent.getBroadcast(ctx, NOTIFICATION_ID, i, flags | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    /**
+     * Re-arms the expiry reminder from the saved {@code expires_at}: alarms are lost on reboot and
+     * force-stop. Called on boot and when the app comes to the foreground; idempotent.
+     */
+    public static void restoreReminder() {
+        if (isFeatureEnabled() && isVisible()) {
+            scheduleReminder(expiresAt());
+        }
     }
 
     private static void scheduleReminder(long expiresAtMs) {
@@ -201,6 +213,11 @@ public final class NearbyController {
     public static class ReminderReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
+            if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
+                // Alarms don't survive a reboot (review P2): schedule again from the saved expiry.
+                restoreReminder();
+                return;
+            }
             showReminder(context);
         }
     }

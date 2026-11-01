@@ -129,6 +129,6 @@ public final class BlockLogic {
         public String loadMore() { return t("加载更多", "Load more"); }
         public String retry() { return t("重试", "Retry"); }
         public String cancel() { return t("取消", "Cancel"); }
-        public String notLinked() { return t("请先在「Luckgram 账号」里绑定 Telegram 账号", "Link your Telegram account in Luckgram Account first"); }
+        public String connectFailed() { return t("暂时无法连接服务，请稍后再试", "The service isn't reachable right now. Please try again later."); }
     }
 }

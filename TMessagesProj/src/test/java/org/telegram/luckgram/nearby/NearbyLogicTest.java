@@ -45,10 +45,9 @@ public class NearbyLogicTest {
 
     @Test
     public void preconditions() {
-        assertEquals(NearbyLogic.NEED_LINK, NearbyLogic.precondition(false, "alice"));
-        assertEquals(NearbyLogic.NEED_USERNAME, NearbyLogic.precondition(true, null));
-        assertEquals(NearbyLogic.NEED_USERNAME, NearbyLogic.precondition(true, ""));
-        assertEquals(NearbyLogic.READY, NearbyLogic.precondition(true, "alice"));
+        assertEquals(NearbyLogic.NEED_USERNAME, NearbyLogic.precondition(null));
+        assertEquals(NearbyLogic.NEED_USERNAME, NearbyLogic.precondition(""));
+        assertEquals(NearbyLogic.READY, NearbyLogic.precondition("alice"));
     }
 
     @Test
@@ -134,5 +133,27 @@ public class NearbyLogicTest {
         assertEquals(64, n.codePointCount(0, n.length()));
         org.json.JSONObject body = NearbyLogic.cardBody(b.toString(), "", "u", 31.2, 121.4, null);
         assertEquals(64, body.getString("display_name").codePointCount(0, body.getString("display_name").length()));
+    }
+
+    @Test
+    public void fallbackFixMustBeFresh() {
+        long now = 1_800_000_000_000L;
+        assertTrue(NearbyLogic.isFreshFix(now - 29 * 60 * 1000L, now));
+        assertTrue(NearbyLogic.isFreshFix(now - 30 * 60 * 1000L, now));
+        assertFalse(NearbyLogic.isFreshFix(now - 31 * 60 * 1000L, now));
+        assertFalse(NearbyLogic.isFreshFix(0, now));
+        assertFalse(NearbyLogic.isFreshFix(now + 10 * 60 * 1000L, now));
+    }
+
+    @Test
+    public void noLinkWordingInTexts() throws Exception {
+        for (boolean zh : new boolean[]{true, false}) {
+            NearbyLogic.Texts tx = new NearbyLogic.Texts(zh);
+            for (java.lang.reflect.Method m : NearbyLogic.Texts.class.getMethods()) {
+                if (m.getReturnType() != String.class || m.getParameterCount() != 0 || m.getDeclaringClass() != NearbyLogic.Texts.class) continue;
+                String v = (String) m.invoke(tx);
+                assertFalse(m.getName() + ": " + v, v.contains("绑定") || v.contains("解绑") || v.toLowerCase(java.util.Locale.ROOT).contains("link"));
+            }
+        }
     }
 }

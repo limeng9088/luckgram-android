@@ -94,8 +94,14 @@ public final class NearbyLocation {
             finish.run();
             Location fallback = null;
             try {
-                fallback = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                if (fallback == null) fallback = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                long now = System.currentTimeMillis();
+                for (String p : new String[]{LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER}) {
+                    Location l = lm.getLastKnownLocation(p);
+                    // Review P2: an old last-known fix is a failure, not a location.
+                    if (l != null && NearbyLogic.isFreshFix(l.getTime(), now) && (fallback == null || l.getTime() > fallback.getTime())) {
+                        fallback = l;
+                    }
+                }
             } catch (Exception ignore) {
             }
             callback.onLocation(fallback);

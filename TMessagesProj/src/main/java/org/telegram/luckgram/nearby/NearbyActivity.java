@@ -21,7 +21,7 @@ import org.json.JSONObject;
 import org.telegram.luckgram.LuckgramAI;
 import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.luckgram.LuckgramStrings;
-import org.telegram.luckgram.account.LuckgramAccountActivity;
+import org.telegram.luckgram.account.SilentLink;
 import org.telegram.luckgram.discover.BlockedUsersActivity;
 import org.telegram.luckgram.discover.DiscoverBlocks;
 import org.telegram.messenger.AndroidUtilities;
@@ -55,7 +55,7 @@ import java.util.Map;
  */
 public class NearbyActivity extends UniversalFragment {
 
-    private static final int ID_GO_LINK = 1;
+    private static final int ID_RETRY_CONNECT = 1;
     private static final int ID_GO_USERNAME = 2;
     private static final int ID_INTRO_OK = 3;
     private static final int ID_OPEN_SETTINGS = 4;
@@ -71,7 +71,11 @@ public class NearbyActivity extends UniversalFragment {
 
     private final NearbyLogic.Texts tx = new NearbyLogic.Texts(LuckgramStrings.isChinese());
 
+    /** Silent S6 link: null while connecting (or not started), TRUE once linked, FALSE if it failed. */
     private Boolean linked;
+    private boolean connecting;
+    /** One automatic re-link per page if the server answers not_linked. */
+    private boolean relinkTried;
     private boolean permissionDenied;
     private boolean locating;
     private boolean loadingList;
@@ -107,16 +111,16 @@ public class NearbyActivity extends UniversalFragment {
 
     @Override
     public boolean onFragmentCreate() {
-        loadLink();
+        connectIfReady();
         return super.onFragmentCreate();
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        // Back from the account / username pages or system settings.
-        if (linked == null || precondition() != NearbyLogic.READY) {
-            loadLink();
+        // Back from the username page or system settings.
+        if (!Boolean.TRUE.equals(linked)) {
+            connectIfReady();
         } else if (permissionDenied && getParentActivity() != null && NearbyLocation.hasPermission(getParentActivity())) {
             permissionDenied = false;
             refresh();
@@ -140,32 +144,46 @@ public class NearbyActivity extends UniversalFragment {
     }
 
     private int precondition() {
-        return NearbyLogic.precondition(Boolean.TRUE.equals(linked), myUsername());
+        return NearbyLogic.precondition(myUsername());
     }
 
     // ---------------------------------------------------------------- loading
 
-    private void loadLink() {
-        if (!NearbyController.isFeatureEnabled()) return;
-        if (inFlight != null) inFlight.cancel();
-        inFlight = LuckgramAI.getInstance().requestJson("GET", "/v1/link", null, new LuckgramAI.Callback<JSONObject>() {
-            @Override
-            public void onResult(JSONObject result) {
-                linked = result.optBoolean("linked", false);
-                if (!linked) NearbyController.onUnlinked();
+    /**
+     * Username set and intro confirmed: make sure this device is linked (silently, spec 25 item 2),
+     * then load the card state and the list. Nothing about linking is shown to the user.
+     */
+    private void connectIfReady() {
+        if (!NearbyController.isFeatureEnabled() || connecting) return;
+        if (precondition() != NearbyLogic.READY || !NearbyController.introDone()) return;
+        connecting = true;
+        linked = null;
+        update();
+        SilentLink.refresh(() -> {
+            // The server lost the link (unlinked elsewhere): the card is gone, forget it here too.
+            if (Boolean.FALSE.equals(SilentLink.cached())) NearbyController.onUnlinked();
+            SilentLink.ensure(currentAccount, ok -> {
+                connecting = false;
+                linked = ok;
                 update();
-                if (precondition() == NearbyLogic.READY && NearbyController.introDone()) {
+                if (ok) {
                     syncMe();
                     refresh();
                 }
-            }
-
-            @Override
-            public void onError(LuckgramAIError error) {
-                showError(error);
-                update();
-            }
+            });
         });
+    }
+
+    /** The server said not_linked: re-link once, then give up with a neutral message. */
+    private void onNotLinked() {
+        SilentLink.clearCache();
+        if (!relinkTried) {
+            relinkTried = true;
+            connectIfReady();
+        } else {
+            linked = false;
+            update();
+        }
     }
 
     private void syncMe() {
@@ -186,7 +204,7 @@ public class NearbyActivity extends UniversalFragment {
 
     /** Page opened / refresh: one location fix, then the list. */
     private void refresh() {
-        if (precondition() != NearbyLogic.READY || !NearbyController.introDone() || locating) return;
+        if (precondition() != NearbyLogic.READY || !NearbyController.introDone() || !Boolean.TRUE.equals(linked) || locating) return;
         if (getParentActivity() == null) return;
         if (!NearbyLocation.hasPermission(getParentActivity())) {
             requestPermission();
@@ -236,7 +254,10 @@ public class NearbyActivity extends UniversalFragment {
             public void onError(LuckgramAIError error) {
                 loadingList = false;
                 NearbyController.onError(error);
-                if ("not_linked".equals(error.code)) linked = false;
+                if ("not_linked".equals(error.code)) {
+                    onNotLinked();
+                    return;
+                }
                 showError(error);
                 update();
             }
@@ -324,7 +345,10 @@ public class NearbyActivity extends UniversalFragment {
             public void onError(LuckgramAIError error) {
                 busy = false;
                 NearbyController.onError(error);
-                if ("not_linked".equals(error.code)) linked = false;
+                if ("not_linked".equals(error.code)) {
+                    onNotLinked();
+                    return;
+                }
                 showError(error);
                 update();
             }
@@ -387,17 +411,7 @@ public class NearbyActivity extends UniversalFragment {
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         shown.clear();
-        if (linked == null) {
-            items.add(UItem.asButtonLoadingValue(0, tx.title()).setEnabled(false));
-            return;
-        }
         int pre = precondition();
-        if (pre == NearbyLogic.NEED_LINK) {
-            items.add(UItem.asHeader(tx.needLinkTitle()));
-            items.add(UItem.asButton(ID_GO_LINK, tx.goLink()).accent());
-            items.add(UItem.asShadow(tx.needLinkText()));
-            return;
-        }
         if (pre == NearbyLogic.NEED_USERNAME) {
             items.add(UItem.asHeader(tx.needUsernameTitle()));
             items.add(UItem.asButton(ID_GO_USERNAME, tx.goUsername()).accent());
@@ -408,6 +422,15 @@ public class NearbyActivity extends UniversalFragment {
             items.add(UItem.asHeader(tx.introTitle()));
             items.add(UItem.asButton(ID_INTRO_OK, tx.introContinue()).accent());
             items.add(UItem.asShadow(tx.introText()));
+            return;
+        }
+        if (linked == null) {
+            items.add(UItem.asButtonLoadingValue(0, tx.connecting()).setEnabled(false));
+            return;
+        }
+        if (!linked) {
+            items.add(UItem.asButton(ID_RETRY_CONNECT, tx.refresh()).accent());
+            items.add(UItem.asShadow(tx.connectFailed()));
             return;
         }
 
@@ -501,8 +524,9 @@ public class NearbyActivity extends UniversalFragment {
             return;
         }
         switch (item.id) {
-            case ID_GO_LINK:
-                presentFragment(new LuckgramAccountActivity());
+            case ID_RETRY_CONNECT:
+                relinkTried = false;
+                connectIfReady();
                 break;
             case ID_GO_USERNAME:
                 presentFragment(new ChangeUsernameActivity());
@@ -510,8 +534,7 @@ public class NearbyActivity extends UniversalFragment {
             case ID_INTRO_OK:
                 NearbyController.setIntroDone();
                 update();
-                syncMe();
-                refresh();
+                connectIfReady();
                 break;
             case ID_OPEN_SETTINGS:
                 try {
@@ -633,7 +656,7 @@ public class NearbyActivity extends UniversalFragment {
         } else if ("nearby_disabled".equals(error.code)) {
             text = tx.disabled();
         } else if ("not_linked".equals(error.code)) {
-            text = tx.notLinked();
+            text = tx.connectFailed();
         } else {
             text = error.getLocalizedMessage();
         }
