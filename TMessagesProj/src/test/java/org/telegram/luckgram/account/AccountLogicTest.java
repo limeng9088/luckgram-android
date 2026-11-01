@@ -86,4 +86,14 @@ public class AccountLogicTest {
         assertNull(AccountLogic.botUsername(null));
         assertEquals("/start n1", AccountLogic.startCommand("n1"));
     }
+
+    @Test
+    public void botCleanupDelays() {
+        long[] d = AccountLogic.BOT_CLEANUP_DELAYS_MS;
+        assertTrue(d.length > 0);
+        for (int i = 0; i < d.length; i++) {
+            assertTrue(d[i] > 0 && d[i] < 60_000);
+            if (i > 0) assertTrue(d[i] > d[i - 1]);
+        }
+    }
 }

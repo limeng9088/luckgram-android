@@ -189,7 +189,6 @@ public final class NearbyLogic {
 
     // ---------------------------------------------------------------- expiry
 
-    /** When to show the "expires in 1 hour" reminder, or 0 if it is already too late. */
     /** Oldest last-known fix accepted when a single location request times out. */
     public static final long FALLBACK_MAX_AGE_MS = 30 * 60 * 1000L;
 
@@ -197,9 +196,20 @@ public final class NearbyLogic {
         return fixTimeMs > 0 && nowMs - fixTimeMs <= FALLBACK_MAX_AGE_MS && fixTimeMs <= nowMs + 60 * 1000L;
     }
 
+    /** When to show the "expires in 1 hour" reminder, or 0 if it is already too late. */
     public static long reminderAt(long expiresAtMs, long nowMs) {
         long at = expiresAtMs - REMIND_BEFORE_MS;
         return at > nowMs ? at : 0;
+    }
+
+    /**
+     * After a reboot: the reminder time has passed while the alarm was lost (phone off during the
+     * reminder or rebooted in the last hour), the card is still visible and this expiry hasn't been
+     * reminded of yet, so show it right away. {@code remindedForMs} is the expiry last reminded of.
+     */
+    public static boolean missedReminder(long expiresAtMs, long nowMs, long remindedForMs) {
+        return expiresAtMs > 0 && reminderAt(expiresAtMs, nowMs) == 0 && !isExpired(expiresAtMs, nowMs)
+            && remindedForMs != expiresAtMs;
     }
 
     public static boolean isExpired(long expiresAtMs, long nowMs) {

@@ -38,6 +38,8 @@ public final class NearbyController {
     private static final String KEY_PHOTO = "nearby.show_photo";
     /** Telegram account whose username is on the uploaded card. */
     private static final String KEY_ACCOUNT = "nearby.account";
+    /** The {@code expires_at} the reminder was last shown for (no second reminder after a reboot). */
+    private static final String KEY_REMINDED = "nearby.reminded_for";
     private static final String CHANNEL = "luckgram_nearby";
     private static final int NOTIFICATION_ID = 0x4c4e4231;
 
@@ -151,6 +153,22 @@ public final class NearbyController {
         }
     }
 
+    /** Boot: re-arm, and show the reminder now if its time passed while the phone was off (review P2). */
+    static void restoreAfterBoot(Context ctx) {
+        restoreReminder();
+        if (isFeatureEnabled() && NearbyLogic.missedReminder(expiresAt(), System.currentTimeMillis(), remindedFor())) {
+            showReminder(ctx);
+        }
+    }
+
+    private static long remindedFor() {
+        try {
+            return Long.parseLong(LuckgramSettings.getString(KEY_REMINDED, "0"));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     private static void scheduleReminder(long expiresAtMs) {
         try {
             Context ctx = ApplicationLoader.applicationContext;
@@ -200,6 +218,7 @@ public final class NearbyController {
             .setContentText(tx.reminderText())
             .setAutoCancel(true)
             .setContentIntent(pi);
+        LuckgramSettings.setString(KEY_REMINDED, Long.toString(expiresAt()));
         try {
             nm.notify(NOTIFICATION_ID, b.build());
         } catch (Exception e) {
@@ -214,8 +233,9 @@ public final class NearbyController {
         @Override
         public void onReceive(Context context, Intent intent) {
             if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
-                // Alarms don't survive a reboot (review P2): schedule again from the saved expiry.
-                restoreReminder();
+                // Alarms don't survive a reboot (review P2): schedule again from the saved expiry,
+                // or remind now if the reminder time passed while the phone was off.
+                restoreAfterBoot(context);
                 return;
             }
             showReminder(context);

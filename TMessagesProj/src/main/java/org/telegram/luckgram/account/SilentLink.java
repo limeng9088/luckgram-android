@@ -132,12 +132,7 @@ public final class SilentLink {
                 AccountLogic.LinkStatus s = AccountLogic.parseLink(result);
                 if (s.linked || "linked".equals(s.request)) {
                     linked = true;
-                    // The bot conversation is cleaned up so the user isn't bothered by it.
-                    try {
-                        MessagesController.getInstance(account).deleteDialog(botPeerId, 1);
-                    } catch (Throwable e) {
-                        FileLog.e(e);
-                    }
+                    clearBotChat(account, botPeerId);
                     finish(true);
                 } else if (AccountLogic.shouldPoll(s.request, System.currentTimeMillis(), expiresAt)) {
                     AndroidUtilities.runOnUIThread(() -> poll(account, nonce, botPeerId, expiresAt), AccountLogic.POLL_INTERVAL_MS);
@@ -152,6 +147,25 @@ public final class SilentLink {
                 AndroidUtilities.runOnUIThread(() -> poll(account, nonce, botPeerId, expiresAt), AccountLogic.POLL_INTERVAL_MS);
             }
         });
+    }
+
+    /**
+     * The bot conversation is cleaned up so the user isn't bothered by it, now and again a little
+     * later: the server records the link before the bot replies, so the reply may land after the
+     * first delete (review P2).
+     */
+    private static void clearBotChat(int account, long botPeerId) {
+        Runnable clear = () -> {
+            try {
+                MessagesController.getInstance(account).deleteDialog(botPeerId, 1);
+            } catch (Throwable e) {
+                FileLog.e(e);
+            }
+        };
+        clear.run();
+        for (long d : AccountLogic.BOT_CLEANUP_DELAYS_MS) {
+            AndroidUtilities.runOnUIThread(clear, d);
+        }
     }
 
     private static void finish(boolean ok) {
