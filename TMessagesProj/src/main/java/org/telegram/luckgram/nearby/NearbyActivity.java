@@ -452,7 +452,9 @@ public class NearbyActivity extends UniversalFragment {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(8), AndroidUtilities.dp(16), AndroidUtilities.dp(8));
-        row.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+        // Custom rows aren't clickable through UniversalAdapter, so the row handles the tap itself.
+        row.setBackground(Theme.getSelectorDrawable(true));
+        row.setOnClickListener(v -> showPerson(p));
         BackupImageView avatar = new BackupImageView(ctx);
         avatar.setRoundRadius(AndroidUtilities.dp(23));
         AvatarDrawable placeholder = new AvatarDrawable();
