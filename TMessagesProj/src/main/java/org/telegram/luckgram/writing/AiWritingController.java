@@ -5,6 +5,7 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 import android.content.Context;
 import android.text.Editable;
 import android.text.SpannableStringBuilder;
+import android.text.Spanned;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -27,10 +28,15 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ChatActivity;
 import org.telegram.ui.Components.AlertsCreator;
+import org.telegram.ui.Components.AnimatedEmojiSpan;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.EditTextCaption;
 import org.telegram.ui.Components.ItemOptions;
+import org.telegram.ui.Components.TextStyleSpan;
+import org.telegram.ui.Components.URLSpanReplacement;
+import org.telegram.ui.Components.URLSpanUserMention;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -125,7 +131,7 @@ public final class AiWritingController implements AiWritingRegistry.Host {
                         replaceText(before);
                         return;
                     }
-                    replaceText(result);
+                    replaceText(withFormatting(before, original, result));
                     undoText = before;
                     showUndoHint(LuckgramStrings.get(doneZh, doneEn));
                 }
@@ -140,6 +146,40 @@ public final class AiWritingController implements AiWritingRegistry.Host {
                     }
                 }
             });
+    }
+
+    /** Spans the field keeps across a rewrite (spec 21 review P2): style, mentions by name, links, custom emoji. */
+    private static final Class<?>[] KEPT_SPANS = {TextStyleSpan.class, URLSpanUserMention.class, URLSpanReplacement.class, AnimatedEmojiSpan.class};
+
+    /** The AI works on plain text; puts the original's formatting back where its text survived. */
+    static CharSequence withFormatting(CharSequence before, String original, String result) {
+        if (!(before instanceof Spanned) || before.length() != original.length()) {
+            return result;
+        }
+        final Spanned spanned = (Spanned) before;
+        final ArrayList<Object> spans = new ArrayList<>();
+        for (Class<?> type : KEPT_SPANS) {
+            Collections.addAll(spans, spanned.getSpans(0, spanned.length(), type));
+        }
+        if (spans.isEmpty()) {
+            return result;
+        }
+        final int[][] ranges = new int[spans.size()][];
+        for (int i = 0; i < spans.size(); i++) {
+            ranges[i] = new int[]{spanned.getSpanStart(spans.get(i)), spanned.getSpanEnd(spans.get(i))};
+        }
+        final int[] starts = AiWritingEntities.relocate(original, ranges, result);
+        final SpannableStringBuilder out = new SpannableStringBuilder(result);
+        for (int i = 0; i < spans.size(); i++) {
+            if (starts[i] < 0) continue;
+            Object span = spans.get(i);
+            if (span instanceof AnimatedEmojiSpan) {
+                // a drawing span: the undo copy keeps the old one
+                span = AnimatedEmojiSpan.cloneSpan((AnimatedEmojiSpan) span, null);
+            }
+            out.setSpan(span, starts[i], starts[i] + ranges[i][1] - ranges[i][0], Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        return out;
     }
 
     private void replaceText(CharSequence text) {
