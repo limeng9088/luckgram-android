@@ -206,6 +206,7 @@ public final class LuckgramSettings {
      * @param noAccountsLeft true when no logged-in account remains on the device
      */
     public static void onAccountCleared(int account, boolean noAccountsLeft) {
+        org.telegram.luckgram.ai.LuckgramAiStore.clearAccount(account);
         SharedPreferences.Editor editor = prefs().edit();
         if (noAccountsLeft) {
             editor.clear();

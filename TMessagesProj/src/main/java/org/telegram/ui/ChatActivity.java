@@ -1249,6 +1249,8 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_VIEW_REPLIES_OR_THREAD = 27;
     public final static int OPTION_STATISTICS = 28;
     public final static int OPTION_TRANSLATE = 29;
+    /** Luckgram: "Ask AI" (feature 18). */
+    public final static int OPTION_LUCKGRAM_ASK_AI = 0x4C47A1;
     public final static int OPTION_TRANSCRIBE = 30;
     public final static int OPTION_HIDE_SPONSORED_MESSAGE = 31;
     public final static int OPTION_VIEW_IN_TOPIC = 32;
@@ -33556,6 +33558,16 @@ public class ChatActivity extends BaseFragment implements
         }
         boolean preserveDim = false;
         switch (option) {
+            case OPTION_LUCKGRAM_ASK_AI: {
+                ArrayList<MessageObject> asked = new ArrayList<>();
+                if (selectedObjectGroup != null && selectedObjectGroup.messages != null) {
+                    asked.addAll(selectedObjectGroup.messages);
+                } else {
+                    asked.add(selectedObject);
+                }
+                presentFragment(org.telegram.luckgram.ai.LuckgramAiChatActivity.newConversation(org.telegram.luckgram.ai.LuckgramAskAi.buildPrompt(asked)));
+                break;
+            }
             case OPTION_RETRY: {
                 final MessageObject object = selectedObject;
                 final MessageObject.GroupedMessages group = selectedObjectGroup;
@@ -46456,6 +46468,11 @@ public class ChatActivity extends BaseFragment implements
                     options.add(OPTION_TRANSLATE);
                     icons.add(R.drawable.msg_translate);
                 }
+                if (selectedObject != null && !selectedObject.isEphemeral() && !isPeerNoForwards() && (selectedObject.messageOwner == null || !selectedObject.messageOwner.noforwards) && !DialogObject.isEncryptedDialog(dialog_id) && org.telegram.luckgram.ai.LuckgramAskAi.canAsk(selectedObject)) {
+                    items.add(org.telegram.luckgram.LuckgramStrings.get("问 AI", "Ask AI"));
+                    options.add(OPTION_LUCKGRAM_ASK_AI);
+                    icons.add(R.drawable.luckgram_ai);
+                }
                 if (message.canEditMessage(currentChat) && message.type != MessageObject.TYPE_POLL || chatMode == MODE_WELCOME_MESSAGES) {
                     items.add(LocaleController.getString(R.string.Edit));
                     options.add(OPTION_EDIT);
@@ -46802,6 +46819,11 @@ public class ChatActivity extends BaseFragment implements
                     items.add(LocaleController.getString(R.string.TranslateMessage));
                     options.add(OPTION_TRANSLATE);
                     icons.add(R.drawable.msg_translate);
+                }
+                if (selectedObject != null && !selectedObject.isEphemeral() && !isPeerNoForwards() && (selectedObject.messageOwner == null || !selectedObject.messageOwner.noforwards) && !DialogObject.isEncryptedDialog(dialog_id) && org.telegram.luckgram.ai.LuckgramAskAi.canAsk(selectedObject)) {
+                    items.add(org.telegram.luckgram.LuckgramStrings.get("问 AI", "Ask AI"));
+                    options.add(OPTION_LUCKGRAM_ASK_AI);
+                    icons.add(R.drawable.luckgram_ai);
                 }
                 if (allowEdit || chatMode == MODE_WELCOME_MESSAGES) {
                     items.add(LocaleController.getString(R.string.Edit));
