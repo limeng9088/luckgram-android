@@ -70,6 +70,19 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
     private boolean isEmpty;
     private boolean hasPhonebook;
     public boolean isEmptyWithMainTabs;
+    /** Luckgram 25/26 rows (DiscoverEntries) in section 0 of the main contacts list. */
+    private java.util.List<Integer> luckgramEntries = java.util.Collections.emptyList();
+
+    private int luckgramFirstRow() {
+        return isEmptyWithMainTabs ? 0 : 2;
+    }
+
+    /** The DiscoverEntries entry at this row of section 0 (search row already removed), or 0. */
+    public int luckgramEntryAt(int section, int row) {
+        if (section != 0) return 0;
+        int i = row - luckgramFirstRow();
+        return i >= 0 && i < luckgramEntries.size() ? luckgramEntries.get(i) : 0;
+    }
 
     BaseFragment fragment;
 
@@ -228,6 +241,9 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
 
     @Override
     public boolean isEnabled(RecyclerView.ViewHolder holder, int section, int row) {
+        if (luckgramEntryAt(section, row) != 0) {
+            return true;
+        }
         if (isEmptyWithMainTabs) {
             return section == 1 && row > 1;
         }
@@ -246,7 +262,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                 if (isAdmin) {
                     return row < 1;
                 } else if (needPhonebook) {
-                    return row < 2;
+                    return row < 2 + luckgramEntries.size();
                 } else {
                     return row < 3;
                 }
@@ -299,6 +315,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
 
         hasPhonebook = !ContactsController.getInstance(currentAccount).phoneBookContacts.isEmpty();
         isEmptyWithMainTabs = isEmpty && needPhonebook && !isAdmin && onlyUsers == 0;
+        luckgramEntries = needPhonebook && !isAdmin && onlyUsers == 0 ? org.telegram.luckgram.discover.DiscoverEntries.visible() : java.util.Collections.emptyList();
         if (isEmptyWithMainTabs) {
             // empty + invite friends
             return hasPhonebook ? 2 : 1;
@@ -315,7 +332,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
     private int getCountForSectionInternal(int section) {
         if (isEmptyWithMainTabs) {
             if (section == 0) { // empty
-                return (includeSearch ? 1 : 0) + 1;
+                return (includeSearch ? 1 : 0) + luckgramEntries.size() + 1;
             } else if (section == 1) {  // invite contacts
                 return 2 + ContactsController.getInstance(currentAccount).phoneBookContacts.size();
             }
@@ -346,7 +363,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                 if (isAdmin) {
                     return (includeSearch ? 1 : 0) + 3;
                 } else if (needPhonebook) {
-                    return (includeSearch ? 1 : 0) + 4;
+                    return (includeSearch ? 1 : 0) + 4 + luckgramEntries.size();
                 } else {
                     return (includeSearch ? 1 : 0) + 4;
                 }
@@ -559,7 +576,11 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                 } else {
                     textCell.setColors(Theme.key_telegram_color_text, Theme.key_telegram_color_text);
                 }
-                if (section == 0) {
+                int lgEntry = luckgramEntryAt(section, position);
+                if (lgEntry != 0) {
+                    textCell.setColors(Theme.key_windowBackgroundWhiteBlackText, Theme.key_windowBackgroundWhiteBlackText);
+                    org.telegram.luckgram.discover.DiscoverEntries.bind(textCell, lgEntry, false);
+                } else if (section == 0) {
                     if (needPhonebook) {
                         if (position == 0) {
                             textCell.setTextAndValueAndColorfulIcon(getString(R.string.InviteFriends), "", false, R.drawable.settings_invite, 0xFF1CA5ED, 0xFF1488E1, false);
@@ -619,6 +640,9 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
             if (position == 0) return SEARCH_CELL;
             position--;
         }
+        if (luckgramEntryAt(section, position) != 0) {
+            return TEXT_CELL;
+        }
         if (isEmptyWithMainTabs) {
             if (section == 0) {
                 return EMPTY_CELL;
@@ -652,6 +676,7 @@ public class ContactsAdapter extends RecyclerListView.SectionsAdapter {
                         return (sortType == SORT_TYPE_BY_NAME || sortType == SORT_TYPE_BY_TIME ? HEADER_CELL : GRAY_CELL);
                     }
                 } else if (needPhonebook) {
+                    position -= luckgramEntries.size(); // Luckgram rows come right after RecentCalls
                     if (position < 2) {
                         return TEXT_CELL;
                     }

@@ -19,6 +19,8 @@ public final class LuckgramAIError {
 
     public final String code;
     public final int httpStatus;
+    /** From {@code error.retry_after_seconds} (or the Retry-After header) on 429 responses; 0 if absent. */
+    public long retryAfterSeconds;
 
     public LuckgramAIError(String code, int httpStatus) {
         this.code = code;

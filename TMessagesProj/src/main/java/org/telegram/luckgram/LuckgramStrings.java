@@ -138,6 +138,8 @@ public final class LuckgramStrings {
                 return get("媒体、通话与存储", "Media, Calls & Storage");
             case PROFILE_ORGANIZE:
                 return get("资料与整理", "Profiles & Organization");
+            case DISCOVER:
+                return get("发现", "Discover");
             case AI:
                 return "AI";
             case DEBUG:

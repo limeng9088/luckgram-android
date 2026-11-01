@@ -95,6 +95,7 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
         LuckgramFeature.Group.MESSAGES_LANGUAGE,
         LuckgramFeature.Group.MEDIA_CALLS_STORAGE,
         LuckgramFeature.Group.PROFILE_ORGANIZE,
+        LuckgramFeature.Group.DISCOVER,
         LuckgramFeature.Group.AI,
     };
 

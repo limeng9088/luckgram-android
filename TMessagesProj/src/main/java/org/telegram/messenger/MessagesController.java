@@ -16141,6 +16141,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void performLogout(int type) {
+        org.telegram.luckgram.nearby.NearbyController.onLogout(currentAccount); // Luckgram 25: delete my nearby card before the token goes
         // Luckgram: private notes are stored per account on this device only; wipe them on logout / account deletion.
         org.telegram.luckgram.notes.UserNotesStore.wipeAccount(currentAccount, getUserConfig().getClientUserId());
         if (type == 1) {

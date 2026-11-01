@@ -127,6 +127,11 @@ public final class LuckgramFeatures {
             "共同群动态", "Activity in shared groups",
             "用户资料页显示对方最近在共同群组里发的消息", "Show a user's recent messages in your groups in common on their profile"));
 
+        // ---- 发现 / Discover
+        add(toggle(org.telegram.luckgram.nearby.NearbyLogic.FEATURE_KEY, DISCOVER, true,
+            "附近的人", "People Nearby",
+            "「联系人」顶部的入口：找到附近同样开启的 Luckgram 用户", "Entry at the top of Contacts: find Luckgram users nearby who turned it on"));
+
         // ---- AI
         add(toggle(AI_ASSISTANT, AI, true,
             "AI 助手", "AI assistant",

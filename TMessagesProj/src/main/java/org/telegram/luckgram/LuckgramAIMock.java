@@ -28,6 +28,11 @@ public final class LuckgramAIMock implements LuckgramAI.Transport {
     private volatile String forcedError;
     private volatile int chatLimit = 50;
     private final AtomicInteger transcribeCalls = new AtomicInteger();
+    private final org.telegram.luckgram.discover.DiscoverMock discover = new org.telegram.luckgram.discover.DiscoverMock();
+
+    public org.telegram.luckgram.discover.DiscoverMock discover() {
+        return discover;
+    }
 
     private volatile int failTranscribeAt;
     private volatile String failTranscribeCode;
@@ -126,8 +131,12 @@ public final class LuckgramAIMock implements LuckgramAI.Transport {
                         .put("chat", new JSONObject().put("used", chats.get()).put("limit", chatLimit))
                         .put("image", new JSONObject().put("used", 0).put("limit", 5))
                         .put("transcribe_minutes", new JSONObject().put("used", 0).put("limit", 30))));
-                default:
+                default: {
+                    // 25/26: nearby, square, blocks and the S6 link status
+                    org.telegram.luckgram.discover.DiscoverMock.Reply r = discover.handle(method, path, query, body);
+                    if (r != null) return json(r.status, r.body);
                     return error(404, "not_found");
+                }
             }
         } catch (IOException e) {
             throw e;

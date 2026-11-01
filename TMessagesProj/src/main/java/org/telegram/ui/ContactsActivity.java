@@ -671,6 +671,11 @@ public class ContactsActivity extends BaseFragment implements FactorAnimator.Tar
 //                } else if (listViewAdapter.hasStories && section > 1) {
 //                    section--;
 //                }
+                int lgEntry = listViewAdapter.luckgramEntryAt(section, row);
+                if (lgEntry != 0) {
+                    org.telegram.luckgram.discover.DiscoverEntries.open(ContactsActivity.this, lgEntry); // Luckgram 25/26
+                    return;
+                }
                 if ((!onlyUsers || inviteViaLink != 0) && section == 0) {
                     if (needPhonebook) {
                         if (row == 0) {
