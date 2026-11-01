@@ -189,6 +189,26 @@ public final class NearbyLogic {
 
     // ---------------------------------------------------------------- expiry
 
+    // ---------------------------------------------------------------- location providers
+
+    /** {@code LocationManager} provider names (same strings as its constants). */
+    public static final String PROVIDER_FUSED = "fused";
+    public static final String PROVIDER_NETWORK = "network";
+    public static final String PROVIDER_GPS = "gps";
+
+    /**
+     * Providers to ask one after another until one gives a fix. API 31+: the platform fused
+     * provider (network + GPS + sensors, no Play Services) when present; otherwise network. GPS is
+     * always the last try, because network often has no fix (emulators, phones without GMS).
+     */
+    public static List<String> providerChain(int sdk, boolean fusedOn, boolean networkOn, boolean gpsOn) {
+        ArrayList<String> l = new ArrayList<>();
+        if (sdk >= 31 && fusedOn) l.add(PROVIDER_FUSED);
+        else if (networkOn) l.add(PROVIDER_NETWORK);
+        if (gpsOn) l.add(PROVIDER_GPS);
+        return l;
+    }
+
     /** Oldest last-known fix accepted when a single location request times out. */
     public static final long FALLBACK_MAX_AGE_MS = 30 * 60 * 1000L;
 
