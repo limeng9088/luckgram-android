@@ -66,6 +66,7 @@ public final class RoundVideoFeature {
     public static final int STR_CONVERTING = 5;
     public static final int STR_FAILED = 6;
     public static final int STR_SELECTED = 7;
+    public static final int STR_TRIM_HINT = 8;
 
     private static final String[] EN = {
             "Send as Round Video",
@@ -76,6 +77,7 @@ public final class RoundVideoFeature {
             "Converting… %d%%",
             "Couldn't convert this video.",
             "Selected %s",
+            "Videos longer than 60 seconds: choose up to 60 seconds",
     };
 
     private static final String[] ZH = {
@@ -87,6 +89,7 @@ public final class RoundVideoFeature {
             "正在转换… %d%%",
             "无法转换这个视频。",
             "已选 %s",
+            "视频超过 60 秒，请选取不超过 60 秒的一段",
     };
 
     /** The one Luckgram language rule (00, issue #42). */
