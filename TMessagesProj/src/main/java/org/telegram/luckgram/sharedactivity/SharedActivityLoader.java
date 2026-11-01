@@ -38,11 +38,14 @@ public final class SharedActivityLoader {
     public static final class Result {
         public final ArrayList<MessageObject> messages;
         public final int groupCount;
+        /** Some groups (or the group list) didn't answer within the time budget. */
+        public final boolean partial;
         final long loadedAt;
 
-        Result(ArrayList<MessageObject> messages, int groupCount, long loadedAt) {
+        Result(ArrayList<MessageObject> messages, int groupCount, boolean partial, long loadedAt) {
             this.messages = messages;
             this.groupCount = groupCount;
+            this.partial = partial;
             this.loadedAt = loadedAt;
         }
     }
@@ -93,6 +96,17 @@ public final class SharedActivityLoader {
     private int running;
     private boolean cancelled;
     private boolean finished;
+    private boolean partial;
+    private long startedAt;
+    /** Ends a load that is still waiting when the time budget runs out (16 P1). */
+    private final Runnable deadline = () -> {
+        if (finished || cancelled) {
+            return;
+        }
+        partial = true;
+        cancelRequests();
+        finish();
+    };
 
     public SharedActivityLoader(int account, long userId, int classGuid, Callback callback) {
         this.account = account;
@@ -102,11 +116,22 @@ public final class SharedActivityLoader {
     }
 
     public void load() {
+        startedAt = System.currentTimeMillis();
+        AndroidUtilities.runOnUIThread(deadline, SharedActivityLogic.TIME_BUDGET_MS);
         loadCommonChats(0);
+    }
+
+    private long elapsed() {
+        return System.currentTimeMillis() - startedAt;
     }
 
     public void cancel() {
         cancelled = true;
+        AndroidUtilities.cancelRunOnUIThread(deadline);
+        cancelRequests();
+    }
+
+    private void cancelRequests() {
         ConnectionsManager cm = ConnectionsManager.getInstance(account);
         for (int id : requestIds) {
             cm.cancelRequest(id, true);
@@ -130,9 +155,11 @@ public final class SharedActivityLoader {
         send(req, (response, error) -> {
             if (error != null) {
                 int wait = SharedActivityLogic.floodWaitSeconds(error.text);
-                if (wait >= 0 && wait <= SharedActivityLogic.MAX_FLOOD_WAIT_SECONDS) {
+                if (SharedActivityLogic.canWaitFlood(wait, elapsed())) {
                     AndroidUtilities.runOnUIThread(() -> loadCommonChats(maxId), wait * 1000L + 500);
                 } else {
+                    // The group list is incomplete (or empty): say so instead of "no groups".
+                    partial = true;
                     startSearches();
                 }
                 return;
@@ -186,7 +213,7 @@ public final class SharedActivityLoader {
             running--;
             if (error != null) {
                 int wait = SharedActivityLogic.floodWaitSeconds(error.text);
-                if (wait >= 0 && wait <= SharedActivityLogic.MAX_FLOOD_WAIT_SECONDS) {
+                if (SharedActivityLogic.canWaitFlood(wait, elapsed())) {
                     // Sit the wait out, then try this group again (spec 16 requirement 5).
                     running++;
                     AndroidUtilities.runOnUIThread(() -> {
@@ -196,6 +223,7 @@ public final class SharedActivityLoader {
                     }, wait * 1000L + 500);
                     return;
                 }
+                partial = true;
             } else if (response instanceof TLRPC.messages_Messages) {
                 TLRPC.messages_Messages res = (TLRPC.messages_Messages) response;
                 mc.putUsers(res.users, false);
@@ -217,13 +245,17 @@ public final class SharedActivityLoader {
             return;
         }
         finished = true;
+        AndroidUtilities.cancelRunOnUIThread(deadline);
         ArrayList<Item> merged = SharedActivityLogic.newestFirst(perGroup, SharedActivityLogic.MAX_ITEMS);
         ArrayList<MessageObject> messages = new ArrayList<>(merged.size());
         for (Item item : merged) {
             messages.add(new MessageObject(account, item.message, false, true));
         }
-        Result result = new Result(messages, groups.size(), System.currentTimeMillis());
-        cache.put(key(account, userId), result);
+        Result result = new Result(messages, groups.size(), partial, System.currentTimeMillis());
+        if (!partial) {
+            // A partial result is shown but not reused: the next open tries again.
+            cache.put(key(account, userId), result);
+        }
         callback.onLoaded(result);
     }
 
@@ -251,8 +283,8 @@ public final class SharedActivityLoader {
         return LuckgramStrings.get("动态", "Activity");
     }
 
-    public static String header(int groupCount) {
-        return SharedActivityLogic.header(groupCount, LuckgramStrings.isChinese());
+    public static String header(int groupCount, boolean partial) {
+        return SharedActivityLogic.header(groupCount, partial, LuckgramStrings.isChinese());
     }
 
     public static String refreshText() {

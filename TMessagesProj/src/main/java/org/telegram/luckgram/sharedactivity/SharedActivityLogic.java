@@ -25,6 +25,17 @@ public final class SharedActivityLogic {
     public static final long CACHE_MILLIS = 10 * 60 * 1000L;
     /** Longest FLOOD_WAIT we sit out; anything longer skips that group. */
     public static final int MAX_FLOOD_WAIT_SECONDS = 120;
+    /**
+     * The whole load (common chats + searches + FLOOD_WAITs) gets this long; after it, whatever
+     * has arrived is shown, marked partial, instead of a skeleton that never ends (16 P1).
+     */
+    public static final long TIME_BUDGET_MS = 15_000;
+
+    /** Sit out a FLOOD_WAIT of {@code waitSeconds} only if it ends inside the time budget. */
+    public static boolean canWaitFlood(int waitSeconds, long elapsedMs) {
+        return waitSeconds >= 0 && waitSeconds <= MAX_FLOOD_WAIT_SECONDS
+            && elapsedMs + waitSeconds * 1000L + 500 < TIME_BUDGET_MS;
+    }
 
     private SharedActivityLogic() {
     }
@@ -85,5 +96,14 @@ public final class SharedActivityLogic {
             return "最近消息 · " + groupCount + " 个共同群组";
         }
         return String.format(Locale.US, "Recent messages · %d %s in common", groupCount, groupCount == 1 ? "group" : "groups");
+    }
+
+    /** Header when some groups didn't answer within the time budget. */
+    public static String header(int groupCount, boolean partial, boolean chinese) {
+        String h = header(groupCount, chinese);
+        if (!partial) {
+            return h;
+        }
+        return h + (chinese ? "（部分群组未加载完，点「刷新」重试）" : " (some groups didn't load, tap Refresh to retry)");
     }
 }
