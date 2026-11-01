@@ -6251,6 +6251,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     // ------------------------------------------------------------ Luckgram: AI writing (feature 21)
 
     private ImageView aiWritingButton;
+    /** ✦ while the field has text: attachLayout hides then, so this one sits left of the send button (21 §1). */
+    private ImageView aiWritingTextButton;
+    private boolean aiWritingTextShown;
     private org.telegram.luckgram.writing.AiWritingController aiWritingController;
 
     /** The AI writing host of this field (also used by features 20 and 24 through the registry). */
@@ -6282,17 +6285,62 @@ public class ChatActivityEnterView extends FrameLayout implements
         });
         aiWritingButton.setVisibility(GONE);
         attachLayout.addView(aiWritingButton, LayoutHelper.createLinear(DEFAULT_HEIGHT, DEFAULT_HEIGHT));
+
+        if (messageEditTextContainer != null) {
+            aiWritingTextButton = new ImageView(context);
+            aiWritingTextButton.setImageResource(R.drawable.luckgram_ai);
+            aiWritingTextButton.setScaleType(ImageView.ScaleType.CENTER);
+            aiWritingTextButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+            aiWritingTextButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_CIRCLE_20DP, dp(16)));
+            aiWritingTextButton.setContentDescription(org.telegram.luckgram.LuckgramStrings.get("AI 写作", "AI writing"));
+            aiWritingTextButton.setOnClickListener(v -> {
+                org.telegram.luckgram.writing.AiWritingController c = getAiWritingController();
+                if (c != null) {
+                    c.showMenu(v);
+                }
+            });
+            aiWritingTextButton.setVisibility(GONE);
+            aiWritingTextButton.setAlpha(0.0f);
+            aiWritingTextButton.setScaleX(0.6f);
+            aiWritingTextButton.setScaleY(0.6f);
+            messageEditTextContainer.addView(aiWritingTextButton, LayoutHelper.createFrame(DEFAULT_HEIGHT, DEFAULT_HEIGHT, Gravity.BOTTOM | Gravity.RIGHT, 0, 0, DEFAULT_HEIGHT, 0));
+        }
+    }
+
+    private void updateAiWritingTextButton(boolean show) {
+        if (aiWritingTextButton == null || show == aiWritingTextShown) {
+            return;
+        }
+        aiWritingTextShown = show;
+        aiWritingTextButton.animate().cancel();
+        aiWritingTextButton.setVisibility(VISIBLE);
+        aiWritingTextButton.setEnabled(show);
+        aiWritingTextButton.animate()
+            .alpha(show ? 1.0f : 0.0f)
+            .scaleX(show ? 1.0f : 0.6f)
+            .scaleY(show ? 1.0f : 0.6f)
+            .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT)
+            .setDuration(320)
+            .withEndAction(() -> {
+                if (!aiWritingTextShown) {
+                    aiWritingTextButton.setVisibility(GONE);
+                }
+            })
+            .start();
+        updateFieldRight(lastAttachVisible);
     }
 
     private void updateAiWritingButton() {
         if (aiWritingButton == null) {
             return;
         }
-        boolean show = org.telegram.luckgram.writing.AiWritingController.isEnabled() && editingMessageObject == null;
-        if (show) {
-            org.telegram.luckgram.writing.AiWritingController c = getAiWritingController();
-            show = c != null && c.shouldShowButton();
-        }
+        boolean enabled = org.telegram.luckgram.writing.AiWritingController.isEnabled() && editingMessageObject == null;
+        org.telegram.luckgram.writing.AiWritingController c = enabled ? getAiWritingController() : null;
+        boolean hasText = messageEditText != null && messageEditText.length() > 0;
+        // Empty field: the attachLayout button ("Help me reply"). With text attachLayout is hidden,
+        // so the ✦ moves next to the send button (spec 21 §1).
+        boolean show = c != null && !hasText && c.shouldShowButton();
+        updateAiWritingTextButton(c != null && hasText && c.shouldShowButton());
         final int visibility = show ? VISIBLE : GONE;
         if (aiWritingButton.getVisibility() != visibility) {
             aiWritingButton.setVisibility(visibility);
@@ -9204,6 +9252,13 @@ public class ChatActivityEnterView extends FrameLayout implements
             translateOutButton.setTranslationX(scheduledVisible ? -dp(DEFAULT_HEIGHT) : 0);
             layoutParams.rightMargin = Math.max(layoutParams.rightMargin, dp(scheduledVisible ? 98 : 50));
         }
+        if (aiWritingTextShown && aiWritingTextButton != null && !(isStories && isLiveComment)) {
+            // Luckgram 21: ✦ left of the send button, and left of the scheduled / translate buttons if shown
+            final boolean scheduledVisible = scheduledButton != null && scheduledButton.getTag() != null && scheduledButton.getVisibility() == VISIBLE;
+            final int slots = (scheduledVisible ? 1 : 0) + (translateOutShown ? 1 : 0);
+            aiWritingTextButton.setTranslationX(-dp(DEFAULT_HEIGHT) * slots);
+            layoutParams.rightMargin = Math.max(layoutParams.rightMargin, dp(50 + 48 * slots));
+        }
         layoutParams.rightMargin = Math.max(layoutParams.rightMargin, Math.max(0, sendButton.width() - dp(DEFAULT_HEIGHT)));
         if (doneButton != null && doneButton.getVisibility() == VISIBLE) {
             layoutParams.rightMargin = Math.max(layoutParams.rightMargin, Math.max(0, doneButton.width() - dp(DEFAULT_HEIGHT)));
@@ -10789,6 +10844,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     public void updateColors() {
         if (translateOutButton != null) {
             translateOutButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+        }
+        if (aiWritingTextButton != null) {
+            aiWritingTextButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
         }
         if (messageSendPreview != null) {
             messageSendPreview.updateColors();
