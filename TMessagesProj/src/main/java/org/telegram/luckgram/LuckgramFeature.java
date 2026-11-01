@@ -83,7 +83,12 @@ public final class LuckgramFeature {
         return LuckgramSettings.isEnabled(key);
     }
 
+    /** The user's switch, as shown on the settings row. */
+    public boolean isLocallyEnabled() {
+        return LuckgramSettings.isLocallyEnabled(key);
+    }
+
     public boolean isVisible() {
-        return !debugOnly || LuckgramSettings.isDebugToolsVisible();
+        return (!debugOnly || LuckgramSettings.isDebugToolsVisible()) && LuckgramSettings.isRemotelyAllowed(key);
     }
 }

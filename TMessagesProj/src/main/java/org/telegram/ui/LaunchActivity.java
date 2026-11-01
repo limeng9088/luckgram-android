@@ -6973,6 +6973,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     protected void onResume() {
         super.onResume();
         isResumed = true;
+        org.telegram.luckgram.LuckgramRemoteConfigFetcher.refreshIfStale(); // Luckgram: remote config (S4)
         pipActivityHandler.onResume();
         if (onResumeStaticCallback != null) {
             onResumeStaticCallback.run();
