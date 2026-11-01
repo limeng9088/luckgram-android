@@ -214,6 +214,10 @@ public class ApplicationLoader extends Application {
 
                     boolean isSlow = isConnectionSlow();
                     for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                        // Luckgram 09: don't create connections for empty account slots
+                        if (!ConnectionsManager.isCreated(a)) {
+                            continue;
+                        }
                         ConnectionsManager.getInstance(a).checkConnection();
                         FileLoader.getInstance(a).onNetworkChanged(isSlow);
                     }
@@ -246,8 +250,16 @@ public class ApplicationLoader extends Application {
 
         SharedConfig.loadConfig();
         SharedPrefsHelper.init(applicationContext);
-        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             UserConfig.getInstance(a).loadConfig();
+        }
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
+            // Luckgram 09 (more accounts): with 20 slots, only start the logged-in accounts (plus
+            // slot 0 and the selected one). An empty slot is started on demand when a new account
+            // logs in (LoginActivity -> ConnectionsManager.getInstance).
+            if (!isAccountSlotUsed(a)) {
+                continue;
+            }
             MessagesController.getInstance(a);
             if (a == 0) {
                 SharedConfig.pushStringStatus = "__FIREBASE_GENERATING_SINCE_" + ConnectionsManager.getInstance(a).getCurrentTime() + "__";
@@ -269,10 +281,17 @@ public class ApplicationLoader extends Application {
 
         MediaController.getInstance();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
+            if (!isAccountSlotUsed(a)) {
+                continue;
+            }
             ContactsController.getInstance(a).checkAppAccount();
             DownloadController.getInstance(a);
         }
         BillingController.getInstance().startConnection();
+    }
+
+    private static boolean isAccountSlotUsed(int account) {
+        return account == 0 || account == UserConfig.selectedAccount || UserConfig.getInstance(account).isClientActivated();
     }
 
     public ApplicationLoader() {
