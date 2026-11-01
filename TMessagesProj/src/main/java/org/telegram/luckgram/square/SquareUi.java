@@ -80,6 +80,31 @@ public final class SquareUi {
         myAuthorId = null;
     }
 
+    /**
+     * Learns who "I" am in Square (specs#68): when a page opens and the device is linked, the
+     * profile is fetched quietly so own posts and comments get their delete entry. No profile
+     * yet (404) is fine — nothing is shown.
+     */
+    public static void prefetchMe() {
+        if (myAuthorId != null) return;
+        Runnable fetch = () -> {
+            if (!Boolean.TRUE.equals(linked) || myAuthorId != null) return;
+            LuckgramAI.getInstance().requestJson("GET", "/v1/square/profile", null, new LuckgramAI.Callback<JSONObject>() {
+                @Override
+                public void onResult(JSONObject result) {
+                    if (!result.optString("display_name", "").isEmpty()) setProfile(result);
+                }
+
+                @Override
+                public void onError(LuckgramAIError error) {
+                    // not_found / offline: stay unknown until the next page open
+                }
+            });
+        };
+        if (linked == null) refreshLink(fetch);
+        else fetch.run();
+    }
+
     public static void refreshLink(Runnable done) {
         LuckgramAI.getInstance().requestJson("GET", "/v1/link", null, new LuckgramAI.Callback<JSONObject>() {
             @Override
@@ -177,11 +202,10 @@ public final class SquareUi {
                 if (s.linked || "linked".equals(s.request)) {
                     linked = true;
                     // Spec 26 item 2: the bot conversation is cleaned up so the user isn't bothered by it.
-                    try {
-                        MessagesController.getInstance(account).deleteDialog(botPeerId, 1);
-                    } catch (Throwable e) {
-                        FileLog.e(e);
-                    }
+                    // The bot's "linked" reply can arrive after the first clear, so clear once more later.
+                    clearBotChat(account, botPeerId);
+                    AndroidUtilities.runOnUIThread(() -> clearBotChat(account, botPeerId), 6_000);
+                    AndroidUtilities.runOnUIThread(() -> clearBotChat(account, botPeerId), 20_000);
                     finishLink(f, true);
                 } else if (AccountLogic.shouldPoll(s.request, System.currentTimeMillis(), expiresAt)) {
                     AndroidUtilities.runOnUIThread(() -> pollLink(f, account, nonce, botPeerId, expiresAt), AccountLogic.POLL_INTERVAL_MS);
@@ -196,6 +220,14 @@ public final class SquareUi {
                 AndroidUtilities.runOnUIThread(() -> pollLink(f, account, nonce, botPeerId, expiresAt), AccountLogic.POLL_INTERVAL_MS);
             }
         });
+    }
+
+    private static void clearBotChat(int account, long botPeerId) {
+        try {
+            MessagesController.getInstance(account).deleteDialog(botPeerId, 1);
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
     }
 
     private static void finishLink(BaseFragment f, boolean ok) {

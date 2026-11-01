@@ -74,7 +74,7 @@ public class SquareActivity extends UniversalFragment {
 
     @Override
     public boolean onFragmentCreate() {
-        SquareUi.refreshLink(null);
+        SquareUi.prefetchMe();
         reload();
         return super.onFragmentCreate();
     }

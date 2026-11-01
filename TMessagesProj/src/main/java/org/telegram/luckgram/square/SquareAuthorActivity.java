@@ -98,6 +98,7 @@ public class SquareAuthorActivity extends UniversalFragment {
 
     @Override
     public boolean onFragmentCreate() {
+        SquareUi.prefetchMe();
         loadAuthor();
         reloadPosts();
         return super.onFragmentCreate();
