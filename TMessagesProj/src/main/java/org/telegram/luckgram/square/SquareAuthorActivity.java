@@ -17,7 +17,6 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
@@ -128,7 +127,7 @@ public class SquareAuthorActivity extends UniversalFragment {
             @Override
             public void onError(LuckgramAIError error) {
                 if (author == null && (error.httpStatus == 404 || "not_found".equals(error.code))) {
-                    BulletinFactory.of(SquareAuthorActivity.this).createErrorBulletin(tx.authorGone()).show();
+                    SquareUi.bulletin(SquareAuthorActivity.this).createErrorBulletin(tx.authorGone()).show();
                     finishFragment();
                 }
             }

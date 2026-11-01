@@ -247,7 +247,7 @@ public class SquareActivity extends UniversalFragment {
                 .setPositiveButton(tx.delete(), (d, w) -> LuckgramAI.getInstance().requestJson("DELETE", "/v1/square/posts/" + SquareLogic.pathId(p.id), null, new LuckgramAI.Callback<JSONObject>() {
                     @Override
                     public void onResult(JSONObject result) {
-                        org.telegram.ui.Components.BulletinFactory.of(f).createSimpleBulletin(R.raw.done, tx.deleted()).show();
+                        SquareUi.bulletin(f).createSimpleBulletin(R.raw.done, tx.deleted()).show();
                         dirty = true;
                         onDeleted.run();
                     }

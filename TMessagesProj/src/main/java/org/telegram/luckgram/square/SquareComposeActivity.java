@@ -8,7 +8,9 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.provider.MediaStore;
 import android.text.InputFilter;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -21,10 +23,12 @@ import android.widget.TextView;
 import org.json.JSONObject;
 import org.telegram.luckgram.LuckgramAI;
 import org.telegram.luckgram.LuckgramAIError;
+import org.telegram.luckgram.LuckgramRemoteConfigFetcher;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.ActionBar;
@@ -32,7 +36,6 @@ import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
@@ -58,6 +61,9 @@ public class SquareComposeActivity extends UniversalFragment {
     private static final int ID_ADD = 3;
     private static final int ID_CLEAR = 4;
     private static final int ID_PROGRESS = 5;
+    private static final int ID_ERROR = 6;
+    /** Re-fetch /v1/config when the cached copy is older than this, so the limits shown here are current. */
+    private static final long CONFIG_MAX_AGE_SECONDS = 60;
     private static final int REQUEST_PICK_IMAGES = 0x5173;
     private static final int REQUEST_PICK_VIDEO = 0x5174;
     private static final int REQUEST_CAPTURE_PHOTO = 0x5175;
@@ -67,6 +73,8 @@ public class SquareComposeActivity extends UniversalFragment {
     private final ArrayList<SquareImages.Prepared> images = new ArrayList<>();
     private SquareVideos.Prepared video;
     private EditTextBoldCursor editText;
+    private FrameLayout textBox;
+    private TextView errorView;
     private String draft = "";
     private boolean preparing;
     /** What {@link #preparing} is about: a video (transcode) or photos. */
@@ -75,6 +83,10 @@ public class SquareComposeActivity extends UniversalFragment {
     private Runnable cancelPrepare;
     private boolean publishing;
     private String progressText;
+    /** Last error, shown in a row under the text until the next edit or attempt (the toast alone was missed with the keyboard open). */
+    private String errorText;
+    /** The limits last rendered in the footer; the page only re-renders when a config refresh changes them. */
+    private String renderedLimits;
     private ActionBarMenuItem sendItem;
     private LuckgramAI.Request inFlight;
     private File captureFile;
@@ -105,11 +117,38 @@ public class SquareComposeActivity extends UniversalFragment {
     }
 
     @Override
+    public boolean onFragmentCreate() {
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.luckgramSettingsChanged);
+        // The footer quotes square.max_posts_per_day / max_video_seconds: make sure they are not an hour old.
+        LuckgramRemoteConfigFetcher.refreshIfOlderThan(CONFIG_MAX_AGE_SECONDS);
+        return super.onFragmentCreate();
+    }
+
+    @Override
     public void onFragmentDestroy() {
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.luckgramSettingsChanged);
         if (inFlight != null) inFlight.cancel();
         if (cancelPrepare != null) cancelPrepare.run();
         if (video != null && !publishing) video.delete();
         super.onFragmentDestroy();
+    }
+
+    @Override
+    public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.luckgramSettingsChanged && renderedLimits != null && !renderedLimits.equals(limitsKey())) {
+            update(); // only when the quoted limits actually changed
+        }
+    }
+
+    private static String limitsKey() {
+        return SquareUi.maxPostsPerDay() + "/" + SquareUi.maxVideoSeconds();
+    }
+
+    /** Shows {@code text} under the text box and as a toast; cleared by the next edit or attempt. */
+    private void showError(String text) {
+        errorText = text;
+        update();
+        SquareUi.bulletin(this).createErrorBulletin(text).show();
     }
 
     @Override
@@ -142,14 +181,33 @@ public class SquareComposeActivity extends UniversalFragment {
             editText.setGravity(Gravity.TOP | Gravity.START);
             editText.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(14), AndroidUtilities.dp(20), AndroidUtilities.dp(14));
             editText.setText(draft);
+            editText.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                }
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {
+                }
+
+                @Override
+                public void afterTextChanged(Editable s) {
+                    if (errorText != null) {
+                        errorText = null;
+                        update();
+                    }
+                }
+            });
+            // One box for the lifetime of the page: custom rows are diffed by view identity, so a
+            // stable instance keeps the row (and the keyboard) in place when other rows change.
+            textBox = new FrameLayout(ctx);
+            textBox.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+            textBox.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         }
-        FrameLayout textBox = new FrameLayout(ctx);
-        textBox.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        if (editText.getParent() instanceof FrameLayout) {
-            ((FrameLayout) editText.getParent()).removeView(editText);
-        }
-        textBox.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         items.add(UItem.asCustom(ID_TEXT, textBox));
+        if (errorText != null) {
+            items.add(UItem.asCustom(ID_ERROR, errorView(ctx, errorText)));
+        }
         items.add(UItem.asShadow(null));
 
         if (!images.isEmpty() || video != null) {
@@ -170,7 +228,20 @@ public class SquareComposeActivity extends UniversalFragment {
                 items.add(UItem.asButton(ID_CLEAR, R.drawable.msg_delete, tx.removeVideo()).red());
             }
         }
+        renderedLimits = limitsKey();
         items.add(UItem.asShadow(tx.attachmentsInfo(SquareUi.maxVideoSeconds()) + "\n\n" + tx.dailyLimitInfo(SquareUi.maxPostsPerDay())));
+    }
+
+    private View errorView(Context ctx, String text) {
+        if (errorView == null) {
+            errorView = new TextView(ctx);
+            errorView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            errorView.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
+            errorView.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+            errorView.setPadding(AndroidUtilities.dp(21), 0, AndroidUtilities.dp(21), AndroidUtilities.dp(12));
+        }
+        errorView.setText(text);
+        return errorView;
     }
 
     private View mediaView(Context ctx) {
@@ -317,7 +388,7 @@ public class SquareComposeActivity extends UniversalFragment {
             startActivityForResult(intent, REQUEST_CAPTURE_PHOTO);
         } catch (Exception e) {
             FileLog.e(e);
-            BulletinFactory.of(this).createErrorBulletin(tx.imageFailed()).show();
+            SquareUi.bulletin(this).createErrorBulletin(tx.imageFailed()).show();
         }
     }
 
@@ -332,7 +403,7 @@ public class SquareComposeActivity extends UniversalFragment {
             startActivityForResult(intent, REQUEST_CAPTURE_VIDEO);
         } catch (Exception e) {
             FileLog.e(e);
-            BulletinFactory.of(this).createErrorBulletin(tx.videoFailed()).show();
+            SquareUi.bulletin(this).createErrorBulletin(tx.videoFailed()).show();
         }
     }
 
@@ -371,7 +442,7 @@ public class SquareComposeActivity extends UniversalFragment {
             return;
         }
         if (video != null) {
-            BulletinFactory.of(this).createErrorBulletin(tx.onlyOneAttachmentType()).show();
+            SquareUi.bulletin(this).createErrorBulletin(tx.onlyOneAttachmentType()).show();
             return;
         }
         while (uris.size() > room) uris.remove(uris.size() - 1);
@@ -402,7 +473,7 @@ public class SquareComposeActivity extends UniversalFragment {
                 }
                 update();
                 if (anyFailed) {
-                    BulletinFactory.of(SquareComposeActivity.this).createErrorBulletin(tx.imageFailed()).show();
+                    SquareUi.bulletin(SquareComposeActivity.this).createErrorBulletin(tx.imageFailed()).show();
                 }
             });
         });
@@ -410,7 +481,7 @@ public class SquareComposeActivity extends UniversalFragment {
 
     private void addVideo(Uri uri) {
         if (!images.isEmpty()) {
-            BulletinFactory.of(this).createErrorBulletin(tx.onlyOneAttachmentType()).show();
+            SquareUi.bulletin(this).createErrorBulletin(tx.onlyOneAttachmentType()).show();
             return;
         }
         preparing = true;
@@ -424,7 +495,7 @@ public class SquareComposeActivity extends UniversalFragment {
                 if (source == null) {
                     preparing = false;
                     update();
-                    BulletinFactory.of(SquareComposeActivity.this).createErrorBulletin(tx.videoFailed()).show();
+                    SquareUi.bulletin(SquareComposeActivity.this).createErrorBulletin(tx.videoFailed()).show();
                     return;
                 }
                 long max = SquareUi.maxVideoSeconds();
@@ -485,7 +556,7 @@ public class SquareComposeActivity extends UniversalFragment {
                 preparing = false;
                 prepareProgress = -1f;
                 update();
-                BulletinFactory.of(SquareComposeActivity.this).createErrorBulletin(tooBig ? tx.videoTooBig(SquareVideos.maxBytes() / (1024 * 1024)) : tx.videoFailed()).show();
+                SquareUi.bulletin(SquareComposeActivity.this).createErrorBulletin(tooBig ? tx.videoTooBig(SquareVideos.maxBytes() / (1024 * 1024)) : tx.videoFailed()).show();
             }
         });
     }
@@ -505,12 +576,13 @@ public class SquareComposeActivity extends UniversalFragment {
         String text = editText != null ? editText.getText().toString() : draft;
         draft = text;
         if (!SquareLogic.isValidPost(text, images.size(), video != null)) {
-            BulletinFactory.of(this).createErrorBulletin(SquareLogic.length(text.trim()) > SquareLogic.TEXT_MAX ? tx.tooLong() : tx.needContent()).show();
+            showError(SquareLogic.length(text.trim()) > SquareLogic.TEXT_MAX ? tx.tooLong() : tx.needContent());
             return;
         }
         SquareUi.requireProfile(this, () -> {
             publishing = true;
             progressText = null;
+            errorText = null;
             if (sendItem != null) sendItem.setEnabled(false);
             update();
             if (video != null) {
@@ -702,7 +774,7 @@ public class SquareComposeActivity extends UniversalFragment {
                     finishFragment();
                     AndroidUtilities.runOnUIThread(() -> {
                         if (getParentLayout() != null && getParentLayout().getLastFragment() != null) {
-                            BulletinFactory.of(getParentLayout().getLastFragment()).createSimpleBulletin(R.raw.done, tx.published()).show();
+                            SquareUi.bulletin(getParentLayout().getLastFragment()).createSimpleBulletin(R.raw.done, tx.published()).show();
                         }
                     }, 300);
                 }
@@ -722,6 +794,9 @@ public class SquareComposeActivity extends UniversalFragment {
         publishing = false;
         progressText = null;
         if (sendItem != null) sendItem.setEnabled(true);
+        if (error != null && !LuckgramAIError.CANCELLED.equals(error.code) && !"profile_required".equals(error.code)) {
+            errorText = SquareUi.errorText(error); // e.g. "还要等 N 秒" on 429: stays visible under the text
+        }
         update();
         SquareUi.showError(this, error);
     }
