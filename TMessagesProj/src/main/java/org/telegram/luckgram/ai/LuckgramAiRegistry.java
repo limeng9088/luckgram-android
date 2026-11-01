@@ -206,6 +206,7 @@ public final class LuckgramAiRegistry {
         LuckgramAiDebugDemo.register();
         // ---- features that extend the assistant register here ----
         org.telegram.luckgram.agents.LuckgramAgentsActivity.register(); // 22 agents
+        org.telegram.luckgram.image.LuckgramAiImage.register(); // 23 images
     }
 
     /** Puts {@code prefix} in front of what is already typed (replacing another built-in prefix). */
