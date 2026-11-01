@@ -40,7 +40,7 @@ public class SquareActivity extends UniversalFragment {
     private boolean failed;
     private LuckgramAI.Request inFlight;
     /** Set by detail / compose pages so the feed reloads when it comes back. */
-    static boolean dirty;
+    public static boolean dirty;
 
     @Override
     protected CharSequence getTitle() {
