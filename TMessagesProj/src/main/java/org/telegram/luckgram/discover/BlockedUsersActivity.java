@@ -5,6 +5,7 @@ import android.view.View;
 import org.json.JSONObject;
 import org.telegram.luckgram.LuckgramAI;
 import org.telegram.luckgram.LuckgramAIError;
+import org.telegram.luckgram.account.SilentLink;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.Components.BulletinFactory;
@@ -50,11 +51,25 @@ public class BlockedUsersActivity extends UniversalFragment {
         if (listView != null) listView.adapter.update(true);
     }
 
+    /** The list needs the silent S6 link (shared with People Nearby / Square). */
     private void load() {
         if (inFlight != null) inFlight.cancel();
         loading = true;
         failed = false;
         update();
+        SilentLink.ensure(currentAccount, ok -> {
+            if (ok) {
+                fetch();
+            } else {
+                loading = false;
+                failed = true;
+                update();
+                if (getParentActivity() != null) BulletinFactory.of(this).createErrorBulletin(tx.connectFailed()).show();
+            }
+        });
+    }
+
+    private void fetch() {
         inFlight = DiscoverBlocks.list(nextCursor, new LuckgramAI.Callback<DiscoverBlocks.Page>() {
             @Override
             public void onResult(DiscoverBlocks.Page page) {
@@ -132,7 +147,8 @@ public class BlockedUsersActivity extends UniversalFragment {
 
     private void showError(LuckgramAIError error) {
         if (error == null || LuckgramAIError.CANCELLED.equals(error.code) || getParentActivity() == null) return;
-        String text = "not_linked".equals(error.code) ? tx.notLinked() : error.getLocalizedMessage();
+        if ("not_linked".equals(error.code)) SilentLink.clearCache();
+        String text = "not_linked".equals(error.code) ? tx.connectFailed() : error.getLocalizedMessage();
         BulletinFactory.of(this).createErrorBulletin(text).show();
     }
 

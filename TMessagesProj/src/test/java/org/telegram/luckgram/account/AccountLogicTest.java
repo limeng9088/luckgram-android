@@ -76,4 +76,14 @@ public class AccountLogicTest {
         }
         assertEquals("Pro，到期 2026-12-01", zh.proUntil("2026-12-01"));
     }
+
+    @Test
+    public void silentLinkBotUsername() {
+        assertEquals("LuckgramBot", AccountLogic.botUsername("https://t.me/LuckgramBot?start=abc"));
+        assertEquals("luck_bot", AccountLogic.botUsername("t.me/luck_bot"));
+        assertNull(AccountLogic.botUsername("https://example.com/x"));
+        assertNull(AccountLogic.botUsername("https://t.me/ab?start=1"));
+        assertNull(AccountLogic.botUsername(null));
+        assertEquals("/start n1", AccountLogic.startCommand("n1"));
+    }
 }
