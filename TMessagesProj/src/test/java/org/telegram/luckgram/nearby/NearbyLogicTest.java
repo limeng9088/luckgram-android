@@ -151,6 +151,20 @@ public class NearbyLogicTest {
     }
 
     @Test
+    public void providerChainFallsBackToGps() {
+        // API 31+: fused first, then GPS once.
+        assertEquals(java.util.Arrays.asList("fused", "gps"), NearbyLogic.providerChain(31, true, true, true));
+        // No fused provider on the device: network, then GPS.
+        assertEquals(java.util.Arrays.asList("network", "gps"), NearbyLogic.providerChain(34, false, true, true));
+        // Before 31 fused isn't used even if listed.
+        assertEquals(java.util.Arrays.asList("network", "gps"), NearbyLogic.providerChain(30, true, true, true));
+        // Only one on.
+        assertEquals(java.util.Collections.singletonList("gps"), NearbyLogic.providerChain(29, false, false, true));
+        assertEquals(java.util.Collections.singletonList("network"), NearbyLogic.providerChain(29, false, true, false));
+        assertTrue(NearbyLogic.providerChain(33, false, false, false).isEmpty());
+    }
+
+    @Test
     public void fallbackFixMustBeFresh() {
         long now = 1_800_000_000_000L;
         assertTrue(NearbyLogic.isFreshFix(now - 29 * 60 * 1000L, now));
