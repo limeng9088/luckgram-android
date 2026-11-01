@@ -204,6 +204,8 @@ public final class LuckgramAiRegistry {
         registerQuickAction(new QuickAction("explain", "讲解", "Explain", 0, host -> fillPrefix(host, LuckgramStrings.get("讲解一下：", "Explain this: "))));
         registerQuickAction(new QuickAction("solve", "解题", "Solve", 0, host -> fillPrefix(host, LuckgramStrings.get("解这道题：", "Solve this: "))));
         LuckgramAiDebugDemo.register();
+        // ---- features that extend the assistant register here ----
+        org.telegram.luckgram.agents.LuckgramAgentsActivity.register(); // 22 agents
     }
 
     /** Puts {@code prefix} in front of what is already typed (replacing another built-in prefix). */
