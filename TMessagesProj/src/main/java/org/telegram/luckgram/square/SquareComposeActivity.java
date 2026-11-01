@@ -520,7 +520,9 @@ public class SquareComposeActivity extends UniversalFragment {
 
     private void requestImageUploads(String text) {
         try {
-            inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(images.size(), SquareLogic.IMAGE_CONTENT_TYPE), new LuckgramAI.Callback<JSONObject>() {
+            ArrayList<Long> sizes = new ArrayList<>();
+            for (SquareImages.Prepared p : images) sizes.add((long) p.jpeg.length);
+            inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(SquareLogic.IMAGE_CONTENT_TYPE, sizes), new LuckgramAI.Callback<JSONObject>() {
                 @Override
                 public void onResult(JSONObject result) {
                     List<SquareLogic.Upload> uploads = SquareLogic.parseUploads(result);
@@ -551,7 +553,11 @@ public class SquareComposeActivity extends UniversalFragment {
         update();
         try {
             // One slot for the MP4, one for its cover; the server only accepts a video post with both.
-            inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(1, SquareLogic.VIDEO_CONTENT_TYPE), new LuckgramAI.Callback<JSONObject>() {
+            ArrayList<Long> videoSize = new ArrayList<>();
+            videoSize.add(video.mp4.length());
+            ArrayList<Long> coverSize = new ArrayList<>();
+            coverSize.add((long) video.coverJpeg.length);
+            inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(SquareLogic.VIDEO_CONTENT_TYPE, videoSize), new LuckgramAI.Callback<JSONObject>() {
                 @Override
                 public void onResult(JSONObject videoResult) {
                     List<SquareLogic.Upload> videoUploads = SquareLogic.parseUploads(videoResult);
@@ -560,7 +566,7 @@ public class SquareComposeActivity extends UniversalFragment {
                         return;
                     }
                     try {
-                        inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(1, SquareLogic.IMAGE_CONTENT_TYPE), new LuckgramAI.Callback<JSONObject>() {
+                        inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(SquareLogic.IMAGE_CONTENT_TYPE, coverSize), new LuckgramAI.Callback<JSONObject>() {
                             @Override
                             public void onResult(JSONObject coverResult) {
                                 List<SquareLogic.Upload> coverUploads = SquareLogic.parseUploads(coverResult);

@@ -400,8 +400,11 @@ public final class SquareLogic {
             .put("cover_key", coverKey);
     }
 
-    public static JSONObject uploadsBody(int count, String contentType) throws Exception {
-        return new JSONObject().put("count", count).put("content_type", contentType);
+    /** S11: every slot declares its byte size; the PUT's Content-Length must match (S3 checks it). */
+    public static JSONObject uploadsBody(String contentType, List<Long> sizes) throws Exception {
+        JSONArray arr = new JSONArray();
+        for (Long s : sizes) arr.put(s.longValue());
+        return new JSONObject().put("count", sizes.size()).put("content_type", contentType).put("sizes", arr);
     }
 
     public static JSONObject commentBody(String text, String parentId) throws Exception {
