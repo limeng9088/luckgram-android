@@ -61,6 +61,9 @@ public:
     void setDelegate(ConnectiosManagerDelegate *connectiosManagerDelegate);
     ConnectionState getConnectionState();
     void setUserId(int64_t userId);
+    // Luckgram 10 (account backup)
+    ByteArray *luckgramExportAuth(uint32_t *datacenterId, int64_t *salt);
+    void luckgramImportAuth(uint32_t datacenterId, ByteArray *authKey, int64_t salt);
     void setUserPremium(bool premium);
     void switchBackend(bool restart);
     void resumeNetwork(bool partial);
