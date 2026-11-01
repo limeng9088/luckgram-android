@@ -396,6 +396,7 @@ public final class SquareUi {
         if ("not_linked".equals(error.code)) return tx.connectFailed();
         if ("invalid_video".equals(error.code)) return tx.videoRejected();
         if ("square_disabled".equals(error.code)) return tx.squareDisabled();
+        if ("rate_limit_unavailable".equals(error.code)) return tx.waitSeconds(error.retryAfterSeconds); // 503: try again shortly
         return error.getLocalizedMessage();
     }
 

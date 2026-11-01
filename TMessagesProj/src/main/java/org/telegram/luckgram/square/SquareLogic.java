@@ -511,9 +511,18 @@ public final class SquareLogic {
         public String refresh() { return t("刷新", "Refresh"); }
 
         public String hidden() { return t("已隐藏", "Hidden"); }
+        /** {@code reason} is a report reason code (S11: the most reported one) or free text. */
         public String hiddenInfo(String reason) {
             String base = t("这条动态已被隐藏，只有你自己能看到。", "This post has been hidden and is visible only to you.");
-            return reason == null || reason.isEmpty() ? base : base + " " + t("原因：", "Reason: ") + reason;
+            if (reason == null || reason.isEmpty()) return base;
+            String shown = reason;
+            for (String code : REPORT_REASONS) {
+                if (code.equals(reason)) {
+                    shown = reportReason(reason);
+                    break;
+                }
+            }
+            return base + " " + t("原因：", "Reason: ") + shown;
         }
         public String likes(int n) { return t("赞 " + n, n == 1 ? "1 like" : n + " likes"); }
         public String comments(int n) { return t("评论 " + n, n == 1 ? "1 comment" : n + " comments"); }
