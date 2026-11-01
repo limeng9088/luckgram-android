@@ -15,6 +15,7 @@ import org.json.JSONObject;
 import org.telegram.luckgram.LuckgramAI;
 import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.luckgram.LuckgramSettings;
+import org.telegram.luckgram.discover.DiscoverBlocks;
 import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
@@ -112,6 +113,7 @@ public final class NearbyController {
      * account and, for the last account, the device token are cleared): delete the card now.
      */
     public static void onLogout(int account) {
+        DiscoverBlocks.clearLocal();
         if (!isVisible() || LuckgramSettings.getInt(KEY_ACCOUNT, account) != account) return;
         clearLocal();
         LuckgramAI.getInstance().sendWithCurrentToken("DELETE", "/v1/nearby/me");
@@ -119,6 +121,7 @@ public final class NearbyController {
 
     /** S6 unlink: the server deletes the card itself; only forget it here. */
     public static void onUnlinked() {
+        DiscoverBlocks.clearLocal();
         clearLocal();
     }
 

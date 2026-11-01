@@ -22,6 +22,8 @@ import org.telegram.luckgram.LuckgramAI;
 import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.luckgram.account.LuckgramAccountActivity;
+import org.telegram.luckgram.discover.BlockedUsersActivity;
+import org.telegram.luckgram.discover.DiscoverBlocks;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
@@ -62,6 +64,7 @@ public class NearbyActivity extends UniversalFragment {
     private static final int ID_BIO = 7;
     private static final int ID_PHOTO = 8;
     private static final int ID_REFRESH = 9;
+    private static final int ID_BLOCKED = 10;
     private static final int ID_PERSON = 1000;
     private static final int MENU_REFRESH = 1;
     private static final int PERMISSION_REQUEST = 0x4e42;
@@ -413,6 +416,7 @@ public class NearbyActivity extends UniversalFragment {
         String bio = NearbyController.bio();
         items.add(UItem.asButton(ID_BIO, tx.bio(), bio.isEmpty() ? tx.bioEmpty() : bio));
         items.add(UItem.asCheck(ID_PHOTO, tx.showPhoto()).setChecked(NearbyController.showPhoto()));
+        items.add(UItem.asButton(ID_BLOCKED, DiscoverBlocks.tx().title()));
         items.add(UItem.asShadow(visible
             ? tx.visibleUntil(org.telegram.messenger.LocaleController.formatDateTime(NearbyController.expiresAt() / 1000, true))
             : tx.visibleOffInfo()));
@@ -528,6 +532,9 @@ public class NearbyActivity extends UniversalFragment {
                 update();
                 if (NearbyController.isVisible()) uploadCard();
                 break;
+            case ID_BLOCKED:
+                presentFragment(new BlockedUsersActivity());
+                break;
             case ID_REFRESH:
                 refresh();
                 break;
@@ -587,7 +594,7 @@ public class NearbyActivity extends UniversalFragment {
             .setMessage(tx.hideConfirm(p.displayName))
             .setPositiveButton(tx.hide(), (d, w) -> {
                 try {
-                    LuckgramAI.getInstance().requestJson("POST", "/v1/blocks", new JSONObject().put("user", p.id), new LuckgramAI.Callback<JSONObject>() {
+                    DiscoverBlocks.block(p.id, p.displayName, new LuckgramAI.Callback<JSONObject>() {
                         @Override
                         public void onResult(JSONObject result) {
                             if (people != null) {

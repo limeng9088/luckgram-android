@@ -71,7 +71,8 @@ jobs:
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
             nearby/NearbyLogic.java \
-            discover/DiscoverMock.java; do
+            discover/DiscoverMock.java \
+            discover/BlockLogic.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"
