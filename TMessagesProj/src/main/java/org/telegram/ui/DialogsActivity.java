@@ -591,6 +591,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ActionBarMenuSubItem readItem;
     @Nullable
     private ActionBarMenuSubItem blockItem;
+    private ActionBarMenuSubItem luckgramHideItem;
 
     private float additionalFloatingTranslation;
     private float floatingButtonPanOffset;
@@ -712,6 +713,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private final static int add_to_folder = 109;
     private final static int remove_from_folder = 110;
     private final static int community_ungroup = 111;
+    /** Luckgram 12: hide / unhide the selected chats. */
+    private final static int luckgram_hide = 112;
 
     private final static int ARCHIVE_ITEM_STATE_PINNED = 0;
     private final static int ARCHIVE_ITEM_STATE_SHOWED = 1;
@@ -2240,6 +2243,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                                             ArrayList<Long> selectedDialogs = new ArrayList<>();
                                             selectedDialogs.add(dialogId);
                                             performSelectedDialogsAction(selectedDialogs, delete, true, false);
+                                        } else if (SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_HIDE) {
+                                            // Luckgram 12: swipe hides the chat (unhides it inside the hidden list)
+                                            luckgramSetHidden(dialogId, !org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, dialogId));
                                         }
                                     }
                                 }
@@ -2461,10 +2467,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         currentDialogsType = parentPage.dialogsAdapter.getDialogsType();
                     } catch (Exception ignore) {
                     }
-                    if ((filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_FOLDERS) || !allowSwipeDuringCurrentTouch || ((dialogId == getUserConfig().clientUserId || dialogId == 777000 || currentDialogsType == 7 || currentDialogsType == 8) && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_ARCHIVE) || getMessagesController().isPromoDialog(dialogId, false) && getMessagesController().promoDialogType != MessagesController.PROMO_TYPE_PSA) {
+                    if ((filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_FOLDERS) || !allowSwipeDuringCurrentTouch || ((dialogId == getUserConfig().clientUserId || dialogId == 777000 || currentDialogsType == 7 || currentDialogsType == 8) && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_ARCHIVE) || ((dialogId == getUserConfig().clientUserId || dialogId == 777000) && SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_HIDE) || getMessagesController().isPromoDialog(dialogId, false) && getMessagesController().promoDialogType != MessagesController.PROMO_TYPE_PSA) {
                         return 0;
                     }
-                    boolean canSwipeBack = folderId == 0 && (ChatObject.isCommunity(currentAccount, dialogId) || SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_MUTE || SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_READ || SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_PIN || SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_DELETE) && !rightSlidingDialogContainer.hasFragment();
+                    boolean canSwipeBack = folderId == 0 && (ChatObject.isCommunity(currentAccount, dialogId) || SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_MUTE || SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_READ || SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_PIN || SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_DELETE || SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_HIDE) && !rightSlidingDialogContainer.hasFragment();
                     if (SharedConfig.getChatSwipeAction(currentAccount) == SwipeGestureSettingsView.SWIPE_GESTURE_READ) {
                         MessagesController.DialogFilter filter = null;
                         if (viewPages[0].dialogsType == 7 || viewPages[0].dialogsType == 8) {
@@ -4043,7 +4049,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         undoView.showWithAction(did, UndoView.ACTION_REMOVED_FROM_FOLDER, neverShow.size(), filter, null, null);
                     }
                     hideActionMode(false);
-                } else if (id == pin || id == read || id == delete || id == clear || id == mute || id == archive || id == block || id == archive2 || id == pin2) {
+                } else if (id == pin || id == read || id == delete || id == clear || id == mute || id == archive || id == block || id == archive2 || id == pin2 || id == luckgram_hide) {
                     performSelectedDialogsAction(selectedDialogs, id, true, false);
                 }
             }
@@ -6831,6 +6837,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         readItem = otherItem.addSubItem(read, R.drawable.msg_markread, LocaleController.getString(R.string.MarkAsRead));
         clearItem = otherItem.addSubItem(clear, R.drawable.msg_clear, LocaleController.getString(R.string.ClearHistory));
         blockItem = otherItem.addSubItem(block, R.drawable.msg_block, LocaleController.getString(R.string.BlockUser));
+        luckgramHideItem = otherItem.addSubItem(luckgram_hide, R.drawable.msg_archive_hide, org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hideText());
 
         muteItem.setOnLongClickListener(e -> {
             performSelectedDialogsAction(selectedDialogs, mute, true, true);
@@ -8547,13 +8554,40 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     /** Luckgram 12: hides or unhides a chat with an undo toast; the first time, says how to find hidden chats. */
     private void luckgramSetHidden(long dialogId, boolean hidden) {
-        org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.setHidden(currentAccount, dialogId, hidden);
+        ArrayList<Long> ids = new ArrayList<>();
+        ids.add(dialogId);
+        luckgramSetHidden(ids, hidden);
+    }
+
+    /** Luckgram 12 (multi-select): hides the chats, or unhides them when every one of them is hidden. */
+    private void luckgramSetHidden(ArrayList<Long> dialogIds) {
+        boolean allHidden = !dialogIds.isEmpty();
+        for (int a = 0; a < dialogIds.size(); a++) {
+            if (!org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, dialogIds.get(a))) {
+                allHidden = false;
+                break;
+            }
+        }
+        luckgramSetHidden(dialogIds, !allHidden);
+    }
+
+    private void luckgramSetHidden(ArrayList<Long> dialogIds, boolean hidden) {
+        if (dialogIds.isEmpty()) {
+            return;
+        }
+        for (int a = 0; a < dialogIds.size(); a++) {
+            org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.setHidden(currentAccount, dialogIds.get(a), hidden);
+        }
         if (!BulletinFactory.canShowBulletin(this)) {
             return;
         }
-        String text = hidden ? org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hiddenToastText() : org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.unhiddenToastText();
+        String text = hidden ? org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hiddenToastText(dialogIds.size()) : org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.unhiddenToastText(dialogIds.size());
         String subtitle = hidden && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.takeFirstHint() ? org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hintText() : null;
-        Runnable undo = () -> org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.setHidden(currentAccount, dialogId, !hidden);
+        Runnable undo = () -> {
+            for (int a = 0; a < dialogIds.size(); a++) {
+                org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.setHidden(currentAccount, dialogIds.get(a), !hidden);
+            }
+        };
         if (subtitle != null) {
             BulletinFactory.of(this).createUndoBulletin(text, subtitle, undo, null).show();
         } else {
@@ -9289,6 +9323,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         int count = selectedDialogs.size();
         int pinnedActionCount = 0;
+        if (action == luckgram_hide) {
+            luckgramSetHidden(new ArrayList<>(selectedDialogs));
+            hideActionMode(false);
+            return;
+        }
         if (action == archive || action == archive2) {
             ArrayList<Long> copy = new ArrayList<>(selectedDialogs);
             getMessagesController().addDialogToFolder(copy, canUnarchiveCount == 0 ? 1 : 0, -1, null, 0);
@@ -10055,6 +10094,24 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             } else {
                 blockItem.setVisibility(View.VISIBLE);
             }
+        }
+        if (luckgramHideItem != null) {
+            // Luckgram 12: hide (or unhide, when every selected chat is hidden) the selection
+            boolean show = org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isEnabled() && count > 0 && communitiesCount == 0 && communityId == 0;
+            boolean allHidden = true;
+            for (int a = 0; a < selectedDialogs.size(); a++) {
+                long id = selectedDialogs.get(a);
+                if (DialogObject.isFolderDialogId(id) || id == getUserConfig().clientUserId) {
+                    show = false;
+                }
+                if (!org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, id)) {
+                    allHidden = false;
+                }
+            }
+            if (show) {
+                luckgramHideItem.setTextAndIcon(allHidden ? org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.unhideText() : org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hideText(), allHidden ? R.drawable.msg_archive_show : R.drawable.msg_archive_hide);
+            }
+            luckgramHideItem.setVisibility(show ? View.VISIBLE : View.GONE);
         }
         if (removeFromFolderItem != null) {
             boolean cantRemoveFromFolder = filterTabsView == null || filterTabsView.getVisibility() != View.VISIBLE || filterTabsView.currentTabIsDefault();
