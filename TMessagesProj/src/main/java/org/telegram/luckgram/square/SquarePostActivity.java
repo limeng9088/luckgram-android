@@ -379,6 +379,11 @@ public class SquarePostActivity extends UniversalFragment {
         }
 
         @Override
+        public void onVideo(SquareLogic.Post p) {
+            if (p.video != null) presentFragment(new SquareVideoActivity(p.video));
+        }
+
+        @Override
         public void onMore(SquareLogic.Post p) {
             SquareActivity.showPostMenu(SquarePostActivity.this, p, SquarePostActivity.this::finishFragment, SquarePostActivity.this::finishFragment);
         }

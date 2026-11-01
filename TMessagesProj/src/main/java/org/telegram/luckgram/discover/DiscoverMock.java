@@ -54,8 +54,6 @@ public final class DiscoverMock {
     private final List<Long> myPostTimes = new ArrayList<>();
     private final List<Long> myCommentTimes = new ArrayList<>();
     private int nextId = 100;
-    /** Pending posts are approved this long after posting (mock moderation). */
-    public static final long MOCK_REVIEW_MS = 5000;
 
     public DiscoverMock() {
         String[][] seed = {
@@ -86,7 +84,7 @@ public final class DiscoverMock {
                 posts.add(new JSONObject().put("id", "p" + i).put("author", author)
                     .put("text", (i % 2 == 0 ? "Mock 帖子 #" : "Mock post #") + i)
                     .put("images", images).put("like_count", (i * 7) % 13).put("comment_count", 0)
-                    .put("created_at_ms", now - i * 3_600_000L).put("status", "approved"));
+                    .put("created_at_ms", now - i * 3_600_000L).put("status", "published"));
             } catch (Exception ignore) {
             }
         }
@@ -195,18 +193,21 @@ public final class DiscoverMock {
     private boolean visible(JSONObject o) {
         JSONObject a = o.optJSONObject("author");
         if (a != null && blocked.contains(a.optString("id"))) return false;
-        return isMine(o) || "approved".equals(o.optString("status"));
+        return isMine(o) || "published".equals(o.optString("status"));
     }
 
-    private void moderate() throws Exception {
-        long now = System.currentTimeMillis();
-        for (JSONObject p : posts) {
-            if ("pending".equals(p.optString("status")) && now - p.optLong("created_at_ms") >= MOCK_REVIEW_MS) {
-                if (p.optString("text").toLowerCase(Locale.US).contains("reject") || p.optString("text").contains("违规")) {
-                    p.put("status", "rejected").put("reject_reason", "Mock: 内容不符合广场规则 / against the rules");
-                } else {
-                    p.put("status", "approved");
-                }
+    /** Reports per target id; at {@link #REPORT_HIDE_THRESHOLD} the content is hidden (S11: 3 different users; the mock has one). */
+    private final java.util.Map<String, Integer> reports = new java.util.HashMap<>();
+    public static final int REPORT_HIDE_THRESHOLD = 3;
+
+    private void countReport(String target, String id) throws Exception {
+        int n = (reports.containsKey(id) ? reports.get(id) : 0) + 1;
+        reports.put(id, n);
+        if (n < REPORT_HIDE_THRESHOLD) return;
+        List<JSONObject> list = "comment".equals(target) ? comments : posts;
+        for (JSONObject o : list) {
+            if (o.optString("id").equals(id)) {
+                o.put("status", "hidden").put("hidden_reason", "Mock: 被多名用户举报 / reported by several users");
             }
         }
     }
@@ -221,7 +222,7 @@ public final class DiscoverMock {
             if (c.optString("post_id").equals(p.optString("id")) && visible(c)) n++;
         }
         o.put("comment_count", n);
-        if (!isMine(p)) o.remove("reject_reason");
+        if (!isMine(p)) o.remove("hidden_reason");
         return o;
     }
 
@@ -250,7 +251,6 @@ public final class DiscoverMock {
     }
 
     private Reply square(String method, String path, String query, byte[] body) throws Exception {
-        moderate();
         boolean write = !"GET".equals(method);
         if (write && !linked) return error(403, "not_linked");
         if (path.equals("/v1/square/feed")) {
@@ -294,10 +294,12 @@ public final class DiscoverMock {
         if (path.equals("/v1/square/uploads") && "POST".equals(method)) {
             JSONObject r = json(body);
             int count = r.optInt("count", 0);
-            if (count < 1 || count > 9 || !"image/jpeg".equals(r.optString("content_type"))) return error(400, "invalid_request");
+            String ct = r.optString("content_type");
+            boolean video = "video/mp4".equals(ct);
+            if (count < 1 || count > 9 || !("image/jpeg".equals(ct) || video)) return error(400, "invalid_request");
             JSONArray ups = new JSONArray();
             for (int i = 0; i < count; i++) {
-                String key = "square/mock_" + (nextId++) + ".jpg";
+                String key = "square/mock_" + (nextId++) + (video ? ".mp4" : ".jpg");
                 ups.put(new JSONObject().put("key", key).put("url", "https://" + MOCK_HOST + UPLOAD_PREFIX + key).put("expires_at", iso(System.currentTimeMillis() + 900_000)));
             }
             return ok(new JSONObject().put("uploads", ups));
@@ -314,11 +316,24 @@ public final class DiscoverMock {
                 if (!uploaded.contains(keys.getString(i))) return error(400, "invalid_request");
                 images.put(new JSONObject().put("url", "https://" + MOCK_HOST + "/mock-image/" + keys.getString(i)).put("width", 1).put("height", 1));
             }
+            JSONObject videoIn = r.optJSONObject("video");
+            JSONObject video = null;
+            if (videoIn != null) {
+                if (n > 0) return error(400, "invalid_request"); // attachments are exclusive
+                String vk = videoIn.optString("key", "");
+                String ck = videoIn.optString("cover_key", "");
+                int dur = videoIn.optInt("duration_seconds", 0);
+                if (!uploaded.contains(vk) || !uploaded.contains(ck) || dur <= 0 || dur > 60) return error(400, "invalid_request");
+                video = new JSONObject().put("url", "https://" + MOCK_HOST + "/mock-video/" + vk)
+                    .put("cover_url", "https://" + MOCK_HOST + "/mock-image/" + ck)
+                    .put("width", videoIn.optInt("width", 0)).put("height", videoIn.optInt("height", 0)).put("duration_seconds", dur);
+            }
             Reply lim = limited(myPostTimes, 24L * 3600 * 1000, 10);
             if (lim != null) return lim;
             JSONObject p = new JSONObject().put("id", "p" + (nextId++)).put("author", myAuthor()).put("text", text)
                 .put("images", images).put("like_count", 0).put("comment_count", 0)
-                .put("created_at_ms", System.currentTimeMillis()).put("status", "pending");
+                .put("created_at_ms", System.currentTimeMillis()).put("status", "published");
+            if (video != null) p.put("video", video);
             posts.add(0, p);
             return ok(out(p));
         }
@@ -357,7 +372,7 @@ public final class DiscoverMock {
                         Reply lim = limited(myCommentTimes, 60_000, 5);
                         if (lim != null) return lim;
                         JSONObject c = new JSONObject().put("id", "c" + (nextId++)).put("post_id", id).put("author", myAuthor())
-                            .put("text", text).put("created_at", iso(System.currentTimeMillis())).put("status", "approved");
+                            .put("text", text).put("created_at", iso(System.currentTimeMillis())).put("status", "published");
                         String parent = r.optString("parent_id", "");
                         if (!parent.isEmpty()) c.put("parent_id", parent);
                         comments.add(c);
@@ -406,6 +421,7 @@ public final class DiscoverMock {
         if (path.equals("/v1/square/report") && "POST".equals(method)) {
             JSONObject r = json(body);
             if (r.optString("target", "").isEmpty() || r.optString("id", "").isEmpty() || r.optString("reason", "").isEmpty()) return error(400, "invalid_request");
+            countReport(r.optString("target"), r.optString("id"));
             return ok(new JSONObject());
         }
         return error(404, "not_found");

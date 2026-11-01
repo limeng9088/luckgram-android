@@ -18,11 +18,14 @@ import org.telegram.luckgram.LuckgramAI;
 import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.luckgram.LuckgramSettings;
 import org.telegram.luckgram.LuckgramStrings;
-import org.telegram.luckgram.account.LuckgramAccountActivity;
+import org.telegram.luckgram.account.AccountLogic;
 import org.telegram.luckgram.discover.DiscoverBlocks;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SendMessagesHelper;
+import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -34,8 +37,9 @@ import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
 
 /**
- * Shared pieces of the Square pages (spec 26): link / profile checks before writes, error
- * messages, report and block dialogs, and the post card view.
+ * Shared pieces of the Square pages (spec 26): the silent S6 link before the first write, the
+ * profile check, error messages, report and block dialogs, and the post card view (text, image
+ * grid or inline video). Nothing about "linking an account" is ever shown to the user.
  */
 public final class SquareUi {
 
@@ -50,12 +54,24 @@ public final class SquareUi {
         return LuckgramSettings.isEnabled(SquareLogic.FEATURE_KEY);
     }
 
-    // ---------------------------------------------------------------- link / profile
+    public static long maxPostsPerDay() {
+        return LuckgramSettings.remoteLong("square.max_posts_per_day", SquareLogic.DEFAULT_MAX_POSTS_PER_DAY);
+    }
+
+    public static long maxVideoSeconds() {
+        return Math.max(1, LuckgramSettings.remoteLong("square.max_video_seconds", SquareLogic.DEFAULT_MAX_VIDEO_SECONDS));
+    }
+
+    // ---------------------------------------------------------------- link (S6, silent)
 
     private static Boolean linked;
     private static JSONObject profile;
     /** Author id of this device's user in Square (from the profile response), if known. */
     public static String myAuthorId;
+    private static boolean linking;
+    private static final java.util.ArrayList<Runnable> waitingForLink = new java.util.ArrayList<>();
+    /** How long the silent link may take before giving up (nonce TTL is 10 minutes; be quicker). */
+    private static final long LINK_TIMEOUT_MS = 90_000;
 
     /** Forget cached state (unlink, logout, "delete my Square data"). */
     public static void clearCache() {
@@ -83,30 +99,119 @@ public final class SquareUi {
         });
     }
 
-    /** Runs {@code then} if this device is linked (S6); otherwise shows the link prompt. */
+    /**
+     * Runs {@code then} once this device is linked to the current Telegram account (S6). If it is
+     * not yet, the link is made in the background: {@code POST /v1/link/start} → the app sends
+     * {@code /start <nonce>} to the bot from the current account → poll until the server has it →
+     * the bot chat is cleared locally. The user only sees a short "connecting" notice.
+     */
     public static void requireLink(BaseFragment f, Runnable then) {
         if (Boolean.TRUE.equals(linked)) {
             then.run();
             return;
         }
         refreshLink(() -> {
-            if (Boolean.TRUE.equals(linked)) then.run();
-            else showLinkPrompt(f);
+            if (Boolean.TRUE.equals(linked)) {
+                then.run();
+            } else {
+                autoLink(f, then);
+            }
         });
     }
 
-    public static void showLinkPrompt(BaseFragment f) {
-        if (f.getParentActivity() == null) return;
-        SquareLogic.Texts tx = tx();
-        new AlertDialog.Builder(f.getParentActivity())
-            .setTitle(tx.needLinkTitle())
-            .setMessage(tx.needLinkText())
-            .setPositiveButton(tx.goLink(), (d, w) -> f.presentFragment(new LuckgramAccountActivity()))
-            .setNegativeButton(tx.cancel(), null)
-            .show();
+    private static void autoLink(BaseFragment f, Runnable then) {
+        waitingForLink.add(then);
+        if (linking) return;
+        linking = true;
+        final int account = f.getCurrentAccount();
+        final SquareLogic.Texts tx = tx();
+        BulletinFactory.of(f).createSimpleBulletin(R.raw.chats_infotip, tx.connecting()).show();
+        LuckgramAI.getInstance().requestJson("POST", "/v1/link/start", null, new LuckgramAI.Callback<JSONObject>() {
+            @Override
+            public void onResult(JSONObject result) {
+                AccountLogic.LinkStart st = AccountLogic.parseStart(result);
+                String bot = SquareLogic.botUsername(st.url);
+                if (bot == null || st.nonce.isEmpty()) {
+                    finishLink(f, false);
+                    return;
+                }
+                long expiresAt = Math.min(st.expiresAtMs > 0 ? st.expiresAtMs : Long.MAX_VALUE, System.currentTimeMillis() + LINK_TIMEOUT_MS);
+                MessagesController.getInstance(account).getUserNameResolver().resolve(bot, peerId -> {
+                    if (peerId == null || peerId == 0) {
+                        finishLink(f, false);
+                        return;
+                    }
+                    try {
+                        SendMessagesHelper.getInstance(account).sendMessage(SendMessagesHelper.SendMessageParams.of(
+                            SquareLogic.startCommand(st.nonce), peerId, null, null, null, false, null, null, null, true, 0, 0, null, false));
+                    } catch (Throwable e) {
+                        FileLog.e(e);
+                        finishLink(f, false);
+                        return;
+                    }
+                    pollLink(f, account, st.nonce, peerId, expiresAt);
+                });
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                if ("already_linked".equals(error.code)) {
+                    linked = true;
+                    finishLink(f, true);
+                } else {
+                    finishLink(f, false);
+                }
+            }
+        });
     }
 
-    /** Linked and has a Square profile: then {@code then}; otherwise asks for whatever is missing. */
+    private static void pollLink(BaseFragment f, int account, String nonce, long botPeerId, long expiresAt) {
+        if (!AccountLogic.shouldPoll(null, System.currentTimeMillis(), expiresAt)) {
+            finishLink(f, false);
+            return;
+        }
+        LuckgramAI.getInstance().requestJson("GET", "/v1/link?nonce=" + nonce, null, new LuckgramAI.Callback<JSONObject>() {
+            @Override
+            public void onResult(JSONObject result) {
+                AccountLogic.LinkStatus s = AccountLogic.parseLink(result);
+                if (s.linked || "linked".equals(s.request)) {
+                    linked = true;
+                    // Spec 26 item 2: the bot conversation is cleaned up so the user isn't bothered by it.
+                    try {
+                        MessagesController.getInstance(account).deleteDialog(botPeerId, 1);
+                    } catch (Throwable e) {
+                        FileLog.e(e);
+                    }
+                    finishLink(f, true);
+                } else if (AccountLogic.shouldPoll(s.request, System.currentTimeMillis(), expiresAt)) {
+                    AndroidUtilities.runOnUIThread(() -> pollLink(f, account, nonce, botPeerId, expiresAt), AccountLogic.POLL_INTERVAL_MS);
+                } else {
+                    finishLink(f, false);
+                }
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                // Offline for a moment: keep trying until the deadline.
+                AndroidUtilities.runOnUIThread(() -> pollLink(f, account, nonce, botPeerId, expiresAt), AccountLogic.POLL_INTERVAL_MS);
+            }
+        });
+    }
+
+    private static void finishLink(BaseFragment f, boolean ok) {
+        linking = false;
+        java.util.ArrayList<Runnable> waiting = new java.util.ArrayList<>(waitingForLink);
+        waitingForLink.clear();
+        if (ok) {
+            for (Runnable r : waiting) r.run();
+        } else if (f.getParentActivity() != null) {
+            BulletinFactory.of(f).createErrorBulletin(tx().connectFailed()).show();
+        }
+    }
+
+    // ---------------------------------------------------------------- profile
+
+    /** Linked and has a Square profile: then {@code then}; otherwise fills in whatever is missing first. */
     public static void requireProfile(BaseFragment f, Runnable then) {
         requireLink(f, () -> {
             if (profile != null) {
@@ -148,7 +253,7 @@ public final class SquareUi {
         if (ctx == null) return;
         SquareLogic.Texts tx = tx();
         JSONObject cur = current != null ? current : profile;
-        TLRPC.User me = f.getUserConfig().getCurrentUser();
+        TLRPC.User me = UserConfig.getInstance(f.getCurrentAccount()).getCurrentUser();
         String myUsername = UserObject.getPublicUsername(me);
 
         LinearLayout box = new LinearLayout(ctx);
@@ -168,14 +273,12 @@ public final class SquareUi {
         bio.setText(cur != null ? cur.optString("bio", "") : "");
         box.addView(bio, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 0));
         final boolean[] showUsername = {cur != null ? !cur.optString("username", "").isEmpty() : false};
-        org.telegram.ui.Cells.CheckBoxCell check = null;
         if (!TextUtils.isEmpty(myUsername)) {
-            check = new org.telegram.ui.Cells.CheckBoxCell(ctx, 1);
+            org.telegram.ui.Cells.CheckBoxCell check = new org.telegram.ui.Cells.CheckBoxCell(ctx, 1);
             check.setText(tx.useMyUsername(myUsername), "", showUsername[0], false);
-            final org.telegram.ui.Cells.CheckBoxCell c = check;
             check.setOnClickListener(v -> {
                 showUsername[0] = !showUsername[0];
-                c.setChecked(showUsername[0], true);
+                check.setChecked(showUsername[0], true);
             });
             box.addView(check, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, -22, 8, -22, 0));
         }
@@ -228,31 +331,29 @@ public final class SquareUi {
 
     // ---------------------------------------------------------------- errors
 
+    public static String errorText(LuckgramAIError error) {
+        SquareLogic.Texts tx = tx();
+        if (LuckgramAIError.RATE_LIMITED.equals(error.code)) return tx.waitSeconds(error.retryAfterSeconds);
+        if ("banned".equals(error.code)) return tx.banned();
+        if ("not_linked".equals(error.code)) return tx.connectFailed();
+        return error.getLocalizedMessage();
+    }
+
     public static void showError(BaseFragment f, LuckgramAIError error) {
         if (error == null || LuckgramAIError.CANCELLED.equals(error.code) || f.getParentActivity() == null) return;
-        SquareLogic.Texts tx = tx();
         if ("not_linked".equals(error.code)) {
+            // The server lost the link (e.g. unlinked elsewhere): make it again silently next time.
             linked = false;
-            showLinkPrompt(f);
-            return;
         }
         if ("profile_required".equals(error.code)) {
             profile = null;
             editProfile(f, null, null);
             return;
         }
-        String text;
-        if (LuckgramAIError.RATE_LIMITED.equals(error.code)) {
-            text = tx.waitSeconds(error.retryAfterSeconds);
-        } else if ("banned".equals(error.code)) {
-            text = tx.banned();
-        } else {
-            text = error.getLocalizedMessage();
-        }
-        BulletinFactory.of(f).createErrorBulletin(text).show();
+        BulletinFactory.of(f).createErrorBulletin(errorText(error)).show();
     }
 
-    // ---------------------------------------------------------------- report / block
+    // ---------------------------------------------------------------- report / block / like
 
     /** {@code target}: post, comment or user. */
     public static void report(BaseFragment f, String target, String id) {
@@ -340,6 +441,9 @@ public final class SquareUi {
         void onOpen(SquareLogic.Post p);
         void onLike(SquareLogic.Post p);
         void onMore(SquareLogic.Post p);
+        /** Full-screen playback with sound. */
+        default void onVideo(SquareLogic.Post p) {
+        }
     }
 
     public static View avatar(Context ctx, SquareLogic.Author a, int sizeDp) {
@@ -363,7 +467,7 @@ public final class SquareUi {
         return t;
     }
 
-    /** A post card: author, time / review status, text, image grid, like and comment counts. */
+    /** A post card: author, time, text, image grid or video, like and comment counts. */
     public static View postView(Context ctx, SquareLogic.Post p, boolean full, PostActions actions) {
         SquareLogic.Texts tx = tx();
         LinearLayout card = new LinearLayout(ctx);
@@ -383,8 +487,8 @@ public final class SquareUi {
         name.setEllipsize(TextUtils.TruncateAt.END);
         names.addView(name);
         String sub = tx.timeAgo(p.createdAtMs, System.currentTimeMillis());
-        if (SquareLogic.STATUS_PENDING.equals(p.status)) sub = sub + " · " + tx.pending();
-        TextView time = text(ctx, sub, 13, Theme.key_windowBackgroundWhiteGrayText);
+        if (p.isHidden()) sub = (sub.isEmpty() ? "" : sub + " · ") + tx.hidden();
+        TextView time = text(ctx, sub, 13, p.isHidden() ? Theme.key_text_RedRegular : Theme.key_windowBackgroundWhiteGrayText);
         names.addView(time);
         head.addView(names, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL, 10, 0, 0, 0));
         TextView more = text(ctx, "⋯", 20, Theme.key_windowBackgroundWhiteGrayText);
@@ -398,8 +502,8 @@ public final class SquareUi {
         names.setOnClickListener(author);
         card.addView(head);
 
-        if (SquareLogic.STATUS_REJECTED.equals(p.status)) {
-            TextView r = text(ctx, tx.rejectedReason(p.rejectReason), 13, Theme.key_text_RedRegular);
+        if (p.isHidden()) {
+            TextView r = text(ctx, tx.hiddenInfo(p.hiddenReason), 13, Theme.key_text_RedRegular);
             card.addView(r, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 0));
         }
         if (!p.text.isEmpty()) {
@@ -411,7 +515,12 @@ public final class SquareUi {
             }
             card.addView(body, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 0));
         }
-        if (!p.images.isEmpty()) {
+        if (p.video != null) {
+            int width = AndroidUtilities.displaySize.x - AndroidUtilities.dp(32);
+            int height = SquareVideoView.heightFor(width, p.video);
+            SquareVideoView video = new SquareVideoView(ctx, p.video, () -> actions.onVideo(p));
+            card.addView(video, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, (int) (height / AndroidUtilities.density), 0, 8, 0, 0));
+        } else if (!p.images.isEmpty()) {
             card.addView(imageGrid(ctx, p), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 0));
         }
 
@@ -433,7 +542,7 @@ public final class SquareUi {
         return card;
     }
 
-    /** Nine-grid: 1 image wide, otherwise 3 per row. */
+    /** Nine-grid: 1 image wide, otherwise 3 per row (2 for exactly 4). */
     private static View imageGrid(Context ctx, SquareLogic.Post p) {
         int n = p.images.size();
         int cols = n == 1 ? 1 : (n == 4 ? 2 : 3);
@@ -470,12 +579,10 @@ public final class SquareUi {
         row.addView(avatar(ctx, c.author, 32), LayoutHelper.createLinear(32, 32));
         LinearLayout col = new LinearLayout(ctx);
         col.setOrientation(LinearLayout.VERTICAL);
+        boolean hidden = SquareLogic.STATUS_HIDDEN.equals(c.status);
         TextView name = text(ctx, c.author.displayName + "  ·  " + tx.timeAgo(c.createdAtMs, System.currentTimeMillis())
-            + (SquareLogic.STATUS_PENDING.equals(c.status) ? "  ·  " + tx.pending() : ""), 13, Theme.key_windowBackgroundWhiteGrayText);
+            + (hidden ? "  ·  " + tx.hidden() : ""), 13, Theme.key_windowBackgroundWhiteGrayText);
         col.addView(name);
-        if (SquareLogic.STATUS_REJECTED.equals(c.status)) {
-            col.addView(text(ctx, tx.rejectedReason(c.rejectReason), 13, Theme.key_text_RedRegular));
-        }
         col.addView(text(ctx, c.text, 15, Theme.key_windowBackgroundWhiteBlackText));
         row.addView(col, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, 10, 0, 0, 0));
         row.setOnClickListener(onClick);

@@ -85,10 +85,23 @@ public class DiscoverMockTest {
         assertTrue(m.acceptUpload(DiscoverMock.UPLOAD_PREFIX + key, b("jpeg")));
         DiscoverMock.Reply posted = m.handle("POST", "/v1/square/posts", "", b("{\"text\":\"hi\",\"image_keys\":[\"" + key + "\"]}"));
         assertEquals(200, posted.status);
-        assertEquals("pending", posted.body.getString("status"));
+        assertEquals("published", posted.body.getString("status")); // public at once, no review
         String id = posted.body.getString("id");
-        // pending posts are visible to their author only
-        assertEquals("pending", m.handle("GET", "/v1/square/posts/" + id, "", null).body.getString("status"));
+        assertEquals(id, m.handle("GET", "/v1/square/feed", "tab=latest", null).body.getJSONArray("items").getJSONObject(0).getString("id"));
+
+        // a video post: one MP4 plus its cover, never together with images
+        JSONObject vup = m.handle("POST", "/v1/square/uploads", "", b("{\"count\":1,\"content_type\":\"video/mp4\"}")).body.getJSONArray("uploads").getJSONObject(0);
+        JSONObject cup = m.handle("POST", "/v1/square/uploads", "", b("{\"count\":1,\"content_type\":\"image/jpeg\"}")).body.getJSONArray("uploads").getJSONObject(0);
+        assertEquals(400, m.handle("POST", "/v1/square/uploads", "", b("{\"count\":1,\"content_type\":\"video/quicktime\"}")).status);
+        assertTrue(vup.getString("key").endsWith(".mp4"));
+        assertTrue(m.acceptUpload(DiscoverMock.UPLOAD_PREFIX + vup.getString("key"), b("mp4")));
+        assertTrue(m.acceptUpload(DiscoverMock.UPLOAD_PREFIX + cup.getString("key"), b("jpg")));
+        String videoBody = "{\"text\":\"v\",\"video\":{\"key\":\"" + vup.getString("key") + "\",\"cover_key\":\"" + cup.getString("key") + "\",\"width\":1280,\"height\":720,\"duration_seconds\":42}}";
+        assertEquals(400, m.handle("POST", "/v1/square/posts", "", b(videoBody.replace("\"text\":\"v\"", "\"text\":\"v\",\"image_keys\":[\"" + key + "\"]"))).status);
+        DiscoverMock.Reply vposted = m.handle("POST", "/v1/square/posts", "", b(videoBody));
+        assertEquals(200, vposted.status);
+        assertEquals(42, vposted.body.getJSONObject("video").getInt("duration_seconds"));
+        assertTrue(vposted.body.getJSONObject("video").getString("cover_url").contains("/mock-image/"));
 
         // like / comment / reply / delete
         assertEquals(1, m.handle("POST", "/v1/square/posts/" + id + "/like", "", null).body.getInt("like_count"));
@@ -107,6 +120,16 @@ public class DiscoverMockTest {
         DiscoverMock.Reply limited = m.handle("POST", "/v1/square/posts/" + id + "/comments", "", b("{\"text\":\"x\"}"));
         assertEquals(429, limited.status);
         assertTrue(limited.body.getJSONObject("error").getLong("retry_after_seconds") > 0);
+
+        // three reports hide a post; its author still sees it, marked hidden, with the reason
+        for (int i = 0; i < 3; i++) m.handle("POST", "/v1/square/report", "", b("{\"target\":\"post\",\"id\":\"" + id + "\",\"reason\":\"spam\"}"));
+        JSONObject hidden = m.handle("GET", "/v1/square/posts/" + id, "", null).body;
+        assertEquals("hidden", hidden.getString("status"));
+        assertTrue(hidden.has("hidden_reason"));
+        JSONArray latest = m.handle("GET", "/v1/square/feed", "tab=latest", null).body.getJSONArray("items");
+        boolean stillListedForAuthor = false;
+        for (int i = 0; i < latest.length(); i++) if (latest.getJSONObject(i).getString("id").equals(id)) stillListedForAuthor = true;
+        assertTrue(stillListedForAuthor);
 
         // blocking hides the author's posts; deleting my data removes mine
         assertEquals(200, m.handle("POST", "/v1/blocks", "", b("{\"user\":\"m1\"}")).status);

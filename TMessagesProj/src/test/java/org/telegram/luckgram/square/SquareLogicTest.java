@@ -3,6 +3,7 @@ package org.telegram.luckgram.square;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -37,12 +38,31 @@ public class SquareLogicTest {
         assertEquals("Alice", p.author.displayName);
         assertNull(p.author.avatarUrl); // not https
         assertEquals(1, p.images.size());
+        assertNull(p.video);
         assertEquals(3, p.likeCount);
         assertEquals(0, p.commentCount);
         assertTrue(p.liked);
-        assertEquals(SquareLogic.STATUS_APPROVED, p.status);
+        assertEquals(SquareLogic.STATUS_PUBLISHED, p.status); // unknown states are shown as published
+        assertFalse(p.isHidden());
         assertTrue(p.createdAtMs > 0);
         assertNull(SquareLogic.parsePosts(new JSONObject("{\"items\":[]}")).nextCursor);
+    }
+
+    @Test
+    public void parsesHiddenAndVideo() throws Exception {
+        SquareLogic.Post p = SquareLogic.parsePost(new JSONObject("{\"id\":\"p2\",\"status\":\"hidden\",\"hidden_reason\":\"spam\","
+            + "\"images\":[{\"url\":\"https://cdn/x.jpg\"}],"
+            + "\"video\":{\"url\":\"https://cdn/v.mp4\",\"cover_url\":\"https://cdn/c.jpg\",\"width\":1280,\"height\":720,\"duration_seconds\":42}}"));
+        assertTrue(p.isHidden());
+        assertEquals("spam", p.hiddenReason);
+        assertNotNull(p.video);
+        assertEquals(42, p.video.durationSeconds);
+        assertEquals("https://cdn/c.jpg", p.video.coverUrl);
+        assertTrue(p.images.isEmpty()); // a video post never also carries images
+        assertNull(SquareLogic.parseVideo(new JSONObject("{\"url\":\"http://plain/v.mp4\"}")));
+        SquareLogic.Comment c = SquareLogic.parseComment(new JSONObject("{\"id\":\"c1\",\"status\":\"hidden\",\"reason\":\"x\"}"));
+        assertEquals(SquareLogic.STATUS_HIDDEN, c.status);
+        assertEquals("x", c.hiddenReason);
     }
 
     @Test
@@ -100,11 +120,13 @@ public class SquareLogicTest {
     @Test
     public void validation() {
         String long1000 = new String(new char[1000]).replace('\0', '字');
-        assertTrue(SquareLogic.isValidPost(long1000, 0));
-        assertFalse(SquareLogic.isValidPost(long1000 + "x", 0));
-        assertFalse(SquareLogic.isValidPost("   ", 0));
-        assertTrue(SquareLogic.isValidPost("", 1));
-        assertFalse(SquareLogic.isValidPost("", 10));
+        assertTrue(SquareLogic.isValidPost(long1000, 0, false));
+        assertFalse(SquareLogic.isValidPost(long1000 + "x", 0, false));
+        assertFalse(SquareLogic.isValidPost("   ", 0, false));
+        assertTrue(SquareLogic.isValidPost("", 1, false));
+        assertTrue(SquareLogic.isValidPost("", 0, true));
+        assertFalse(SquareLogic.isValidPost("", 10, false));
+        assertFalse(SquareLogic.isValidPost("x", 1, true)); // photos or a video, not both
         assertTrue(SquareLogic.isValidComment(" ok "));
         assertFalse(SquareLogic.isValidComment(""));
         assertFalse(SquareLogic.isValidComment(new String(new char[301]).replace('\0', 'a')));
@@ -112,7 +134,7 @@ public class SquareLogicTest {
     }
 
     @Test
-    public void imageSizing() {
+    public void imageAndVideoSizing() {
         assertArrayEquals(new int[]{2048, 1536}, SquareLogic.scaledSize(4096, 3072));
         assertArrayEquals(new int[]{1536, 2048}, SquareLogic.scaledSize(3072, 4096));
         assertArrayEquals(new int[]{800, 600}, SquareLogic.scaledSize(800, 600));
@@ -121,6 +143,16 @@ public class SquareLogicTest {
         assertEquals(1, SquareLogic.sampleSize(2048, 100));
         assertEquals(2, SquareLogic.sampleSize(4096, 100));
         assertEquals(4, SquareLogic.sampleSize(9000, 9000));
+        assertArrayEquals(new int[]{1280, 720}, SquareLogic.videoSize(1920, 1080));
+        assertArrayEquals(new int[]{720, 1280}, SquareLogic.videoSize(1080, 1920));
+        assertArrayEquals(new int[]{640, 480}, SquareLogic.videoSize(640, 480));
+        assertArrayEquals(new int[]{1280, 718}, SquareLogic.videoSize(1921, 1079)); // even sides
+        assertEquals(2_500_000, SquareLogic.videoBitrate(1280, 720, 0));
+        assertEquals(1_000_000, SquareLogic.videoBitrate(1280, 720, 1_000_000)); // never above the source
+        assertEquals(600_000, SquareLogic.videoBitrate(160, 120, 0));
+        assertEquals("0:07", SquareLogic.formatDuration(7));
+        assertEquals("1:00", SquareLogic.formatDuration(60));
+        assertEquals("12:34", SquareLogic.formatDuration(754));
     }
 
     @Test
@@ -132,6 +164,11 @@ public class SquareLogicTest {
         JSONObject body = SquareLogic.postBody("  hi ", Arrays.asList("k1", "k2"));
         assertEquals("hi", body.getString("text"));
         assertEquals(2, body.getJSONArray("image_keys").length());
+        JSONObject vb = SquareLogic.postBodyWithVideo("v", "square/v.mp4", "square/c.jpg", 1280, 720, 42);
+        assertEquals("square/v.mp4", vb.getJSONObject("video").getString("key"));
+        assertEquals(42, vb.getJSONObject("video").getInt("duration_seconds"));
+        assertEquals(0, vb.getJSONArray("image_keys").length());
+        assertEquals("video/mp4", SquareLogic.uploadsBody(1, SquareLogic.VIDEO_CONTENT_TYPE).getString("content_type"));
         assertFalse(SquareLogic.commentBody("x", null).has("parent_id"));
         assertEquals("c1", SquareLogic.commentBody("x", "c1").getString("parent_id"));
         JSONObject r = SquareLogic.reportBody("post", "p1", "spam");
@@ -140,17 +177,27 @@ public class SquareLogicTest {
     }
 
     @Test
+    public void silentLinkHelpers() {
+        assertEquals("LuckgramBot", SquareLogic.botUsername("https://t.me/LuckgramBot?start=abc"));
+        assertEquals("lg_bot", SquareLogic.botUsername("t.me/lg_bot/"));
+        assertNull(SquareLogic.botUsername("https://example.com/LuckgramBot?start=abc"));
+        assertNull(SquareLogic.botUsername("https://t.me/?start=abc"));
+        assertNull(SquareLogic.botUsername(null));
+        assertEquals("/start n0nce", SquareLogic.startCommand("n0nce"));
+    }
+
+    @Test
     public void textsCoverBothLanguagesAndWaitTimes() {
         SquareLogic.Texts zh = new SquareLogic.Texts(true);
         SquareLogic.Texts en = new SquareLogic.Texts(false);
         assertEquals("广场", zh.title());
         assertEquals("Square", en.title());
-        assertEquals("未通过：x", zh.rejectedReason("x"));
-        assertEquals("Not approved", en.rejectedReason(null));
+        assertTrue(zh.hiddenInfo("x").contains("原因：x"));
+        assertTrue(en.hiddenInfo(null).startsWith("This post has been hidden"));
         assertTrue(zh.waitSeconds(30).contains("30 秒"));
         assertTrue(en.waitSeconds(90).contains("2 min"));
         assertTrue(zh.waitSeconds(7200).contains("小时"));
-        assertTrue(en.waitSeconds(0).startsWith("Too many"));
+        assertTrue(en.waitSeconds(0).startsWith("You're doing that too often"));
         assertEquals("刚刚", zh.timeAgo(1000, 2000));
         assertEquals("3 h ago", en.timeAgo(1, 1 + 3 * 3600_000L));
         assertEquals("", en.timeAgo(0, 5));
@@ -159,5 +206,14 @@ public class SquareLogicTest {
             assertFalse(en.reportReason(r).isEmpty());
         }
         assertTrue(en.dailyLimitInfo(10).contains("10"));
+        assertTrue(en.videoTooLong(60, 95).contains("1:35"));
+        assertTrue(zh.attachmentsInfo(60).contains("60 秒"));
+        assertEquals("视频 · 0:42", zh.videoLabel(42));
+        // nothing in the UI mentions linking an account (spec 26 item 2)
+        for (SquareLogic.Texts tx : new SquareLogic.Texts[]{zh, en}) {
+            for (String s : new String[]{tx.connecting(), tx.connectFailed(), tx.needContent(), tx.profileNeeded(), tx.empty()}) {
+                assertFalse(s, s.contains("绑定") || s.toLowerCase().contains("link"));
+            }
+        }
     }
 }
