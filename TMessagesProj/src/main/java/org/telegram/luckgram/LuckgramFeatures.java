@@ -70,6 +70,13 @@ public final class LuckgramFeatures {
             "账号备份", "Account backup",
             "把账号导出为加密文件，换手机后导入", "Export accounts to an encrypted file and import them on a new phone")
             .subpage(org.telegram.luckgram.backup.LuckgramBackupActivity::new));
+        add(toggle(org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.FEATURE_KEY, ACCOUNT_PRIVACY, false,
+            "双重空间", "Double space",
+            "用第二个密码解锁时只显示选定的账号", "A second passcode that shows only the accounts you pick")
+            .subpage(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::new)
+            .confirmEnable(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::confirmEnable)
+            .confirmDisable(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::confirmDisable)
+            .hiddenWhen(org.telegram.luckgram.doublebottom.LuckgramDoubleBottom::isActive));
 
         // ---- 消息与语言 / Messages & Language
         add(toggle(org.telegram.luckgram.selectall.SelectAllFromSender.SETTING_KEY, MESSAGES_LANGUAGE, true,
