@@ -371,6 +371,30 @@ public final class LuckgramAI {
         return req;
     }
 
+    /**
+     * Fire-and-forget request with the device token held right now (25 nearby: delete my card on
+     * logout). The token and transport are captured before returning, so a {@link #resetLocalState()}
+     * right after (logout of the last account) can't make it register a new device instead.
+     */
+    public void sendWithCurrentToken(String method, String path) {
+        final String t;
+        final Transport tr = transport();
+        synchronized (this) {
+            t = token != null ? token : (isUsingMock() ? null : LuckgramSecureStore.get(KEY_TOKEN));
+        }
+        if (t == null) return;
+        executor.execute(() -> {
+            Map<String, String> headers = new LinkedHashMap<>();
+            headers.put("Authorization", "Bearer " + t);
+            headers.put("Accept", "application/json");
+            try (HttpResponse ignored = tr.execute(method, path, headers, null)) {
+                // best effort; the server also expires the data
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
+    }
+
     public Request chat(Context context, String task, List<Message> messages, boolean stream, ChatListener listener) {
         return chat(context, task, null, messages, stream, listener);
     }
@@ -819,7 +843,9 @@ public final class LuckgramAI {
         String code = e != null ? optString(e, "code") : null;
         if (code == null) code = codeForStatus(status);
         if ("unauthorized".equals(code)) code = LuckgramAIError.INVALID_TOKEN;
-        return new LuckgramAIError(code, status);
+        LuckgramAIError err = new LuckgramAIError(code, status);
+        if (e != null) err.retryAfterSeconds = Math.max(0, e.optLong("retry_after_seconds", 0));
+        return err;
     }
 
     private static String codeForStatus(int status) {

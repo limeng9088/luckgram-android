@@ -202,6 +202,7 @@ public class LuckgramAccountActivity extends UniversalFragment {
         inFlight = LuckgramAI.getInstance().requestJson("DELETE", "/v1/link", null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
+                org.telegram.luckgram.nearby.NearbyController.onUnlinked(); // 25: the server deleted the nearby card
                 busy = false;
                 BulletinFactory.of(LuckgramAccountActivity.this).createSimpleBulletin(org.telegram.messenger.R.raw.done, tx.unlinkedNow()).show();
                 load();
