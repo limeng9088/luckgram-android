@@ -216,6 +216,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         getNotificationCenter().addObserver(this, NotificationCenter.updateInterfaces);
         getNotificationCenter().addObserver(this, NotificationCenter.starBalanceUpdated);
         getNotificationCenter().addObserver(this, NotificationCenter.newSuggestionsAvailable);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.luckgramUpdateChanged);
 
         if (arguments != null) {
             hasMainTabs = arguments.getBoolean("hasMainTabs", false);
@@ -511,6 +512,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         getNotificationCenter().removeObserver(this, NotificationCenter.updateInterfaces);
         getNotificationCenter().removeObserver(this, NotificationCenter.starBalanceUpdated);
         getNotificationCenter().removeObserver(this, NotificationCenter.newSuggestionsAvailable);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.luckgramUpdateChanged);
     }
 
     @Override
@@ -522,7 +524,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             }
         } else if (id == NotificationCenter.updateInterfaces) {
             setInfo();
-        } else if (id == NotificationCenter.newSuggestionsAvailable) {
+        } else if (id == NotificationCenter.newSuggestionsAvailable || id == NotificationCenter.luckgramUpdateChanged) {
             if (listView != null) {
                 listView.adapter.update(true);
             }
@@ -628,6 +630,13 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         }
 
         items.add(UItem.asCustomShadow(topView, 200 - 12));
+
+        // Luckgram S5: "有新版本 x.y.z · 更新" on top of Settings, opens the download link.
+        final org.telegram.luckgram.update.UpdateLogic.State luckgramUpdate = org.telegram.luckgram.update.LuckgramUpdates.state();
+        if (luckgramUpdate.updateAvailable) {
+            items.add(UItem.asButton(LUCKGRAM_UPDATE_ID, R.drawable.msg_download, org.telegram.luckgram.update.LuckgramUpdates.rowText(luckgramUpdate)).accent());
+            items.add(UItem.asShadow(null));
+        }
 
         accountNumbers.clear();
         // Luckgram 09: the user's account order
@@ -776,6 +785,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     private static final int LUCKGRAM_FEATURES_ID = 40;
     private static final int LUCKGRAM_ACCOUNTS_EXPAND_ID = 41;
     private static final int LUCKGRAM_ACCOUNTS_MANAGE_ID = 42;
+    private static final int LUCKGRAM_UPDATE_ID = 43;
     private boolean accountsExpanded;
 
     private void onAccountsReordered(int sectionId, ArrayList<UItem> reordered) {
@@ -885,6 +895,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                 break;
             case LUCKGRAM_ACCOUNTS_MANAGE_ID:
                 presentSettingFragment(new LuckgramAccountsActivity());
+                break;
+            case LUCKGRAM_UPDATE_ID:
+                org.telegram.luckgram.update.LuckgramUpdates.openDownload(getParentActivity(), org.telegram.luckgram.update.LuckgramUpdates.state());
                 break;
             case LUCKGRAM_FEATURES_ID:
                 presentSettingFragment(new org.telegram.luckgram.LuckgramSettingsActivity());

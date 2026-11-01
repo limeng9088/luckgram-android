@@ -1,0 +1,163 @@
+package org.telegram.luckgram.update;
+
+import org.json.JSONObject;
+
+/**
+ * Pure logic of the update check (task S5, luckgram-specs#30): parsing {@code GET /v1/version},
+ * comparing versions with the server's rule, deciding when to check and what to show. Only java.*
+ * and org.json (JVM unit tests); same rules as LuckgramUpdateLogic.swift on iOS.
+ */
+public final class UpdateLogic {
+
+    private UpdateLogic() {
+    }
+
+    /** Check at most once a day (spec: "启动时（每天最多一次）"). */
+    public static final long CHECK_INTERVAL_MS = 24 * 60 * 60_000L;
+    /** After a failed check try again on a later launch, but not more often than this. */
+    public static final long RETRY_AFTER_FAILURE_MS = 60 * 60_000L;
+
+    /** What {@code GET /v1/version} said, persisted so the hint survives restarts. */
+    public static final class Info {
+        public final String latest;
+        public final long build;
+        public final String min;
+        public final String url;
+        public final String notesZh;
+        public final String notesEn;
+
+        public Info(String latest, long build, String min, String url, String notesZh, String notesEn) {
+            this.latest = latest == null ? "" : latest;
+            this.build = build;
+            this.min = min == null ? "" : min;
+            this.url = url == null ? "" : url;
+            this.notesZh = notesZh == null ? "" : notesZh;
+            this.notesEn = notesEn == null ? "" : notesEn;
+        }
+    }
+
+    /** What the app shows. */
+    public static final class State {
+        public static final State NONE = new State(false, false, "", "", "");
+
+        /** "有新版本 x.y.z · 更新" on top of Settings. */
+        public final boolean updateAvailable;
+        /** Full-screen "must update" with only the Update button. */
+        public final boolean forceUpdate;
+        public final String latest;
+        public final String url;
+        public final String notes;
+
+        State(boolean updateAvailable, boolean forceUpdate, String latest, String url, String notes) {
+            this.updateAvailable = updateAvailable;
+            this.forceUpdate = forceUpdate;
+            this.latest = latest;
+            this.url = url;
+            this.notes = notes;
+        }
+    }
+
+    public static boolean shouldCheck(long nowMs, long lastSuccessMs, long lastFailureMs) {
+        if (lastFailureMs > 0 && nowMs >= lastFailureMs && nowMs - lastFailureMs < RETRY_AFTER_FAILURE_MS) {
+            return false;
+        }
+        // nowMs < lastSuccessMs: the clock went back; check rather than wait for a day that may never come
+        return lastSuccessMs <= 0 || nowMs < lastSuccessMs || nowMs - lastSuccessMs >= CHECK_INTERVAL_MS;
+    }
+
+    /** {@code /v1/version?platform=android&app_version=..[&build=..]}; build 0 = unknown (local build). */
+    public static String path(String platform, String appVersion, long build) {
+        StringBuilder sb = new StringBuilder("/v1/version?platform=").append(platform);
+        if (isVersion(appVersion)) {
+            sb.append("&app_version=").append(appVersion);
+            if (build > 0) {
+                sb.append("&build=").append(build);
+            }
+        }
+        return sb.toString();
+    }
+
+    /** Dotted numbers only, 1–4 segments (same as the server and the X-Luckgram-App-Version guard). */
+    public static boolean isVersion(String v) {
+        return v != null && v.matches("\\d{1,9}(\\.\\d{1,9}){0,3}");
+    }
+
+    /**
+     * Server rule (README "版本检查"): dotted numbers compared segment by segment, a missing
+     * segment counts as 0. Anything that is not a version compares as 0.0.0.
+     */
+    public static int compareVersions(String a, String b) {
+        String[] x = isVersion(a) ? a.split("\\.") : new String[0];
+        String[] y = isVersion(b) ? b.split("\\.") : new String[0];
+        for (int i = 0; i < Math.max(x.length, y.length); i++) {
+            long p = i < x.length ? Long.parseLong(x[i]) : 0;
+            long q = i < y.length ? Long.parseLong(y[i]) : 0;
+            if (p != q) {
+                return p < q ? -1 : 1;
+            }
+        }
+        return 0;
+    }
+
+    /** Equal versions with both builds known compare by build. */
+    public static boolean isNewer(String latest, long latestBuild, String current, long currentBuild) {
+        int c = compareVersions(latest, current);
+        if (c != 0) {
+            return c > 0;
+        }
+        return latestBuild > 0 && currentBuild > 0 && latestBuild > currentBuild;
+    }
+
+    public static Info parse(JSONObject j) {
+        if (j == null) {
+            return null;
+        }
+        JSONObject notes = j.optJSONObject("notes");
+        return new Info(j.optString("latest", ""), j.optLong("build", 0), j.optString("min", ""), j.optString("url", ""),
+                notes != null ? notes.optString("zh", "") : "", notes != null ? notes.optString("en", "") : "");
+    }
+
+    public static String serialize(Info info) {
+        if (info == null) {
+            return "";
+        }
+        try {
+            JSONObject notes = new JSONObject().put("zh", info.notesZh).put("en", info.notesEn);
+            return new JSONObject().put("latest", info.latest).put("build", info.build).put("min", info.min)
+                    .put("url", info.url).put("notes", notes).toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    public static Info deserialize(String s) {
+        if (s == null || s.isEmpty()) {
+            return null;
+        }
+        try {
+            return parse(new JSONObject(s));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Evaluated against the running version every time (not the server's update_available), so a
+     * cached answer stops nagging as soon as the user has installed the new version. Nothing is
+     * shown without an https download link: a "must update" screen without a way to update would
+     * lock the user out.
+     */
+    public static State evaluate(Info info, String current, long currentBuild, boolean chinese) {
+        if (info == null || !info.url.startsWith("https://") || !isVersion(current)) {
+            return State.NONE;
+        }
+        boolean force = isVersion(info.min) && compareVersions(current, info.min) < 0;
+        boolean available = isVersion(info.latest) && isNewer(info.latest, info.build, current, currentBuild);
+        if (!force && !available) {
+            return State.NONE;
+        }
+        String notes = chinese ? (info.notesZh.isEmpty() ? info.notesEn : info.notesZh) : (info.notesEn.isEmpty() ? info.notesZh : info.notesEn);
+        // Below min but latest not newer (misconfigured): still force, the link is the way out.
+        return new State(available || force, force, isVersion(info.latest) ? info.latest : info.min, info.url, notes);
+    }
+}

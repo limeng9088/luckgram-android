@@ -389,6 +389,7 @@ public class NotificationCenter {
     public static final int luckgramSettingsChanged = totalEvents++;
     // Luckgram: chat-list announcements were fetched or one was closed (global instance; S8)
     public static final int luckgramAnnouncementsChanged = totalEvents++;
+    public static final int luckgramUpdateChanged = totalEvents++;
 
     public static boolean alreadyLogged;
 
