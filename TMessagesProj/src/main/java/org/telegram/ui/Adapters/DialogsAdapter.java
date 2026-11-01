@@ -877,6 +877,10 @@ public class DialogsAdapter extends RecyclerListView.SelectionAdapter implements
     public int lastDialogsEmptyType = -1;
 
     public int dialogsEmptyType() {
+        if (dialogsType == DialogsActivity.DIALOGS_TYPE_LUCKGRAM_HIDDEN) {
+            // Luckgram 12: an empty hidden list is not a "welcome" screen
+            return DialogsEmptyCell.TYPE_LUCKGRAM_HIDDEN;
+        }
         if (dialogsType == 7 || dialogsType == 8) {
             if (MessagesController.getInstance(currentAccount).isDialogsEndReached(folderId)) {
                 return DialogsEmptyCell.TYPE_FILTER_NO_CHATS_TO_DISPLAY;
