@@ -308,8 +308,12 @@ public class NearbyActivity extends UniversalFragment {
             @Override
             public void onResult(JSONObject result) {
                 busy = false;
-                NearbyController.applyState(currentAccount, NearbyLogic.parseMe(result.has("visible") ? result : safePut(result)));
-                if (wasVisible) {
+                NearbyLogic.MyState state = NearbyLogic.parseMe(result.has("visible") ? result : safePut(result));
+                NearbyController.applyState(currentAccount, state);
+                if (!state.visible) {
+                    // S10: a reported card awaiting review comes back as visible:false
+                    BulletinFactory.of(NearbyActivity.this).createErrorBulletin(tx.underReview()).show();
+                } else if (wasVisible) {
                     BulletinFactory.of(NearbyActivity.this).createSimpleBulletin(R.raw.done, tx.renewed()).show();
                 }
                 update();
@@ -626,6 +630,8 @@ public class NearbyActivity extends UniversalFragment {
             text = tx.rateLimited(error.retryAfterSeconds);
         } else if ("banned".equals(error.code)) {
             text = tx.banned();
+        } else if ("nearby_disabled".equals(error.code)) {
+            text = tx.disabled();
         } else if ("not_linked".equals(error.code)) {
             text = tx.notLinked();
         } else {

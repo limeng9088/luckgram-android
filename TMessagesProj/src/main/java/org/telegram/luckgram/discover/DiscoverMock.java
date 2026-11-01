@@ -93,6 +93,7 @@ public final class DiscoverMock {
                 blocked.add(user);
                 return ok(new JSONObject());
             }
+            if (!linked) return error(403, "not_linked");
             JSONArray arr = new JSONArray();
             for (String b : blocked) arr.put(new JSONObject().put("user", b));
             return ok(new JSONObject().put("items", arr));
