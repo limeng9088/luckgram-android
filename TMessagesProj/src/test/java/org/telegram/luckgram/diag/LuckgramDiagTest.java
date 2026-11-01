@@ -50,8 +50,8 @@ public class LuckgramDiagTest {
 
     @Test
     public void routeKeepsOnlyHostAndPathOfOtherUrls() {
-        String r = LuckgramDiagLog.route("https://bucket.s3.amazonaws.com/square/p/ab/1.jpg?X-Amz-Signature=deadbeef&X-Amz-Credential=AKIA", API);
-        assertEquals("bucket.s3.amazonaws.com/square/p/ab/1.jpg", r);
+        String r = LuckgramDiagLog.route("https://media.luckgram.cc/square/p/ab/1.jpg?X-Amz-Signature=deadbeef&X-Amz-Credential=AKIA", API);
+        assertEquals("media.luckgram.cc/square/p/ab/1.jpg", r);
         assertFalse(r.contains("Signature"));
         assertEquals("host.example/", LuckgramDiagLog.route("https://user:pass@host.example", API));
     }
