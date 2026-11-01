@@ -336,6 +336,8 @@ public final class SquareUi {
         if (LuckgramAIError.RATE_LIMITED.equals(error.code)) return tx.waitSeconds(error.retryAfterSeconds);
         if ("banned".equals(error.code)) return tx.banned();
         if ("not_linked".equals(error.code)) return tx.connectFailed();
+        if ("invalid_video".equals(error.code)) return tx.videoRejected();
+        if ("square_disabled".equals(error.code)) return tx.squareDisabled();
         return error.getLocalizedMessage();
     }
 

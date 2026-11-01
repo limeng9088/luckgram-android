@@ -316,17 +316,16 @@ public final class DiscoverMock {
                 if (!uploaded.contains(keys.getString(i))) return error(400, "invalid_request");
                 images.put(new JSONObject().put("url", "https://" + MOCK_HOST + "/mock-image/" + keys.getString(i)).put("width", 1).put("height", 1));
             }
-            JSONObject videoIn = r.optJSONObject("video");
+            String vk = r.optString("video_key", "");
+            String ck = r.optString("cover_key", "");
             JSONObject video = null;
-            if (videoIn != null) {
+            if (!vk.isEmpty() || !ck.isEmpty()) {
                 if (n > 0) return error(400, "invalid_request"); // attachments are exclusive
-                String vk = videoIn.optString("key", "");
-                String ck = videoIn.optString("cover_key", "");
-                int dur = videoIn.optInt("duration_seconds", 0);
-                if (!uploaded.contains(vk) || !uploaded.contains(ck) || dur <= 0 || dur > 60) return error(400, "invalid_request");
+                if (!uploaded.contains(vk) || !uploaded.contains(ck) || !vk.endsWith(".mp4")) return error(400, "invalid_video");
+                // The real server reads these from the file; the mock has no decoder.
                 video = new JSONObject().put("url", "https://" + MOCK_HOST + "/mock-video/" + vk)
                     .put("cover_url", "https://" + MOCK_HOST + "/mock-image/" + ck)
-                    .put("width", videoIn.optInt("width", 0)).put("height", videoIn.optInt("height", 0)).put("duration_seconds", dur);
+                    .put("width", 1280).put("height", 720).put("duration_seconds", 15).put("size", 1);
             }
             Reply lim = limited(myPostTimes, 24L * 3600 * 1000, 10);
             if (lim != null) return lim;

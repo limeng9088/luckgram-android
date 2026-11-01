@@ -480,7 +480,7 @@ public class SquareComposeActivity extends UniversalFragment {
                 preparing = false;
                 prepareProgress = -1f;
                 update();
-                BulletinFactory.of(SquareComposeActivity.this).createErrorBulletin(tooBig ? tx.videoTooBig() : tx.videoFailed()).show();
+                BulletinFactory.of(SquareComposeActivity.this).createErrorBulletin(tooBig ? tx.videoTooBig(SquareVideos.maxBytes() / (1024 * 1024)) : tx.videoFailed()).show();
             }
         });
     }
@@ -647,7 +647,7 @@ public class SquareComposeActivity extends UniversalFragment {
     private void createPost(String text, List<String> imageKeys, List<String> videoKeys) {
         try {
             JSONObject body = videoKeys != null
-                ? SquareLogic.postBodyWithVideo(text, videoKeys.get(0), videoKeys.get(1), video.width, video.height, video.durationSeconds)
+                ? SquareLogic.postBodyWithVideo(text, videoKeys.get(0), videoKeys.get(1))
                 : SquareLogic.postBody(text, imageKeys);
             inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/posts", body, new LuckgramAI.Callback<JSONObject>() {
                 @Override

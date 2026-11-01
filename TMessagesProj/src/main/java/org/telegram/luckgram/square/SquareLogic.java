@@ -34,9 +34,10 @@ public final class SquareLogic {
     public static final long DEFAULT_MAX_POSTS_PER_DAY = 10;
     /** Built-in default for {@code square.max_video_seconds}; the remote config value wins (spec 26 item 3). */
     public static final long DEFAULT_MAX_VIDEO_SECONDS = 60;
-    /** Short video after client-side transcoding: long edge ≤ 1280 px, ≤ 50 MB, H.264/AAC MP4. */
+    /** Short video after client-side transcoding: long edge ≤ 1280 px, H.264/AAC MP4, ≤ {@code square.max_video_mb} (default 50). */
     public static final int VIDEO_MAX_EDGE = 1280;
-    public static final long VIDEO_MAX_BYTES = 50L * 1024 * 1024;
+    public static final long DEFAULT_MAX_VIDEO_MB = 50;
+    public static final long VIDEO_MAX_BYTES = DEFAULT_MAX_VIDEO_MB * 1024 * 1024;
     public static final String IMAGE_CONTENT_TYPE = "image/jpeg";
     public static final String VIDEO_CONTENT_TYPE = "video/mp4";
 
@@ -391,16 +392,12 @@ public final class SquareLogic {
         return new JSONObject().put("text", text == null ? "" : text.trim()).put("image_keys", keys);
     }
 
-    public static JSONObject postBodyWithVideo(String text, String videoKey, String coverKey, int width, int height, int durationSeconds) throws Exception {
+    /** S11: {@code {text, video_key, cover_key}}; the server reads size, duration and format from the file. */
+    public static JSONObject postBodyWithVideo(String text, String videoKey, String coverKey) throws Exception {
         return new JSONObject()
             .put("text", text == null ? "" : text.trim())
-            .put("image_keys", new JSONArray())
-            .put("video", new JSONObject()
-                .put("key", videoKey)
-                .put("cover_key", coverKey)
-                .put("width", width)
-                .put("height", height)
-                .put("duration_seconds", durationSeconds));
+            .put("video_key", videoKey)
+            .put("cover_key", coverKey);
     }
 
     public static JSONObject uploadsBody(int count, String contentType) throws Exception {
@@ -563,7 +560,9 @@ public final class SquareLogic {
         public String preparingImages() { return t("正在处理图片…", "Preparing photos…"); }
         public String preparingVideo() { return t("正在处理视频…", "Preparing video…"); }
         public String videoFailed() { return t("视频无法处理，请换一段试试", "The video couldn't be processed. Please try another."); }
-        public String videoTooBig() { return t("转码后仍超过 50 MB，请选一段更短的视频", "The video is still over 50 MB after compression. Please pick a shorter one."); }
+        public String videoTooBig(long maxMb) { return t("转码后仍超过 " + maxMb + " MB，请选一段更短的视频", "The video is still over " + maxMb + " MB after compression. Please pick a shorter one."); }
+        public String videoRejected() { return t("视频不符合要求（时长、大小或格式），请换一段试试", "The video doesn't meet the requirements (length, size or format). Please try another."); }
+        public String squareDisabled() { return t("广场暂时不可用，请稍后再试", "Square is temporarily unavailable. Please try again later."); }
         public String videoTooLongTitle() { return t("视频超过时长限制", "Video is too long"); }
         public String videoTooLong(long maxSeconds, int actualSeconds) {
             return t("广场视频最长 " + maxSeconds + " 秒，这段视频有 " + SquareLogic.formatDuration(actualSeconds) + "。可以只保留开头 " + maxSeconds + " 秒继续发布。",

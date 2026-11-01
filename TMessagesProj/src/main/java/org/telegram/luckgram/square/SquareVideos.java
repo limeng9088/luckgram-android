@@ -107,6 +107,10 @@ public final class SquareVideos {
      * Transcodes {@code source} (keeping at most {@code keepSeconds} from the start) on its own
      * thread. The listener is called on the UI thread. The source copy is deleted afterwards.
      */
+    public static long maxBytes() {
+        return Math.max(1, org.telegram.luckgram.LuckgramSettings.remoteLong("square.max_video_mb", SquareLogic.DEFAULT_MAX_VIDEO_MB)) * 1024 * 1024;
+    }
+
     public static Runnable prepare(Source source, int keepSeconds, Listener listener) {
         final boolean[] cancelled = {false};
         final RoundVideoConverter.Meta meta = source.meta;
@@ -167,7 +171,7 @@ public final class SquareVideos {
                 error = true;
             }
             final boolean failed = error || !output.exists() || output.length() == 0;
-            final boolean tooBig = !failed && output.length() > SquareLogic.VIDEO_MAX_BYTES;
+            final boolean tooBig = !failed && output.length() > maxBytes();
             byte[] cover = null;
             Bitmap thumb = null;
             if (!failed && !tooBig && !cancelled[0]) {

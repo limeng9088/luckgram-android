@@ -96,11 +96,12 @@ public class DiscoverMockTest {
         assertTrue(vup.getString("key").endsWith(".mp4"));
         assertTrue(m.acceptUpload(DiscoverMock.UPLOAD_PREFIX + vup.getString("key"), b("mp4")));
         assertTrue(m.acceptUpload(DiscoverMock.UPLOAD_PREFIX + cup.getString("key"), b("jpg")));
-        String videoBody = "{\"text\":\"v\",\"video\":{\"key\":\"" + vup.getString("key") + "\",\"cover_key\":\"" + cup.getString("key") + "\",\"width\":1280,\"height\":720,\"duration_seconds\":42}}";
+        String videoBody = "{\"text\":\"v\",\"video_key\":\"" + vup.getString("key") + "\",\"cover_key\":\"" + cup.getString("key") + "\"}";
         assertEquals(400, m.handle("POST", "/v1/square/posts", "", b(videoBody.replace("\"text\":\"v\"", "\"text\":\"v\",\"image_keys\":[\"" + key + "\"]"))).status);
         DiscoverMock.Reply vposted = m.handle("POST", "/v1/square/posts", "", b(videoBody));
         assertEquals(200, vposted.status);
-        assertEquals(42, vposted.body.getJSONObject("video").getInt("duration_seconds"));
+        assertTrue(vposted.body.getJSONObject("video").getInt("duration_seconds") > 0);
+        assertEquals(400, m.handle("POST", "/v1/square/posts", "", b("{\"text\":\"v\",\"video_key\":\"" + cup.getString("key") + "\",\"cover_key\":\"" + cup.getString("key") + "\"}")).status);
         assertTrue(vposted.body.getJSONObject("video").getString("cover_url").contains("/mock-image/"));
 
         // like / comment / reply / delete

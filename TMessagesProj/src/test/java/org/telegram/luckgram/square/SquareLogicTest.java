@@ -164,10 +164,10 @@ public class SquareLogicTest {
         JSONObject body = SquareLogic.postBody("  hi ", Arrays.asList("k1", "k2"));
         assertEquals("hi", body.getString("text"));
         assertEquals(2, body.getJSONArray("image_keys").length());
-        JSONObject vb = SquareLogic.postBodyWithVideo("v", "square/v.mp4", "square/c.jpg", 1280, 720, 42);
-        assertEquals("square/v.mp4", vb.getJSONObject("video").getString("key"));
-        assertEquals(42, vb.getJSONObject("video").getInt("duration_seconds"));
-        assertEquals(0, vb.getJSONArray("image_keys").length());
+        JSONObject vb = SquareLogic.postBodyWithVideo("v", "square/v.mp4", "square/c.jpg");
+        assertEquals("square/v.mp4", vb.getString("video_key"));
+        assertEquals("square/c.jpg", vb.getString("cover_key"));
+        assertFalse(vb.has("image_keys"));
         assertEquals("video/mp4", SquareLogic.uploadsBody(1, SquareLogic.VIDEO_CONTENT_TYPE).getString("content_type"));
         assertFalse(SquareLogic.commentBody("x", null).has("parent_id"));
         assertEquals("c1", SquareLogic.commentBody("x", "c1").getString("parent_id"));
