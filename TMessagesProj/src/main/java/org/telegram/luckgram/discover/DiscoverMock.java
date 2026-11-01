@@ -296,7 +296,11 @@ public final class DiscoverMock {
             int count = r.optInt("count", 0);
             String ct = r.optString("content_type");
             boolean video = "video/mp4".equals(ct);
-            if (count < 1 || count > 9 || !("image/jpeg".equals(ct) || video)) return error(400, "invalid_request");
+            JSONArray sizes = r.optJSONArray("sizes");
+            if (count < 1 || count > 9 || !("image/jpeg".equals(ct) || video) || sizes == null || sizes.length() != count) return error(400, "invalid_request");
+            for (int i = 0; i < sizes.length(); i++) {
+                if (sizes.optLong(i, 0) <= 0) return error(400, "invalid_request");
+            }
             JSONArray ups = new JSONArray();
             for (int i = 0; i < count; i++) {
                 String key = "square/mock_" + (nextId++) + (video ? ".mp4" : ".jpg");

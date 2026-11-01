@@ -520,7 +520,9 @@ public class SquareComposeActivity extends UniversalFragment {
 
     private void requestImageUploads(String text) {
         try {
-            inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(images.size(), SquareLogic.IMAGE_CONTENT_TYPE), new LuckgramAI.Callback<JSONObject>() {
+            ArrayList<Long> sizes = new ArrayList<>();
+            for (SquareImages.Prepared p : images) sizes.add((long) p.jpeg.length);
+            inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(SquareLogic.IMAGE_CONTENT_TYPE, sizes), new LuckgramAI.Callback<JSONObject>() {
                 @Override
                 public void onResult(JSONObject result) {
                     List<SquareLogic.Upload> uploads = SquareLogic.parseUploads(result);
@@ -551,7 +553,11 @@ public class SquareComposeActivity extends UniversalFragment {
         update();
         try {
             // One slot for the MP4, one for its cover; the server only accepts a video post with both.
-            inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(1, SquareLogic.VIDEO_CONTENT_TYPE), new LuckgramAI.Callback<JSONObject>() {
+            ArrayList<Long> videoSize = new ArrayList<>();
+            videoSize.add(video.mp4.length());
+            ArrayList<Long> coverSize = new ArrayList<>();
+            coverSize.add((long) video.coverJpeg.length);
+            inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(SquareLogic.VIDEO_CONTENT_TYPE, videoSize), new LuckgramAI.Callback<JSONObject>() {
                 @Override
                 public void onResult(JSONObject videoResult) {
                     List<SquareLogic.Upload> videoUploads = SquareLogic.parseUploads(videoResult);
@@ -560,7 +566,7 @@ public class SquareComposeActivity extends UniversalFragment {
                         return;
                     }
                     try {
-                        inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(1, SquareLogic.IMAGE_CONTENT_TYPE), new LuckgramAI.Callback<JSONObject>() {
+                        inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/square/uploads", SquareLogic.uploadsBody(SquareLogic.IMAGE_CONTENT_TYPE, coverSize), new LuckgramAI.Callback<JSONObject>() {
                             @Override
                             public void onResult(JSONObject coverResult) {
                                 List<SquareLogic.Upload> coverUploads = SquareLogic.parseUploads(coverResult);
@@ -568,24 +574,41 @@ public class SquareComposeActivity extends UniversalFragment {
                                     fail(new LuckgramAIError(LuckgramAIError.UPSTREAM_UNAVAILABLE, 0));
                                     return;
                                 }
-                                byte[] mp4;
-                                try {
-                                    mp4 = SquareVideos.readAll(video.mp4);
-                                } catch (Exception e) {
-                                    FileLog.e(e);
-                                    fail(new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));
-                                    return;
-                                }
-                                ArrayList<SquareLogic.Upload> uploads = new ArrayList<>();
-                                uploads.add(videoUploads.get(0));
-                                uploads.add(coverUploads.get(0));
-                                ArrayList<byte[]> payloads = new ArrayList<>();
-                                payloads.add(mp4);
-                                payloads.add(video.coverJpeg);
-                                ArrayList<String> types = new ArrayList<>();
-                                types.add(SquareLogic.VIDEO_CONTENT_TYPE);
-                                types.add(SquareLogic.IMAGE_CONTENT_TYPE);
-                                uploadAll(uploads, payloads, types, keys -> createPost(text, null, keys));
+                                // The MP4 is streamed from disk (up to 50 MB); only the cover is held in memory.
+                                final SquareLogic.Upload videoUpload = videoUploads.get(0);
+                                final SquareLogic.Upload coverUpload = coverUploads.get(0);
+                                final LuckgramAI.Request req = new LuckgramAI.Request();
+                                inFlight = req;
+                                LuckgramAI.getInstance().runInBackground(() -> {
+                                    LuckgramAIError error = null;
+                                    try {
+                                        int status = LuckgramAI.getInstance().putPresignedFileBlocking(req, videoUpload.url, SquareLogic.VIDEO_CONTENT_TYPE, video.mp4);
+                                        if (status < 200 || status >= 300) error = new LuckgramAIError(LuckgramAIError.UPSTREAM_UNAVAILABLE, status);
+                                    } catch (Exception e) {
+                                        FileLog.e(e);
+                                        error = new LuckgramAIError(LuckgramAIError.NETWORK_ERROR, 0);
+                                    }
+                                    final LuckgramAIError err = error;
+                                    AndroidUtilities.runOnUIThread(() -> {
+                                        if (req.isCancelled()) return;
+                                        if (err != null) {
+                                            fail(err);
+                                            return;
+                                        }
+                                        ArrayList<SquareLogic.Upload> uploads = new ArrayList<>();
+                                        uploads.add(coverUpload);
+                                        ArrayList<byte[]> payloads = new ArrayList<>();
+                                        payloads.add(video.coverJpeg);
+                                        ArrayList<String> types = new ArrayList<>();
+                                        types.add(SquareLogic.IMAGE_CONTENT_TYPE);
+                                        uploadAll(uploads, payloads, types, coverKeys -> {
+                                            ArrayList<String> keys = new ArrayList<>();
+                                            keys.add(videoUpload.key);
+                                            keys.add(coverKeys.get(0));
+                                            createPost(text, null, keys);
+                                        });
+                                    });
+                                });
                             }
 
                             @Override

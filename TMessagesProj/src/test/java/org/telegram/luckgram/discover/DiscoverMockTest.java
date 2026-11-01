@@ -75,7 +75,7 @@ public class DiscoverMockTest {
         // profile first, then uploads + post
         assertEquals(403, m.handle("POST", "/v1/square/posts", "", b("{\"text\":\"hi\"}")).status);
         assertEquals(200, m.handle("PUT", "/v1/square/profile", "", b("{\"display_name\":\"Me\",\"bio\":\"\",\"username\":\"\"}")).status);
-        JSONObject ups = m.handle("POST", "/v1/square/uploads", "", b("{\"count\":2,\"content_type\":\"image/jpeg\"}")).body;
+        JSONObject ups = m.handle("POST", "/v1/square/uploads", "", b("{\"count\":2,\"content_type\":\"image/jpeg\",\"sizes\":[10,20]}")).body;
         assertEquals(2, ups.getJSONArray("uploads").length());
         String key = ups.getJSONArray("uploads").getJSONObject(0).getString("key");
         String url = ups.getJSONArray("uploads").getJSONObject(0).getString("url");
@@ -90,9 +90,10 @@ public class DiscoverMockTest {
         assertEquals(id, m.handle("GET", "/v1/square/feed", "tab=latest", null).body.getJSONArray("items").getJSONObject(0).getString("id"));
 
         // a video post: one MP4 plus its cover, never together with images
-        JSONObject vup = m.handle("POST", "/v1/square/uploads", "", b("{\"count\":1,\"content_type\":\"video/mp4\"}")).body.getJSONArray("uploads").getJSONObject(0);
-        JSONObject cup = m.handle("POST", "/v1/square/uploads", "", b("{\"count\":1,\"content_type\":\"image/jpeg\"}")).body.getJSONArray("uploads").getJSONObject(0);
-        assertEquals(400, m.handle("POST", "/v1/square/uploads", "", b("{\"count\":1,\"content_type\":\"video/quicktime\"}")).status);
+        JSONObject vup = m.handle("POST", "/v1/square/uploads", "", b("{\"count\":1,\"content_type\":\"video/mp4\",\"sizes\":[3000]}")).body.getJSONArray("uploads").getJSONObject(0);
+        JSONObject cup = m.handle("POST", "/v1/square/uploads", "", b("{\"count\":1,\"content_type\":\"image/jpeg\",\"sizes\":[30]}")).body.getJSONArray("uploads").getJSONObject(0);
+        assertEquals(400, m.handle("POST", "/v1/square/uploads", "", b("{\"count\":1,\"content_type\":\"video/quicktime\",\"sizes\":[1]}")).status);
+        assertEquals(400, m.handle("POST", "/v1/square/uploads", "", b("{\"count\":2,\"content_type\":\"image/jpeg\",\"sizes\":[10]}")).status); // sizes must match count
         assertTrue(vup.getString("key").endsWith(".mp4"));
         assertTrue(m.acceptUpload(DiscoverMock.UPLOAD_PREFIX + vup.getString("key"), b("mp4")));
         assertTrue(m.acceptUpload(DiscoverMock.UPLOAD_PREFIX + cup.getString("key"), b("jpg")));

@@ -168,7 +168,10 @@ public class SquareLogicTest {
         assertEquals("square/v.mp4", vb.getString("video_key"));
         assertEquals("square/c.jpg", vb.getString("cover_key"));
         assertFalse(vb.has("image_keys"));
-        assertEquals("video/mp4", SquareLogic.uploadsBody(1, SquareLogic.VIDEO_CONTENT_TYPE).getString("content_type"));
+        JSONObject ub = SquareLogic.uploadsBody(SquareLogic.VIDEO_CONTENT_TYPE, Arrays.asList(1234L));
+        assertEquals("video/mp4", ub.getString("content_type"));
+        assertEquals(1, ub.getInt("count"));
+        assertEquals(1234L, ub.getJSONArray("sizes").getLong(0));
         assertFalse(SquareLogic.commentBody("x", null).has("parent_id"));
         assertEquals("c1", SquareLogic.commentBody("x", "c1").getString("parent_id"));
         JSONObject r = SquareLogic.reportBody("post", "p1", "spam");
@@ -193,6 +196,8 @@ public class SquareLogicTest {
         assertEquals("广场", zh.title());
         assertEquals("Square", en.title());
         assertTrue(zh.hiddenInfo("x").contains("原因：x"));
+        assertTrue(zh.hiddenInfo("spam").contains("垃圾广告")); // reason codes are shown localized
+        assertTrue(en.hiddenInfo("hate").contains("Hate speech"));
         assertTrue(en.hiddenInfo(null).startsWith("This post has been hidden"));
         assertTrue(zh.waitSeconds(30).contains("30 秒"));
         assertTrue(en.waitSeconds(90).contains("2 min"));

@@ -415,6 +415,54 @@ public final class LuckgramAI {
         }
     }
 
+    /**
+     * Like {@link #putPresignedBlocking} but streams {@code file} from disk (26 square videos, up to
+     * 50 MB) instead of holding it in memory. The in-app mock gets the bytes, as it has no sockets.
+     */
+    public int putPresignedFileBlocking(Request req, String url, String contentType, java.io.File file) throws Exception {
+        if (url == null || !url.startsWith("https://")) {
+            throw new IOException("not https");
+        }
+        if (req != null && req.cancelled) {
+            throw new IOException("cancelled");
+        }
+        if (isUsingMock()) {
+            try (java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+                return putPresignedBlocking(req, url, contentType, readAllBytes(in));
+            }
+        }
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setRequestMethod("PUT");
+        c.setConnectTimeout(15_000);
+        c.setReadTimeout(120_000);
+        c.setUseCaches(false);
+        c.setRequestProperty("Content-Type", contentType);
+        c.setDoOutput(true);
+        c.setFixedLengthStreamingMode(file.length());
+        if (req != null) req.connection = c::disconnect;
+        try (OutputStream os = c.getOutputStream(); java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                if (req != null && req.cancelled) throw new IOException("cancelled");
+                os.write(buf, 0, n);
+            }
+        }
+        try {
+            return c.getResponseCode();
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    static byte[] readAllBytes(InputStream in) throws IOException {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[64 * 1024];
+        int n;
+        while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        return out.toByteArray();
+    }
+
     /** Runs {@code work} on the client's worker thread. */
     public void runInBackground(Runnable work) {
         executor.execute(work);

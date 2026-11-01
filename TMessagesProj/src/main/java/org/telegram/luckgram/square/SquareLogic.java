@@ -400,8 +400,11 @@ public final class SquareLogic {
             .put("cover_key", coverKey);
     }
 
-    public static JSONObject uploadsBody(int count, String contentType) throws Exception {
-        return new JSONObject().put("count", count).put("content_type", contentType);
+    /** S11: every slot declares its byte size; the PUT's Content-Length must match (S3 checks it). */
+    public static JSONObject uploadsBody(String contentType, List<Long> sizes) throws Exception {
+        JSONArray arr = new JSONArray();
+        for (Long s : sizes) arr.put(s.longValue());
+        return new JSONObject().put("count", sizes.size()).put("content_type", contentType).put("sizes", arr);
     }
 
     public static JSONObject commentBody(String text, String parentId) throws Exception {
@@ -508,9 +511,18 @@ public final class SquareLogic {
         public String refresh() { return t("刷新", "Refresh"); }
 
         public String hidden() { return t("已隐藏", "Hidden"); }
+        /** {@code reason} is a report reason code (S11: the most reported one) or free text. */
         public String hiddenInfo(String reason) {
             String base = t("这条动态已被隐藏，只有你自己能看到。", "This post has been hidden and is visible only to you.");
-            return reason == null || reason.isEmpty() ? base : base + " " + t("原因：", "Reason: ") + reason;
+            if (reason == null || reason.isEmpty()) return base;
+            String shown = reason;
+            for (String code : REPORT_REASONS) {
+                if (code.equals(reason)) {
+                    shown = reportReason(reason);
+                    break;
+                }
+            }
+            return base + " " + t("原因：", "Reason: ") + shown;
         }
         public String likes(int n) { return t("赞 " + n, n == 1 ? "1 like" : n + " likes"); }
         public String comments(int n) { return t("评论 " + n, n == 1 ? "1 comment" : n + " comments"); }
@@ -579,6 +591,7 @@ public final class SquareLogic {
         public String publicUsername() { return t("公开用户名", "Public username"); }
         public String useMyUsername(String u) { return t("在广场显示 @" + u + "，其他人可以通过它给你发消息", "Show @" + u + " in Square so others can message you"); }
         public String showUsername() { return t("显示", "Show"); }
+        public String useTelegramAvatar() { return t("使用我的 Telegram 头像", "Use my Telegram photo"); }
         public String hideUsername() { return t("不显示", "Don't show"); }
         public String save() { return t("保存", "Save"); }
         public String saved() { return t("已保存", "Saved"); }
