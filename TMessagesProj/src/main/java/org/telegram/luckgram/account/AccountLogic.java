@@ -65,7 +65,6 @@ public final class AccountLogic {
         return (request == null || "pending".equals(request)) && nowMs < expiresAtMs;
     }
 
-    /** Only links the bot itself opens: https://t.me/... */
     /** Bot username from the {@code t.me/<bot>?start=<nonce>} link, or null (silent link, 25/26). */
     public static String botUsername(String link) {
         if (link == null) return null;
@@ -86,11 +85,15 @@ public final class AccountLogic {
         return s;
     }
 
+    /** The bot's "linked" reply can arrive after the chat was deleted: delete it again after these delays. */
+    public static final long[] BOT_CLEANUP_DELAYS_MS = {5_000, 15_000};
+
     /** The message the app sends to the bot on the user's behalf. */
     public static String startCommand(String nonce) {
         return "/start " + nonce;
     }
 
+    /** Only links the bot itself opens: https://t.me/... */
     public static boolean isTelegramLink(String url) {
         return url != null && url.startsWith("https://t.me/") && url.length() > "https://t.me/".length();
     }

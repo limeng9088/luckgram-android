@@ -136,6 +136,21 @@ public class NearbyLogicTest {
     }
 
     @Test
+    public void missedReminderAfterReboot() {
+        long hour = 60 * 60 * 1000L;
+        long exp = 1_000_000_000_000L;
+        // Rebooted 30 min before expiry, not reminded yet: remind now.
+        assertTrue(NearbyLogic.missedReminder(exp, exp - hour / 2, 0));
+        // Already reminded for this expiry: no second one.
+        assertFalse(NearbyLogic.missedReminder(exp, exp - hour / 2, exp));
+        // Reminder still ahead: the alarm handles it.
+        assertFalse(NearbyLogic.missedReminder(exp, exp - 2 * hour, 0));
+        // Expired or nothing saved.
+        assertFalse(NearbyLogic.missedReminder(exp, exp, 0));
+        assertFalse(NearbyLogic.missedReminder(0, exp, 0));
+    }
+
+    @Test
     public void fallbackFixMustBeFresh() {
         long now = 1_800_000_000_000L;
         assertTrue(NearbyLogic.isFreshFix(now - 29 * 60 * 1000L, now));
