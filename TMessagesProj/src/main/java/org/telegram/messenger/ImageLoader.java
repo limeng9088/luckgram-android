@@ -574,7 +574,8 @@ public class ImageLoader {
                         }
                     }
 
-                    URL downloadUrl = new URL(overrideUrl != null ? overrideUrl : location);
+                    // specs#81: server URLs on a blocked API entry are moved to the one in use.
+                    URL downloadUrl = new URL(org.telegram.luckgram.LuckgramAI.rewriteApiUrl(overrideUrl != null ? overrideUrl : location));
                     // specs#72: Luckgram square media follows the in-app SOCKS5 proxy and is logged.
                     if (org.telegram.luckgram.diag.LuckgramNet.isApiUrl(downloadUrl.toString())) {
                         luckgramRoute = org.telegram.luckgram.diag.LuckgramNet.currentRoute();
@@ -591,7 +592,7 @@ public class ImageLoader {
                         httpConnection.connect();
                         httpConnectionStream = httpConnection.getInputStream();
                         if (luckgramRoute != null) {
-                            org.telegram.luckgram.diag.LuckgramNet.logHttp("media", "GET", downloadUrl.toString(), httpConnection.getResponseCode(), null, luckgramStart, luckgramRoute.label, httpConnection.getHeaderField("X-Request-Id"));
+                            org.telegram.luckgram.diag.LuckgramNet.logHttp("media", "GET", downloadUrl.toString(), httpConnection.getResponseCode(), null, luckgramStart, luckgramRoute.label, httpConnection.getHeaderField("X-Request-Id"), downloadUrl.getHost(), false);
                         }
                         fileOutputStream = new RandomAccessFile(cacheImage.tempFilePath, "rws");
                     }
