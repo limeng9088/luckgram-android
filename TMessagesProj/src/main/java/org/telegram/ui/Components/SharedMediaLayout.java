@@ -193,7 +193,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
     public static final int TAB_GIFTS = 14;
     public static final int TAB_POLL = 15;
     /** Luckgram (spec 16): what this user recently wrote in groups you share. */
-    public static final int TAB_LUCKGRAM_ACTIVITY = 100;
+    public static final int TAB_LUCKGRAM_ACTIVITY = org.telegram.luckgram.sharedactivity.SharedActivityLogic.TAB_ID;
     private static final int TAB_STORIES_ALBUM_PREFIX = 0x00010000;
     private static final int TAB_STORIES_ALBUM_MASK = 0x0000FFFF;
 
@@ -4766,6 +4766,11 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             return;
         }
         mediaPage.lastCheckScrollTime = currentTime;
+        // Luckgram (16 P0): the 动态 tab loads everything in one go and has no sharedMediaData slot;
+        // falling through to the media branch below read sharedMediaData[100] from onLayout.
+        if (mediaPage.selectedType == TAB_LUCKGRAM_ACTIVITY) {
+            return;
+        }
         if (searching && searchWas && mediaPage.selectedType != TAB_SAVED_DIALOGS || mediaPage.selectedType == TAB_GROUPUSERS) {
             return;
         }
@@ -4839,6 +4844,9 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             int stype = mediaPage.selectedType;
             if (stype == TAB_POLL) {
                 stype = MEDIA_POLL;
+            }
+            if (!org.telegram.luckgram.sharedactivity.SharedActivityLogic.isMediaSlot(stype, sharedMediaData.length)) {
+                return;
             }
             if ((firstVisibleItem + visibleItemCount > totalItemCount - threshold || sharedMediaData[stype].loadingAfterFastScroll) && !sharedMediaData[stype].loading) {
                 int type;
@@ -4915,6 +4923,9 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
             type = MediaDataController.MEDIA_GIF;
         } else {
             type = MediaDataController.MEDIA_URL;
+        }
+        if (!org.telegram.luckgram.sharedactivity.SharedActivityLogic.isMediaSlot(selectedType, sharedMediaData.length)) {
+            return;
         }
         sharedMediaData[selectedType].loading = true;
         profileActivity.getMediaDataController().loadMedia(dialog_id, 50, 0, sharedMediaData[selectedType].min_id, type, topicId, 1, profileActivity.getClassGuid(), sharedMediaData[selectedType].requestIndex, null, null);
@@ -7516,7 +7527,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
                 if (type == TAB_POLL) {
                     type = MEDIA_POLL;
                 }
-                if (!sharedMediaData[type].loading && !sharedMediaData[type].endReached[0] && sharedMediaData[type].messages.isEmpty()) {
+                if (org.telegram.luckgram.sharedactivity.SharedActivityLogic.isMediaSlot(type, sharedMediaData.length) && !sharedMediaData[type].loading && !sharedMediaData[type].endReached[0] && sharedMediaData[type].messages.isEmpty()) {
                     sharedMediaData[type].loading = true;
                     documentsAdapter.notifyDataSetChanged();
                     if (type == 0) {
