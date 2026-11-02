@@ -46,11 +46,14 @@ public class WelcomeLogicTest {
     }
 
     @Test
-    public void proStepOnlyWhenBillingEnabled() {
-        assertEquals(Arrays.asList(WelcomeLogic.Step.AI, WelcomeLogic.Step.AGENTS, WelcomeLogic.Step.SUMMARY, WelcomeLogic.Step.DISCOVER),
-            WelcomeLogic.steps(false));
-        assertEquals(5, WelcomeLogic.steps(true).size());
-        assertEquals(WelcomeLogic.Step.PRO, WelcomeLogic.steps(true).get(4));
+    public void proStepAlwaysLastAndSubscribeOnlyWithBilling() {
+        assertEquals(Arrays.asList(WelcomeLogic.Step.AI, WelcomeLogic.Step.AGENTS, WelcomeLogic.Step.SUMMARY, WelcomeLogic.Step.DISCOVER, WelcomeLogic.Step.PRO),
+            WelcomeLogic.steps());
+        assertTrue(WelcomeLogic.canSubscribe(WelcomeLogic.Step.PRO, true));
+        assertFalse(WelcomeLogic.canSubscribe(WelcomeLogic.Step.PRO, false));
+        assertFalse(WelcomeLogic.canSubscribe(WelcomeLogic.Step.AI, true));
+        assertEquals("即将推出", new WelcomeLogic.Texts(true).comingSoon());
+        assertEquals("Coming soon", new WelcomeLogic.Texts(false).comingSoon());
     }
 
     @Test

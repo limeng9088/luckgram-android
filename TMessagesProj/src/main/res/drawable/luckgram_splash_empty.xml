@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Luckgram specs#76: no icon on the system splash screen, only the background. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <size android:width="288dp" android:height="288dp" />
+</shape>
