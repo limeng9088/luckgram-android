@@ -87,6 +87,8 @@ public final class AccountLogic {
 
     /** The bot's "linked" reply can arrive after the chat was deleted: delete it again after these delays. */
     public static final long[] BOT_CLEANUP_DELAYS_MS = {5_000, 15_000};
+    /** After linking, any new message in the bot chat within this window is deleted on arrival. */
+    public static final long BOT_WATCH_MS = 2 * 60 * 1000L;
 
     /** The message the app sends to the bot on the user's behalf. */
     public static String startCommand(String nonce) {

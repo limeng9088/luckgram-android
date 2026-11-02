@@ -90,6 +90,9 @@ public class AccountLogicTest {
     @Test
     public void botCleanupDelays() {
         long[] d = AccountLogic.BOT_CLEANUP_DELAYS_MS;
+        // The watch for late replies outlasts the fixed clears (review P2: replies after 15 s).
+        assertEquals(120_000L, AccountLogic.BOT_WATCH_MS);
+        assertTrue(AccountLogic.BOT_WATCH_MS > d[d.length - 1]);
         assertTrue(d.length > 0);
         for (int i = 0; i < d.length; i++) {
             assertTrue(d[i] > 0 && d[i] < 60_000);

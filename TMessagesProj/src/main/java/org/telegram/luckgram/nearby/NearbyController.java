@@ -145,20 +145,24 @@ public final class NearbyController {
 
     /**
      * Re-arms the expiry reminder from the saved {@code expires_at}: alarms are lost on reboot and
-     * force-stop. Called on boot and when the app comes to the foreground; idempotent.
+     * force-stop. If the reminder time already passed while the alarm was gone (phone off, or the
+     * app force-stopped, review P2) and this expiry wasn't reminded of yet, the reminder is shown
+     * now. Called on boot and when the app comes to the foreground; idempotent (one reminder per
+     * expiry).
      */
     public static void restoreReminder() {
-        if (isFeatureEnabled() && isVisible()) {
-            scheduleReminder(expiresAt());
+        if (!isFeatureEnabled() || !isVisible()) {
+            return;
+        }
+        scheduleReminder(expiresAt());
+        if (NearbyLogic.missedReminder(expiresAt(), System.currentTimeMillis(), remindedFor())) {
+            showReminder(ApplicationLoader.applicationContext);
         }
     }
 
-    /** Boot: re-arm, and show the reminder now if its time passed while the phone was off (review P2). */
+    /** Boot: same as {@link #restoreReminder()}. */
     static void restoreAfterBoot(Context ctx) {
         restoreReminder();
-        if (isFeatureEnabled() && NearbyLogic.missedReminder(expiresAt(), System.currentTimeMillis(), remindedFor())) {
-            showReminder(ctx);
-        }
     }
 
     private static long remindedFor() {
