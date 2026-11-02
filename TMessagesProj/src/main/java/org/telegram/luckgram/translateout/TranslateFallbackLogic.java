@@ -14,6 +14,7 @@ public final class TranslateFallbackLogic {
     public static final String SOURCE_OUT = "translate_out";
     public static final String SOURCE_MESSAGE = "translate_message";
     public static final String SOURCE_CHAT = "translate_chat";
+    public static final String SOURCE_VOICE = "translate_voice";
 
     /** Telegram gets this long before we stop waiting and fall back (spec 01 「翻译服务」2). */
     public static final long TELEGRAM_TIMEOUT_MS = 8_000;

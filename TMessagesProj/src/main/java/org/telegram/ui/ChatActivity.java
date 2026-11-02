@@ -1258,7 +1258,8 @@ public class ChatActivity extends BaseFragment implements
         if (!org.telegram.luckgram.translatein.LuckgramTranslateIn.isEnabled() || message == null) {
             return null;
         }
-        if (org.telegram.luckgram.translatein.LuckgramTranslateIn.textOf(message) != null) {
+        if (org.telegram.luckgram.translatein.LuckgramTranslateIn.textOf(message) != null
+            || org.telegram.luckgram.translatein.LuckgramTranslateIn.voiceTextOf(message) != null) {
             return message;
         }
         if (group != null) {
@@ -1276,13 +1277,18 @@ public class ChatActivity extends BaseFragment implements
         if (target == null) {
             return;
         }
-        org.telegram.luckgram.translatein.LuckgramTranslateIn.toggle(target, (ok, error) -> {
+        final org.telegram.luckgram.translatein.LuckgramTranslateIn.Done done = (ok, error) -> {
             if (ok) {
                 luckgramRefreshMessage(target);
             } else if (error != null) {
                 BulletinFactory.of(this).createSimpleBulletin(R.raw.error, error).show();
             }
-        });
+        };
+        if (org.telegram.luckgram.translatein.LuckgramTranslateIn.voiceTextOf(target) != null) {
+            org.telegram.luckgram.translatein.LuckgramTranslateIn.toggleVoice(target, done);
+        } else {
+            org.telegram.luckgram.translatein.LuckgramTranslateIn.toggle(target, done);
+        }
     }
 
     private void luckgramRefreshMessage(MessageObject target) {
@@ -32221,7 +32227,8 @@ public class ChatActivity extends BaseFragment implements
                         // Luckgram spec 01 A.1: translate in the bubble (or undo), instead of Telegram's sheet
                         final MessageObject target = luckgramTranslateTarget(message, groupedMessages);
                         cell.setTextAndIcon(org.telegram.luckgram.translatein.TranslateInLogic.menuLabel(
-                            org.telegram.luckgram.translatein.LuckgramTranslateIn.isTranslated(target), org.telegram.luckgram.LuckgramStrings.isChinese()), R.drawable.msg_translate);
+                            org.telegram.luckgram.translatein.LuckgramTranslateIn.isTranslated(target) || org.telegram.luckgram.translatein.LuckgramTranslateIn.isVoiceTranslated(target),
+                            org.telegram.luckgram.LuckgramStrings.isChinese()), R.drawable.msg_translate);
                         cell.setOnClickListener(e -> {
                             closeMenu();
                             luckgramToggleTranslation(target);
@@ -37226,6 +37233,13 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void didPressMessageUrl(CharacterStyle url, boolean longPress, MessageObject messageObject, ChatMessageCell cell) {
+        if (url instanceof org.telegram.luckgram.translatein.LuckgramTranslateIn.TranslateLinkSpan) {
+            // Luckgram spec 01 B.1: 「翻译」 under a voice transcription
+            if (!longPress) {
+                luckgramToggleTranslation(messageObject);
+            }
+            return;
+        }
         if (url == null || getParentActivity() == null) {
             return;
         }

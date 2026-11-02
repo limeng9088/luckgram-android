@@ -3679,6 +3679,11 @@ public class MessageObject {
     public CharSequence luckgramTranslationBlock;
     /** Luckgram spec 01 A.5: the saved translation state was already looked up. */
     public boolean luckgramRestoreChecked;
+    /** Luckgram spec 01 B: translation shown below a voice / round video transcription (null = none). */
+    public CharSequence luckgramVoiceTranslationBlock;
+    public boolean luckgramVoiceRestoreChecked;
+    /** Luckgram spec 01 B.2: detected language of the transcription (null = not detected yet). */
+    public String luckgramVoiceLanguage;
     private CharSequence luckgramCaptionBlock;
 
     /** Luckgram spec 01 A: shows ({@code block} != null) or removes the in-bubble translation. */
@@ -7591,6 +7596,8 @@ public class MessageObject {
         }
         CharSequence text = translated && messageOwner.translatedVoiceTranscription != null ? messageOwner.translatedVoiceTranscription.text : messageOwner.voiceTranscription;
         if (!TextUtils.isEmpty(text)) {
+            // Luckgram spec 01 B: 「翻译」 link or the translation below the transcription
+            text = org.telegram.luckgram.translatein.LuckgramTranslateIn.decorateTranscription(this, text);
             text = Emoji.replaceEmoji(text, Theme.chat_msgTextPaint.getFontMetricsInt(), false);
         }
         return text;

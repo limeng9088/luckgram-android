@@ -213,6 +213,148 @@ public final class LuckgramTranslateIn {
         msg.luckgramSetTranslation(buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage()));
     }
 
+    // ---------------------------------------------------------------- voice transcriptions (spec 01 B)
+
+    /** The finished transcription of a voice / round video message, or null. */
+    public static String voiceTextOf(MessageObject msg) {
+        if (msg == null || msg.messageOwner == null || !msg.isVoiceTranscriptionOpen() || !msg.messageOwner.voiceTranscriptionFinal) {
+            return null;
+        }
+        if (org.telegram.luckgram.voice.LuckgramTranscriber.isFailed(msg)) {
+            return null;
+        }
+        final String text = msg.messageOwner.voiceTranscription;
+        return TextUtils.isEmpty(text) || text.trim().isEmpty() ? null : text;
+    }
+
+    public static boolean isVoiceTranslated(MessageObject msg) {
+        return msg != null && msg.luckgramVoiceTranslationBlock != null;
+    }
+
+    /** The 「翻译」 link under a transcription (spec 01 B.1); handled by ChatActivity.didPressMessageUrl. */
+    public static final class TranslateLinkSpan extends android.text.style.ClickableSpan {
+        @Override
+        public void onClick(@NonNull android.view.View widget) {
+        }
+
+        @Override
+        public void updateDrawState(@NonNull android.text.TextPaint ds) {
+            ds.setColor(ds.linkColor);
+            ds.setTextSize(ds.getTextSize() * 0.85f);
+            ds.setUnderlineText(false);
+        }
+    }
+
+    /**
+     * spec 01 B: what is shown below a transcription: its translation, or a 「翻译」 link when the
+     * transcription's language is not a "don't translate" language. {@code text} is returned unchanged
+     * otherwise.
+     */
+    public static CharSequence decorateTranscription(MessageObject msg, CharSequence text) {
+        if (msg.luckgramVoiceTranslationBlock != null) {
+            return new SpannableStringBuilder(text).append(msg.luckgramVoiceTranslationBlock);
+        }
+        if (!isEnabled() || msg.translated) {
+            return text;
+        }
+        final String voice = voiceTextOf(msg);
+        if (voice == null) {
+            return text;
+        }
+        restoreVoice(msg, voice);
+        if (msg.luckgramVoiceTranslationBlock != null) {
+            return new SpannableStringBuilder(text).append(msg.luckgramVoiceTranslationBlock);
+        }
+        final String lang = msg.luckgramVoiceLanguage;
+        if (lang == null) {
+            detectVoice(msg, voice);
+            return text;
+        }
+        if (TranslateController.UNKNOWN_LANGUAGE.equals(lang)
+            ? false
+            : !TranslateInLogic.showButton(true, false, true, lang, doNotTranslate(), targetLanguage())) {
+            return text;
+        }
+        final SpannableStringBuilder sb = new SpannableStringBuilder(text);
+        sb.append('\n');
+        final int start = sb.length();
+        sb.append(TranslateInLogic.menuLabel(false, LuckgramStrings.isChinese()));
+        sb.setSpan(new TranslateLinkSpan(), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return sb;
+    }
+
+    private static void detectVoice(MessageObject msg, String text) {
+        if (!LanguageDetector.hasSupport()) {
+            msg.luckgramVoiceLanguage = TranslateController.UNKNOWN_LANGUAGE;
+            return;
+        }
+        final String key = "v:" + msg.currentAccount + ":" + msg.getDialogId() + ":" + msg.getId();
+        if (!detecting.add(key)) {
+            return;
+        }
+        LanguageDetector.detectLanguage(text, lng -> AndroidUtilities.runOnUIThread(() -> {
+            detecting.remove(key);
+            msg.luckgramVoiceLanguage = lng == null ? TranslateController.UNKNOWN_LANGUAGE : lng;
+            refreshVoice(msg);
+        }), err -> AndroidUtilities.runOnUIThread(() -> {
+            detecting.remove(key);
+            msg.luckgramVoiceLanguage = TranslateController.UNKNOWN_LANGUAGE;
+            refreshVoice(msg);
+        }));
+    }
+
+    private static void refreshVoice(MessageObject msg) {
+        msg.forceUpdate = true;
+        org.telegram.messenger.NotificationCenter.getInstance(msg.currentAccount).postNotificationName(
+            org.telegram.messenger.NotificationCenter.voiceTranscriptionUpdate, msg);
+    }
+
+    /** spec 01 B.1: 「翻译」 under a transcription, or long-press 「撤销翻译」 on it. */
+    public static void toggleVoice(MessageObject msg, Done done) {
+        final String text = voiceTextOf(msg);
+        if (text == null) {
+            done.run(false, null);
+            return;
+        }
+        final String key = "v" + stateKey(msg, text);
+        if (isVoiceTranslated(msg)) {
+            forgetKey(key);
+            msg.luckgramVoiceTranslationBlock = null;
+            refreshVoice(msg);
+            done.run(true, null);
+            return;
+        }
+        final String toLang = targetLanguage();
+        translate(msg.currentAccount, TranslateFallbackLogic.SOURCE_VOICE, text, toLang, (translated, fromLang, error) -> {
+            if (translated == null) {
+                done.run(false, LuckgramTranslate.failureMessage(error));
+                return;
+            }
+            String from = fromLang != null ? fromLang : msg.luckgramVoiceLanguage;
+            if (TranslateController.UNKNOWN_LANGUAGE.equals(from)) {
+                from = null;
+            }
+            state().put(key, translated, TranslateInLogic.encodeLanguages(from, toLang), System.currentTimeMillis());
+            scheduleSave();
+            msg.luckgramVoiceTranslationBlock = buildBlock(msg, translated, from, toLang);
+            refreshVoice(msg);
+            done.run(true, null);
+        });
+    }
+
+    private static void restoreVoice(MessageObject msg, String text) {
+        if (msg.luckgramVoiceRestoreChecked) {
+            return;
+        }
+        msg.luckgramVoiceRestoreChecked = true;
+        final TranslateCache.Entry e = state().get("v" + stateKey(msg, text), System.currentTimeMillis());
+        if (e == null) {
+            return;
+        }
+        final String[] langs = TranslateInLogic.decodeLanguages(e.fromLang);
+        msg.luckgramVoiceTranslationBlock = buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage());
+    }
+
     // ---------------------------------------------------------------- translation service
 
     public interface TranslateDone {
@@ -351,9 +493,12 @@ public final class LuckgramTranslateIn {
     }
 
     private static void forget(MessageObject msg, String text) {
+        forgetKey(stateKey(msg, text));
+    }
+
+    private static void forgetKey(String key) {
         // An expired entry is a removed one: overwrite with time 0.
         final TranslateCache s = state();
-        final String key = stateKey(msg, text);
         if (s.get(key, System.currentTimeMillis()) != null) {
             s.put(key, " ", null, 0);
             s.prune(System.currentTimeMillis());
