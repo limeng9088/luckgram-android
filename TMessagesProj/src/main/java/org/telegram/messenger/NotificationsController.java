@@ -5446,7 +5446,9 @@ public class NotificationsController extends BaseController implements Notificat
                     } else {
                         personName = senderName[0];
                     }
-                    if (DialogObject.isUserDialog(dialogId) && !TextUtils.isEmpty(personName)) {
+                    // Luckgram 09: on API 28+ a private chat or channel notification is titled by its
+                    // "person" (the sender / the channel), not by conversationName, so prefix that too.
+                    if ((DialogObject.isUserDialog(dialogId) || isChannel) && !TextUtils.isEmpty(personName)) {
                         personName = luckgramAccountPrefix + personName;
                     }
 
