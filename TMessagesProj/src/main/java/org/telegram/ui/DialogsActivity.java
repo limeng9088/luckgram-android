@@ -4186,9 +4186,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     }
                     if (viewPage.listView.getScrollState() != RecyclerView.SCROLL_STATE_DRAGGING) {
                         if (luckgramPullReady) {
-                            // Luckgram 12: released past the threshold -> open the hidden chats
+                            // Luckgram 12: released past the threshold -> open the hidden chats. Snap the pull back
+                            // first: the rows' offset is the static DialogsActivity.viewOffset, and the hidden list
+                            // (another DialogsActivity) would lay its rows out ~250px down with it (acceptance
+                            // 2026-11-02: blank band on top, swipe / long-press missing the rows).
                             luckgramPullReady = false;
+                            setStoriesOvercroll(viewPage, 0);
                             org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.open(DialogsActivity.this);
+                            return;
                         }
                         storiesOverscrollAnimator = ValueAnimator.ofFloat(storiesOverscroll, 0);
                         storiesOverscrollAnimator.addUpdateListener(animation -> {
@@ -7195,6 +7200,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     public void onResume() {
         super.onResume();
         updateLuckgramAi();
+        luckgramResetInheritedOffset();
         if (dialogStoriesCell != null) {
             dialogStoriesCell.onResume();
         }
@@ -9215,7 +9221,20 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     @Override
+    /** Luckgram 12: the hidden list never pulls, so it must not keep a row offset left by the list it was opened from. */
+    private void luckgramResetInheritedOffset() {
+        if (initialDialogsType != DIALOGS_TYPE_LUCKGRAM_HIDDEN || viewPages == null) {
+            return;
+        }
+        for (ViewPage page : viewPages) {
+            if (page != null && page.listView != null && (DialogsActivity.viewOffset != 0 || page.listView.getChildCount() > 0 && page.listView.getChildAt(0).getTranslationY() != 0)) {
+                page.listView.setViewsOffset(0);
+            }
+        }
+    }
+
     public void onTransitionAnimationEnd(boolean isOpen, boolean backward) {
+        luckgramResetInheritedOffset();
         if (rightSlidingDialogContainer != null && rightSlidingDialogContainer.hasFragment()) {
             rightSlidingDialogContainer.getFragment().onTransitionAnimationEnd(isOpen, backward);
         } else {
