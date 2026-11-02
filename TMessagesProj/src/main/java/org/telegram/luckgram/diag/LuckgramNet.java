@@ -122,11 +122,10 @@ public final class LuckgramNet {
         });
     }
 
-    /** Whether {@code url} is on the Luckgram API host (AI, config, square media...). */
+    /** Whether {@code url} is on one of the Luckgram API entries (AI, config, square media...). */
     public static boolean isApiUrl(String url) {
         try {
-            String host = new URL(url).getHost();
-            return host != null && host.equalsIgnoreCase(apiHost());
+            return LuckgramAI.endpoints().isEntryHost(new URL(url).getHost());
         } catch (Exception e) {
             return false;
         }
@@ -151,7 +150,14 @@ public final class LuckgramNet {
 
     /** Logs one finished Luckgram API request. */
     public static void logHttp(String feature, String method, String target, int status, Throwable failure, long startMs, String proxy, String requestId) {
+        logHttp(feature, method, target, status, failure, startMs, proxy, requestId, null, false);
+    }
+
+    /** specs#81: also the API entry host used and whether the request moved to it after a failure. */
+    public static void logHttp(String feature, String method, String target, int status, Throwable failure, long startMs, String proxy, String requestId, String endpoint, boolean switched) {
         LuckgramDiagLog.Entry e = new LuckgramDiagLog.Entry();
+        e.endpoint = endpoint;
+        e.switched = switched;
         e.timeMs = startMs;
         e.feature = feature;
         e.method = method;

@@ -5,6 +5,7 @@ import android.text.TextUtils;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.telegram.luckgram.diag.LuckgramEndpoints;
 import org.telegram.luckgram.diag.LuckgramNet;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildConfig;
@@ -162,6 +163,9 @@ public final class LuckgramAI {
         private final Closeable onClose;
         /** The server's {@code X-Request-Id} header (specs#71), or null. */
         public String requestId;
+        /** specs#81: host of the API entry that answered, and whether another entry failed first. */
+        public String endpoint;
+        public boolean switched;
 
         public HttpResponse(int status, String contentType, InputStream body, Closeable onClose) {
             this.status = status;
@@ -192,7 +196,40 @@ public final class LuckgramAI {
         public HttpResponse execute(String method, String path, Map<String, String> headers, byte[] body) throws IOException {
             // path is relative to the API server, or an absolute https URL (temporary files).
             // specs#72: through the in-app SOCKS5 proxy when one is on.
-            HttpURLConnection c = LuckgramNet.open(new URL(path.startsWith("https://") ? path : apiBaseUrl() + path), LuckgramNet.currentRoute());
+            // specs#81: API requests try the entries in order and move on when one can't be reached.
+            LuckgramEndpoints ep = endpoints();
+            boolean relative = !path.startsWith("https://");
+            String own = relative ? null : ep.baseOf(path);
+            if (!relative && own == null) {
+                LAST_ENDPOINT.set(null);
+                return run(new URL(path), method, headers, body, null, false);
+            }
+            maybeProbe();
+            List<String> order = ep.attemptOrder();
+            for (int i = 0; ; i++) {
+                String base = order.get(i);
+                URL url = new URL(base + (relative ? path : path.substring(own.length())));
+                LAST_ENDPOINT.set(url.getHost());
+                long start = System.currentTimeMillis();
+                try {
+                    HttpResponse res = run(url, method, headers, body, base, i > 0);
+                    if (i > 0 && ep.markWorking(base)) {
+                        rememberEndpoint(base);
+                    }
+                    return res;
+                } catch (EntryUnreachable e) {
+                    if (i + 1 >= order.size()) {
+                        throw e.cause;
+                    }
+                    // the failed try gets its own log line; the retry is logged by the caller
+                    LuckgramNet.logHttp("endpoint-switch", method, url.toString(), 0, e.cause, start, LuckgramNet.currentRoute().label, null, url.getHost(), i > 0);
+                }
+            }
+        }
+
+        /** Throws {@link EntryUnreachable} when the connection itself fails (before anything is sent). */
+        private HttpResponse run(URL url, String method, Map<String, String> headers, byte[] body, String base, boolean switched) throws IOException {
+            HttpURLConnection c = LuckgramNet.open(url, LuckgramNet.currentRoute());
             c.setRequestMethod(method);
             c.setConnectTimeout(15_000);
             c.setReadTimeout(120_000);
@@ -203,6 +240,20 @@ public final class LuckgramAI {
             if (body != null) {
                 c.setDoOutput(true);
                 c.setFixedLengthStreamingMode(body.length);
+            }
+            if (base != null) {
+                try {
+                    c.connect(); // DNS, TCP and TLS: a failure here means the request never left
+                } catch (IOException e) {
+                    c.disconnect();
+                    if (LuckgramEndpoints.isNetworkFailure(e)) {
+                        throw new EntryUnreachable(e);
+                    }
+                    throw e;
+                }
+            }
+            if (body != null) {
+                // the whole body is sent again on every entry
                 try (OutputStream os = c.getOutputStream()) {
                     os.write(body);
                 }
@@ -211,8 +262,99 @@ public final class LuckgramAI {
             InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
             HttpResponse res = new HttpResponse(status, c.getContentType(), in, c::disconnect);
             res.requestId = c.getHeaderField("X-Request-Id");
+            res.endpoint = base != null ? url.getHost() : null;
+            res.switched = switched;
             return res;
         }
+    }
+
+    /** The connection to one API entry failed at the network level; try the next one. */
+    private static final class EntryUnreachable extends IOException {
+        final IOException cause;
+
+        EntryUnreachable(IOException cause) {
+            super(cause);
+            this.cause = cause;
+        }
+    }
+
+    /** Host of the API entry the current thread used last (diagnostic log of failed requests). */
+    private static final ThreadLocal<String> LAST_ENDPOINT = new ThreadLocal<>();
+
+    // ---------------------------------------------------------------- API entries (specs#81)
+
+    private static final String KEY_ENDPOINT = "_api_endpoint";
+    private static volatile LuckgramEndpoints endpoints;
+
+    /** The API entries built into the app, the one in use first chosen from the last that worked. */
+    public static LuckgramEndpoints endpoints() {
+        LuckgramEndpoints e = endpoints;
+        if (e == null) {
+            synchronized (LuckgramAI.class) {
+                e = endpoints;
+                if (e == null) {
+                    List<String> list = LuckgramEndpoints.parse(BuildConfig.LUCKGRAM_API_URLS);
+                    if (list.isEmpty()) {
+                        list = LuckgramEndpoints.parse(BuildConfig.LUCKGRAM_API_URL);
+                    }
+                    String remembered = null;
+                    try {
+                        remembered = LuckgramSettings.getString(KEY_ENDPOINT, null);
+                    } catch (Throwable ignore) {
+                    }
+                    endpoints = e = new LuckgramEndpoints(list, remembered);
+                }
+            }
+        }
+        return e;
+    }
+
+    private static void rememberEndpoint(String base) {
+        try {
+            LuckgramSettings.setString(KEY_ENDPOINT, base);
+        } catch (Throwable ignore) {
+        }
+    }
+
+    /** A URL from the server pointing at another API entry is moved to the one in use. */
+    public static String rewriteApiUrl(String url) {
+        return url == null ? null : endpoints().rewrite(url);
+    }
+
+    /**
+     * While a backup entry is in use, checks the first one in the background (once per cold start,
+     * then every 6 hours) and goes back to it when {@code GET /v1/health} answers 200.
+     */
+    private static void maybeProbe() {
+        LuckgramEndpoints ep = endpoints();
+        long now = System.currentTimeMillis();
+        synchronized (ep) {
+            if (!ep.shouldProbe(now)) return;
+            ep.markProbed(now);
+        }
+        Thread t = new Thread(() -> {
+            String primary = ep.primary();
+            long start = System.currentTimeMillis();
+            HttpURLConnection c = null;
+            try {
+                URL url = new URL(primary + LuckgramEndpoints.HEALTH_PATH);
+                c = LuckgramNet.open(url, LuckgramNet.currentRoute());
+                c.setConnectTimeout(10_000);
+                c.setReadTimeout(10_000);
+                c.setUseCaches(false);
+                int status = c.getResponseCode();
+                LuckgramNet.logHttp("endpoint-probe", "GET", url.toString(), status, null, start, LuckgramNet.currentRoute().label, c.getHeaderField("X-Request-Id"), url.getHost(), false);
+                if (status == 200 && ep.markWorking(primary)) {
+                    rememberEndpoint(primary);
+                }
+            } catch (Throwable e) {
+                LuckgramNet.logHttp("endpoint-probe", "GET", primary + LuckgramEndpoints.HEALTH_PATH, 0, e, start, LuckgramNet.currentRoute().label, null, LuckgramEndpoints.hostOf(primary), false);
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        }, "LuckgramProbe");
+        t.setDaemon(true);
+        t.start();
     }
 
     // ---------------------------------------------------------------- singleton
@@ -242,9 +384,9 @@ public final class LuckgramAI {
     private LuckgramAI() {
     }
 
-    /** API server base URL from the build configuration (debug: api-dev, release: api). */
+    /** API entry in use (debug: api-dev, release: api; a backup after a network failure, specs#81). */
     public static String apiBaseUrl() {
-        return BuildConfig.LUCKGRAM_API_URL;
+        return endpoints().current();
     }
 
     /** Debug tools only: route all calls to the in-app mock server instead of the network. */
@@ -452,6 +594,7 @@ public final class LuckgramAI {
         }
         LuckgramNet.Route route = LuckgramNet.currentRoute();
         long start = System.currentTimeMillis();
+        url = rewriteApiUrl(url);
         HttpURLConnection c = LuckgramNet.open(new URL(url), route);
         c.setRequestMethod("PUT");
         c.setConnectTimeout(15_000);
@@ -623,8 +766,10 @@ public final class LuckgramAI {
     private boolean isApiHost(String url) {
         try {
             String host = new URL(url).getHost();
-            String apiHost = isUsingMock() ? LuckgramAIMock.HOST : new URL(apiBaseUrl()).getHost();
-            return host != null && host.equalsIgnoreCase(apiHost);
+            if (isUsingMock()) {
+                return host != null && host.equalsIgnoreCase(LuckgramAIMock.HOST);
+            }
+            return endpoints().isEntryHost(host);
         } catch (Exception e) {
             return false;
         }
@@ -817,10 +962,10 @@ public final class LuckgramAI {
         String proxy = tr == mockTransport ? "mock" : LuckgramNet.currentRoute().label;
         try {
             HttpResponse res = tr.execute(method, path, headers, body);
-            LuckgramNet.logHttp(feature, method, path, res.status, null, start, proxy, res.requestId);
+            LuckgramNet.logHttp(feature, method, path, res.status, null, start, proxy, res.requestId, res.endpoint, res.switched);
             return res;
         } catch (IOException | RuntimeException e) {
-            LuckgramNet.logHttp(feature, method, path, 0, e, start, proxy, null);
+            LuckgramNet.logHttp(feature, method, path, 0, e, start, proxy, null, tr == mockTransport ? null : LAST_ENDPOINT.get(), false);
             throw e;
         }
     }

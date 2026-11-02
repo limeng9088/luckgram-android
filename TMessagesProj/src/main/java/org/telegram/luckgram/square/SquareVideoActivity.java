@@ -317,7 +317,7 @@ public class SquareVideoActivity extends BaseFragment {
             player.setTextureView(texture);
             player.setMute(false);
             player.setLooping(false);
-            player.preparePlayer(Uri.parse(video.url), "other");
+            player.preparePlayer(Uri.parse(org.telegram.luckgram.LuckgramAI.rewriteApiUrl(video.url)), "other");
             player.play();
         } catch (Throwable e) {
             FileLog.e(e);

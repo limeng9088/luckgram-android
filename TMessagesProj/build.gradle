@@ -175,6 +175,7 @@ android {
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "0"
             buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL_DEV + "\""
+            buildConfigField "String", "LUCKGRAM_API_URLS", "\"" + LUCKGRAM_API_URLS_DEV + "\""
         }
 
         HA_private {
@@ -189,6 +190,7 @@ android {
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "1"
             buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL_DEV + "\""
+            buildConfigField "String", "LUCKGRAM_API_URLS", "\"" + LUCKGRAM_API_URLS_DEV + "\""
         }
 
         HA_public {
@@ -203,6 +205,7 @@ android {
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "4"
             buildConfigField "String", "LUCKGRAM_API_URL", "\"" + ((project.findProperty("LUCKGRAM_QA") == "true") ? LUCKGRAM_API_URL_DEV : LUCKGRAM_API_URL) + "\""
+            buildConfigField "String", "LUCKGRAM_API_URLS", "\"" + ((project.findProperty("LUCKGRAM_QA") == "true") ? LUCKGRAM_API_URLS_DEV : LUCKGRAM_API_URLS) + "\""
         }
 
         HA_hardcore {
@@ -217,6 +220,7 @@ android {
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "5"
             buildConfigField "String", "LUCKGRAM_API_URL", "\"" + LUCKGRAM_API_URL_DEV + "\""
+            buildConfigField "String", "LUCKGRAM_API_URLS", "\"" + LUCKGRAM_API_URLS_DEV + "\""
         }
 
         standalone {
@@ -231,6 +235,7 @@ android {
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "6"
             buildConfigField "String", "LUCKGRAM_API_URL", "\"" + ((project.findProperty("LUCKGRAM_QA") == "true") ? LUCKGRAM_API_URL_DEV : LUCKGRAM_API_URL) + "\""
+            buildConfigField "String", "LUCKGRAM_API_URLS", "\"" + ((project.findProperty("LUCKGRAM_QA") == "true") ? LUCKGRAM_API_URLS_DEV : LUCKGRAM_API_URLS) + "\""
         }
 
         release {
@@ -245,6 +250,7 @@ android {
             buildConfigField "boolean", "BUNDLE", "false"
             buildConfigField "int", "VERSION_NUM", "7"
             buildConfigField "String", "LUCKGRAM_API_URL", "\"" + ((project.findProperty("LUCKGRAM_QA") == "true") ? LUCKGRAM_API_URL_DEV : LUCKGRAM_API_URL) + "\""
+            buildConfigField "String", "LUCKGRAM_API_URLS", "\"" + ((project.findProperty("LUCKGRAM_QA") == "true") ? LUCKGRAM_API_URLS_DEV : LUCKGRAM_API_URLS) + "\""
         }
     }
 

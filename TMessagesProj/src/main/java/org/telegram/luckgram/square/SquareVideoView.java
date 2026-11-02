@@ -110,7 +110,7 @@ public class SquareVideoView extends FrameLayout {
             player.setTextureView(texture);
             player.setMute(true);
             player.setLooping(true);
-            player.preparePlayer(Uri.parse(video.url), "other");
+            player.preparePlayer(Uri.parse(org.telegram.luckgram.LuckgramAI.rewriteApiUrl(video.url)), "other");
             player.play();
         } catch (Throwable e) {
             FileLog.e(e);

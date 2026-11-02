@@ -42,6 +42,9 @@ public final class LuckgramDiagLog {
         public String proxy;
         /** The server's {@code X-Request-Id} header. */
         public String requestId;
+        /** specs#81: host of the API entry used, and whether another entry failed first. */
+        public String endpoint;
+        public boolean switched;
     }
 
     /**
@@ -89,6 +92,8 @@ public final class LuckgramDiagLog {
         if (e.durationMs >= 0) b.append(" ms=").append(e.durationMs);
         field(b, "proxy", e.proxy);
         field(b, "rid", e.requestId);
+        field(b, "endpoint", e.endpoint);
+        if (e.switched) b.append(" switched=1");
         return b.toString();
     }
 

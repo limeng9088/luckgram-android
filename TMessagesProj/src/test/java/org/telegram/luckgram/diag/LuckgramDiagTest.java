@@ -90,6 +90,22 @@ public class LuckgramDiagTest {
         assertTrue(LuckgramDiagLog.format(e, API).endsWith("exception=SocketTimeoutException proxy=mtproto-direct"));
     }
 
+    @Test
+    public void formatEndpointAndSwitch() {
+        // specs#81: the entry actually used and whether the request moved there after a failure
+        LuckgramDiagLog.Entry e = new LuckgramDiagLog.Entry();
+        e.timeMs = 1761955200000L;
+        e.feature = "transcribe";
+        e.method = "POST";
+        e.target = "/v1/ai/transcribe";
+        e.status = 200;
+        e.endpoint = "backup.luckgram.cc";
+        e.switched = true;
+        assertTrue(LuckgramDiagLog.format(e, API).endsWith("route=POST /v1/ai/transcribe status=200 endpoint=backup.luckgram.cc switched=1"));
+        e.switched = false;
+        assertTrue(LuckgramDiagLog.format(e, API).endsWith("endpoint=backup.luckgram.cc"));
+    }
+
     // ---------------------------------------------------------------- retention
 
     @Test
