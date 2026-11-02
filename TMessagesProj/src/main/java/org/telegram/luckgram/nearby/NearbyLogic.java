@@ -223,8 +223,8 @@ public final class NearbyLogic {
     }
 
     /**
-     * After a reboot: the reminder time has passed while the alarm was lost (phone off during the
-     * reminder or rebooted in the last hour), the card is still visible and this expiry hasn't been
+     * After a reboot or force-stop: the reminder time has passed while the alarm was lost (phone
+     * off, rebooted in the last hour, app force-stopped), the card is still visible and this expiry hasn't been
      * reminded of yet, so show it right away. {@code remindedForMs} is the expiry last reminded of.
      */
     public static boolean missedReminder(long expiresAtMs, long nowMs, long remindedForMs) {

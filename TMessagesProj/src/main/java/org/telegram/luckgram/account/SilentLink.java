@@ -6,6 +6,7 @@ import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.SendMessagesHelper;
 
 import java.util.ArrayList;
@@ -160,6 +161,8 @@ public final class SilentLink {
         Runnable clear = () -> {
             try {
                 MessagesController.getInstance(account).deleteDialog(botPeerId, 0);
+                // The late reply may already have raised a notification.
+                org.telegram.messenger.NotificationsController.getInstance(account).removeNotificationsForDialog(botPeerId);
             } catch (Throwable e) {
                 FileLog.e(e);
             }
@@ -168,6 +171,19 @@ public final class SilentLink {
         for (long d : AccountLogic.BOT_CLEANUP_DELAYS_MS) {
             AndroidUtilities.runOnUIThread(clear, d);
         }
+        // The reply can come later still (review P2): watch the bot chat for a while and delete
+        // whatever arrives there right away.
+        final NotificationCenter nc = NotificationCenter.getInstance(account);
+        final NotificationCenter.NotificationCenterDelegate[] watcher = {null};
+        watcher[0] = (id, acc, args) -> {
+            if (id == NotificationCenter.didReceiveNewMessages && args.length > 0 && args[0] instanceof Long
+                && (Long) args[0] == botPeerId && !(args.length > 2 && Boolean.TRUE.equals(args[2]))) {
+                // Not inside the notification dispatch itself.
+                AndroidUtilities.runOnUIThread(clear);
+            }
+        };
+        nc.addObserver(watcher[0], NotificationCenter.didReceiveNewMessages);
+        AndroidUtilities.runOnUIThread(() -> nc.removeObserver(watcher[0], NotificationCenter.didReceiveNewMessages), AccountLogic.BOT_WATCH_MS);
     }
 
     private static void finish(boolean ok) {
