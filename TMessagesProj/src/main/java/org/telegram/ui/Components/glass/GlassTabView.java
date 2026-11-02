@@ -311,7 +311,7 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
         }
 
         if (tabAnimation.iconStatic != -1) {
-            imageView.setImageResource(tabAnimation.iconStatic);
+            imageView.setImageResource(isSelected && tabAnimation.iconStaticSelected != -1 ? tabAnimation.iconStaticSelected : tabAnimation.iconStatic);
             updateColors();
             return;
         }
@@ -398,10 +398,14 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
     }
 
     public static GlassTabView createMainTab(Context context, Theme.ResourcesProvider resourcesProvider, TabAnimation tabAnimation, @StringRes int stringRes) {
+        return createMainTab(context, resourcesProvider, tabAnimation, LocaleController.getString(stringRes));
+    }
+
+    public static GlassTabView createMainTab(Context context, Theme.ResourcesProvider resourcesProvider, TabAnimation tabAnimation, CharSequence title) {
         GlassTabView tab = new GlassTabView(context);
         tab.resourcesProvider = resourcesProvider;
         tab.tabAnimation = tabAnimation;
-        tab.textView.setText(LocaleController.getString(stringRes));
+        tab.textView.setText(title);
         tab.checkPlayAnimation(false);
         tab.imageView.setLayoutParams(LayoutHelper.createFrame(24, 24, Gravity.CENTER_HORIZONTAL | Gravity.TOP, 0, 4, 0, 0));
         tab.colorDefault = Theme.getColor(Theme.key_glass_tabUnselected, resourcesProvider);
@@ -563,6 +567,7 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
         REPLIES(R.raw.tab_reply, R.raw.tab_reply_reverse),
         WALLET(R.raw.tab_wallet, R.raw.tab_wallet_reverse),
         LINK(TabAnimationType.STATIC, R.drawable.tabs_link_24),
+        DISCOVER(R.drawable.outline_discover_24, R.drawable.filled_discover_24, true), // Luckgram 27: outline / filled compass
         ARTICLE(R.raw.tab_article, R.raw.tab_article_reverse),
         GRAM(R.raw.gram, R.raw.gram_reverse),
 
@@ -572,7 +577,18 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
         public final @RawRes int iconToFilled;
         public final @RawRes int iconToOutline;
         public final @DrawableRes int iconStatic;
+        /** Static icon shown while selected, or -1 to keep {@link #iconStatic}. */
+        public final @DrawableRes int iconStaticSelected;
         public final int endFrameMid, endFrameEnd;
+
+        TabAnimation(@DrawableRes int iconStatic, @DrawableRes int iconStaticSelected, boolean isStatic) {
+            this.iconStatic = iconStatic;
+            this.iconStaticSelected = iconStaticSelected;
+            this.iconToFilled = -1;
+            this.iconToOutline = -1;
+            this.endFrameMid = -1;
+            this.endFrameEnd = -1;
+        }
 
         TabAnimation(int iconRes, int endFrameMid, int endFrameEnd) {
             this.iconToFilled = iconRes;
@@ -580,6 +596,7 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
             this.endFrameMid = endFrameMid;
             this.endFrameEnd = endFrameEnd;
             this.iconStatic = -1;
+            this.iconStaticSelected = -1;
         }
 
         TabAnimation(TabAnimationType type, int icon) {
@@ -592,6 +609,7 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
                 this.iconToFilled = -1;
                 this.iconToOutline = -1;
             }
+            this.iconStaticSelected = -1;
             this.endFrameMid = -1;
             this.endFrameEnd = -1;
         }
@@ -602,6 +620,7 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
             this.endFrameMid = -1;
             this.endFrameEnd = -1;
             this.iconStatic = -1;
+            this.iconStaticSelected = -1;
         }
 
         TabAnimation(int iconToFilled, int iconToOutline) {
@@ -610,6 +629,7 @@ public class GlassTabView extends FrameLayout implements MainTabsLayout.Tab, Fac
             this.endFrameMid = -1;
             this.endFrameEnd = -1;
             this.iconStatic = -1;
+            this.iconStaticSelected = -1;
         }
     }
 

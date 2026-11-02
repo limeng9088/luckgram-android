@@ -403,7 +403,7 @@ public class LinkManager {
         if ("chats".equalsIgnoreCase(first)) {
             final INavigationLayout layout = getParentLayout();
             MainTabsActivity mainFragment = null;
-            for (int i = layout.getFragmentStack().size() - 1; i >= 0; ++i) {
+            for (int i = layout.getFragmentStack().size() - 1; i >= 0; --i) {
                 if (layout.getFragmentStack().get(i) instanceof MainTabsActivity) {
                     mainFragment = (MainTabsActivity) layout.getFragmentStack().get(i);
                     break;
@@ -415,7 +415,7 @@ public class LinkManager {
 
             if (mainFragment != null) {
                 if ("search".equalsIgnoreCase(second)) {
-                    mainFragment.viewPager.scrollToPosition(2);
+                    presentFragment(new SettingsActivity()); // Luckgram 27: Settings is no longer a tab
                     return true;
                 }
             }
