@@ -8,15 +8,14 @@ import org.telegram.luckgram.square.SquareActivity;
 import org.telegram.luckgram.square.SquareUi;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.BaseFragment;
-import org.telegram.ui.Cells.TextCell;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Luckgram rows at the top of the Contacts tab ("People Nearby" 25, "Square" 26), each shown only
- * while its switch is on. This Telegram version has no side menu, so Contacts is the entry on
- * both platforms (same as iOS).
+ * The rows of the Discover tab (spec 27): "People Nearby" (25) and "Square" (26), each shown only
+ * while its switch is on. They used to sit at the top of Contacts; since 27 the Discover tab is
+ * the only entry on both platforms. New social entries go here too.
  */
 public final class DiscoverEntries {
 
@@ -28,19 +27,33 @@ public final class DiscoverEntries {
 
     public static List<Integer> visible() {
         ArrayList<Integer> out = new ArrayList<>();
-        if (NearbyController.isFeatureEnabled()) out.add(NEARBY);
         if (SquareUi.isFeatureEnabled()) out.add(SQUARE);
+        if (NearbyController.isFeatureEnabled()) out.add(NEARBY);
         return out;
     }
 
-    public static void bind(TextCell cell, int entry, boolean divider) {
-        if (entry == NEARBY) {
-            cell.setTextAndValueAndColorfulIcon(new NearbyLogic.Texts(LuckgramStrings.isChinese()).title(), "", false,
-                R.drawable.msg_location, 0xFFF5A623, 0xFFE6862E, divider);
-        } else if (entry == SQUARE) {
-            cell.setTextAndValueAndColorfulIcon(SquareUi.tx().title(), "", false,
-                R.drawable.msg_discussion, 0xFF5AC8FA, 0xFF2F8BE6, divider);
-        }
+    public static String title(int entry) {
+        if (entry == NEARBY) return new NearbyLogic.Texts(LuckgramStrings.isChinese()).title();
+        if (entry == SQUARE) return SquareUi.tx().title();
+        return "";
+    }
+
+    public static String subtitle(int entry) {
+        if (entry == NEARBY) return LuckgramStrings.get("发现你周围的人和群组", "Find people and groups around you");
+        if (entry == SQUARE) return LuckgramStrings.get("看看大家在分享什么", "Posts from people and channels");
+        return "";
+    }
+
+    public static int icon(int entry) {
+        return entry == NEARBY ? R.drawable.msg_location : R.drawable.msg_discussion;
+    }
+
+    public static int iconColorTop(int entry) {
+        return entry == NEARBY ? 0xFFF5A623 : 0xFF5AC8FA;
+    }
+
+    public static int iconColorBottom(int entry) {
+        return entry == NEARBY ? 0xFFE6862E : 0xFF2F8BE6;
     }
 
     public static void open(BaseFragment from, int entry) {
@@ -49,5 +62,15 @@ public final class DiscoverEntries {
         } else if (entry == SQUARE && SquareUi.isFeatureEnabled()) {
             from.presentFragment(new SquareActivity());
         }
+    }
+
+    // ---------------------------------------------------------------- page texts
+
+    public static String pageTitle() {
+        return LuckgramStrings.get("发现", "Discover");
+    }
+
+    public static String emptyText() {
+        return LuckgramStrings.get("暂时没有可用的功能", "No features available right now");
     }
 }
