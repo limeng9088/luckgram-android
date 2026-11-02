@@ -31,6 +31,11 @@ public final class TranslateOutStrings {
         return isChinese() ? "已翻译成 " + languageName : "Translated to " + languageName;
     }
 
+    /** spec 01 C.2: send button long-press item that picks the target language first. */
+    public static String translateTo() {
+        return s("翻译成…", "Translate to…");
+    }
+
     public static String undo() {
         return s("撤销", "Undo");
     }
