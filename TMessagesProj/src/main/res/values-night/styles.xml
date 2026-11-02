@@ -34,4 +34,10 @@
         <item name="android:title">""</item>
     </style>
 
+    <!-- Luckgram specs#76: LaunchActivity only; black splash like the welcome page. -->
+    <style name="Theme.TMessages.Launch" parent="Theme.TMessages.Start">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowSplashScreenBackground">@android:color/black</item>
+    </style>
+
 </resources>

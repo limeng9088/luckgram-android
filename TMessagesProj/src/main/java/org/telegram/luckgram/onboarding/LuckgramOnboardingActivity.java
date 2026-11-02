@@ -449,10 +449,13 @@ public class LuckgramOnboardingActivity extends BaseFragment {
             row.addView(col, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
             p.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, i == 0 ? 0 : 8, 0, 0));
         }
-        TextView note = text(c, 12, SECONDARY_TEXT);
-        note.setText(texts.proFootnote());
-        note.setGravity(Gravity.CENTER);
-        p.addView(note, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
+        if (WelcomeLogic.canSubscribe(WelcomeLogic.Step.PRO, billingEnabled)) {
+            // "Pay after logging in" only when buying is possible, not under "Coming soon".
+            TextView note = text(c, 12, SECONDARY_TEXT);
+            note.setText(texts.proFootnote());
+            note.setGravity(Gravity.CENTER);
+            p.addView(note, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
+        }
         return p;
     }
 

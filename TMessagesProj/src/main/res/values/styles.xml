@@ -250,4 +250,10 @@
         <item name="android:textColor">@color/widget_badge</item>
     </style>
 
+    <!-- Luckgram specs#76: LaunchActivity only. Black like the welcome page, so there is no white
+         flash between the splash and it (the window is replaced in LaunchActivity.onCreate). -->
+    <style name="Theme.TMessages.Launch" parent="Theme.TMessages.Start">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+
 </resources>
