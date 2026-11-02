@@ -117,8 +117,11 @@ final class CallRecUploader implements NotificationCenter.NotificationCenterDele
 
         NotificationCenter.getInstance(account).addObserver(this, NotificationCenter.messageReceivedByServer);
 
+        // Without force_file the server turns an audio/ogg Opus upload into a voice message (#79).
+        final java.util.HashMap<String, String> sendParams = new java.util.HashMap<>();
+        sendParams.put("forceDocument", "1");
         final SendMessagesHelper.SendMessageParams params = SendMessagesHelper.SendMessageParams.of(
-                document, null, file.getAbsolutePath(), dialogId, null, null, caption, null, null, null,
+                document, null, file.getAbsolutePath(), dialogId, null, null, caption, null, null, sendParams,
                 true, 0, 0, 0, null, null, false);
         AccountInstance.getInstance(account).getSendMessagesHelper().sendMessage(params);
 
