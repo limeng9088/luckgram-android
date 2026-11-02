@@ -1,7 +1,8 @@
 /*
  * Luckgram: translate the message being composed before it is sent (feature 01, "translate_out").
  *
- * Translation goes through Telegram's own messages.translateText; nothing is sent anywhere else.
+ * Translation goes through Telegram's own messages.translateText; only when that fails is the text
+ * sent to the Luckgram API instead (specs#82, {@link LuckgramTranslate}).
  */
 package org.telegram.luckgram.translateout;
 
@@ -44,7 +45,7 @@ public final class TranslateOutController {
     /** Most used languages, shown first in the picker. */
     public static final String[] COMMON_LANGUAGES = {"en", "es", "fr", "de", "ru", "zh", "ja", "ko", "pt", "ar", "it", "tr", "uk", "vi", "id", "hi"};
 
-    private static final long REQUEST_TIMEOUT_MS = 15_000;
+    private static final long REQUEST_TIMEOUT_MS = TranslateFallbackLogic.TELEGRAM_TIMEOUT_MS;
 
     private static final String ACCOUNT_PREFS_PREFIX = "luckgram_translate_out_";
     private static final String KEY_CHAT_LANG_PREFIX = "lang_";
@@ -172,25 +173,27 @@ public final class TranslateOutController {
     }
 
     public interface TranslateCallback {
-        /** @param result translated text with spans ready for the input field, or null on failure */
-        void onResult(CharSequence result);
+        /**
+         * @param result       translated text with spans ready for the input field, or null on failure
+         * @param errorMessage on failure, why (network / AI quota / too long…), for the user
+         */
+        void onResult(CharSequence result, String errorMessage);
     }
 
     /**
      * Translates the composed text via messages.translateText. Emoji, custom emoji, @mentions,
      * links and line breaks are preserved; formatting is kept when the server returns it.
      * Callback runs on the UI thread; null result means failure.
+     * <p>
+     * specs#82: when Telegram fails (any error, e.g. TRANSLATIONS_DISABLED_ALT, a timeout or an empty
+     * result) the plain text is translated by Luckgram AI instead; the Telegram error is logged.
      */
     public static void translate(int account, CharSequence source, String toLang, Paint.FontMetricsInt fontMetrics, TranslateCallback callback) {
         if (TextUtils.isEmpty(source) || TextUtils.isEmpty(toLang)) {
-            callback.onResult(null);
+            callback.onResult(null, TranslateOutStrings.failed());
             return;
         }
         final ConnectionsManager connections = ConnectionsManager.getInstance(account);
-        if (connections.getConnectionState() == ConnectionsManager.ConnectionStateWaitingForNetwork) {
-            callback.onResult(null);
-            return;
-        }
 
         final CharSequence[] message = new CharSequence[]{new SpannableStringBuilder(source)};
         ArrayList<TLRPC.MessageEntity> entities = MediaDataController.getInstance(account).getEntities(message, true, false);
@@ -200,6 +203,12 @@ public final class TranslateOutController {
         final TLRPC.TL_textWithEntities text = new TLRPC.TL_textWithEntities();
         text.text = message[0].toString();
         text.entities = toServerEntities(text.text, entities);
+        if (connections.getConnectionState() == ConnectionsManager.ConnectionStateWaitingForNetwork) {
+            // Telegram has no connection (it may be blocked while HTTPS works): go straight to Luckgram AI
+            LuckgramTranslate.logTelegramFailure(TranslateFallbackLogic.SOURCE_OUT, TranslateFallbackLogic.NO_CONNECTION);
+            translateViaAi(text, toLang, fontMetrics, callback);
+            return;
+        }
 
         final TLRPC.TL_messages_translateText req = new TLRPC.TL_messages_translateText();
         req.flags |= 2;
@@ -212,7 +221,8 @@ public final class TranslateOutController {
             if (finished[0]) return;
             finished[0] = true;
             connections.cancelRequest(reqId[0], true);
-            callback.onResult(null);
+            LuckgramTranslate.logTelegramFailure(TranslateFallbackLogic.SOURCE_OUT, null, true);
+            translateViaAi(text, toLang, fontMetrics, callback);
         };
         reqId[0] = connections.sendRequest(req, (res, err) -> AndroidUtilities.runOnUIThread(() -> {
             if (finished[0]) return;
@@ -223,16 +233,35 @@ public final class TranslateOutController {
                 if (result != null && !result.isEmpty() && result.get(0) != null && !TextUtils.isEmpty(result.get(0).text)) {
                     try {
                         final TLRPC.TL_textWithEntities translated = TranslateAlert2.preprocess(text, result.get(0));
-                        callback.onResult(toEditable(translated, fontMetrics));
+                        callback.onResult(toEditable(translated, fontMetrics), null);
                         return;
                     } catch (Exception e) {
                         FileLog.e(e);
                     }
                 }
             }
-            callback.onResult(null);
+            LuckgramTranslate.logTelegramFailure(TranslateFallbackLogic.SOURCE_OUT, err, false);
+            translateViaAi(text, toLang, fontMetrics, callback);
         }));
         AndroidUtilities.runOnUIThread(timeout, REQUEST_TIMEOUT_MS);
+    }
+
+    /** specs#82: Telegram failed; translate the plain text with Luckgram AI. */
+    private static void translateViaAi(TLRPC.TL_textWithEntities source, String toLang, Paint.FontMetricsInt fontMetrics, TranslateCallback callback) {
+        LuckgramTranslate.viaAi(TranslateFallbackLogic.SOURCE_OUT, source.text, toLang, (result, error) -> {
+            if (result == null) {
+                callback.onResult(null, LuckgramTranslate.failureMessage(error));
+                return;
+            }
+            final TLRPC.TL_textWithEntities translated = new TLRPC.TL_textWithEntities();
+            translated.text = result;
+            try {
+                callback.onResult(toEditable(translated, fontMetrics), null);
+            } catch (Exception e) {
+                FileLog.e(e);
+                callback.onResult(null, TranslateOutStrings.failed());
+            }
+        });
     }
 
     /**

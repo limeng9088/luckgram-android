@@ -26,6 +26,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -58,6 +59,8 @@ public final class LuckgramAI {
     public static final String TASK_WRITING = "writing";
     public static final String TASK_AGENT = "agent";
     public static final String TASK_POST = "post";
+    /** specs#82: translation fallback; the request carries {@code to_lang}. */
+    public static final String TASK_TRANSLATE = "translate";
 
     private static final String KEY_CONSENT = "ai_consent";
     private static final String KEY_TOKEN = "_device_token";
@@ -509,6 +512,38 @@ public final class LuckgramAI {
      *               grammar, dictation} (server prompts/writing-*.md), or null for the default.
      */
     public Request chat(Context context, String task, String effect, List<Message> messages, boolean stream, ChatListener listener) {
+        return chat(context, task, effect, null, messages, stream, listener);
+    }
+
+    /**
+     * specs#82: translates {@code text} into {@code toLang} (ISO 639-1, e.g. {@code en}, {@code zh},
+     * {@code zh-Hant}) with {@link #TASK_TRANSLATE}. Counts against the AI quota.
+     */
+    public Request translate(Context context, String text, String toLang, Callback<String> callback) {
+        final List<Message> messages = new ArrayList<>();
+        messages.add(Message.user(text));
+        return chat(context, TASK_TRANSLATE, null, toLang, messages, false, new ChatListener() {
+            @Override
+            public void onDelta(String delta, String t) {
+            }
+
+            @Override
+            public void onComplete(String t) {
+                if (t == null || t.trim().isEmpty()) {
+                    callback.onError(new LuckgramAIError(LuckgramAIError.UPSTREAM_UNAVAILABLE, 0));
+                } else {
+                    callback.onResult(t);
+                }
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                callback.onError(error);
+            }
+        });
+    }
+
+    private Request chat(Context context, String task, String effect, String toLang, List<Message> messages, boolean stream, ChatListener listener) {
         Request req = new Request();
         req.feature = task;
         int chars = 0;
@@ -522,6 +557,9 @@ public final class LuckgramAI {
             body.put("task", task).put("messages", arr).put("stream", stream);
             if (effect != null && TASK_WRITING.equals(task)) {
                 body.put("effect", effect);
+            }
+            if (toLang != null && TASK_TRANSLATE.equals(task)) {
+                body.put("to_lang", toLang);
             }
         } catch (Exception e) {
             deliverError(listener::onError, new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));

@@ -1104,22 +1104,12 @@ public class TranslateController extends BaseController {
 
                 final String method = getMessagesController().translationsAutoEnabled;
                 if ("alternative".equals(method) || "system".equals(method)) {
-                    final String toLanguage = pendingTranslation1.language;
-                    for (int i = 0; i < pendingTranslation1.messageIds.size(); ++i) {
-                        final int id = pendingTranslation1.messageIds.get(i);
-                        final Utilities.Callback4<Boolean, Integer, TLRPC.TL_textWithEntities, String> _callback = pendingTranslation1.callbacks.get(i);
-                        final String _text = pendingTranslation1.messageTexts.get(i).text;
-                        TranslateAlert2.alternativeTranslate(_text, null, toLanguage, (result, rateLimit) -> {
-                            if (result != null) {
-                                final TLRPC.TL_textWithEntities resultWithEntities = new TLRPC.TL_textWithEntities();
-                                resultWithEntities.text = result;
-                                _callback.run(isTranscription, id, resultWithEntities, toLanguage);
-                            } else {
-                                toggleTranslatingDialog(dialogId, false);
-                                NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR, getString(rateLimit ? R.string.TranslationFailedAlert1 : R.string.TranslationFailedAlert2));
-                            }
-                        });
+                    // Luckgram (specs#82): the alternative translator is Luckgram AI
+                    final ArrayList<String> texts = new ArrayList<>();
+                    for (TLRPC.TL_textWithEntities t : pendingTranslation1.messageTexts) {
+                        texts.add(t.text);
                     }
+                    luckgramFallback(dialogId, isTranscription, pendingTranslation1.messageIds, pendingTranslation1.callbacks, texts, pendingTranslation1.language);
                     return;
                 }/* else if ("system".equals(method)) {
                     final String toLanguage = pendingTranslation1.language;
@@ -1169,32 +1159,15 @@ public class TranslateController extends BaseController {
                         for (int i = 0; i < count; ++i) {
                             callbacks.get(i).run(isTranscription, ids.get(i), TranslateAlert2.preprocess(texts.get(i), translated.get(i)), toLanguage);
                         }
-                    } else if (err != null && "TRANSLATIONS_DISABLED_ALT".equalsIgnoreCase(err.text)) {
-                        for (int i = 0; i < ids.size(); ++i) {
-                            final int id = ids.get(i);
-                            final Utilities.Callback4<Boolean, Integer, TLRPC.TL_textWithEntities, String> _callback = callbacks.get(i);
-                            final String _text = texts.get(i).text;
-                            TranslateAlert2.alternativeTranslate(_text, null, toLanguage, (result, rateLimit) -> {
-                                if (result != null) {
-                                    final TLRPC.TL_textWithEntities resultWithEntities = new TLRPC.TL_textWithEntities();
-                                    resultWithEntities.text = result;
-                                    _callback.run(isTranscription, id, resultWithEntities, toLanguage);
-                                } else {
-                                    toggleTranslatingDialog(dialogId, false);
-                                    NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR, getString(rateLimit ? R.string.TranslationFailedAlert1 : R.string.TranslationFailedAlert2));
-                                }
-                            });
-                        }
-                    } else if (err != null && "TO_LANG_INVALID".equals(err.text)) {
-                        toggleTranslatingDialog(dialogId, false);
-                        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR, getString(R.string.TranslationFailedAlert2));
                     } else {
-                        if (err != null && "QUOTA_EXCEEDED".equals(err.text)) {
-                            NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR, getString(R.string.TranslationFailedAlert1));
+                        // Luckgram (specs#82): any Telegram failure (TRANSLATIONS_DISABLED_ALT,
+                        // QUOTA_EXCEEDED, FLOOD_WAIT…) falls back to Luckgram AI; the error is logged
+                        org.telegram.luckgram.translateout.LuckgramTranslate.logTelegramFailure(org.telegram.luckgram.translateout.TranslateFallbackLogic.SOURCE_CHAT, err, false);
+                        final ArrayList<String> plain = new ArrayList<>();
+                        for (int i = 0; i < ids.size() && i < texts.size(); ++i) {
+                            plain.add(texts.get(i).text);
                         }
-                        for (int i = 0; i < callbacks.size(); ++i) {
-                            callbacks.get(i).run(isTranscription, ids.get(i), null, pendingTranslation1.language);
-                        }
+                        luckgramFallback(dialogId, isTranscription, ids, callbacks, plain, toLanguage);
                     }
                     synchronized (TranslateController.this) {
                         for (int i = 0; i < ids.size(); ++i) {
@@ -1208,6 +1181,37 @@ public class TranslateController extends BaseController {
             };
             AndroidUtilities.runOnUIThread(pendingTranslation.runnable, pendingTranslation.delay);
             pendingTranslation.delay /= 2;
+        }
+    }
+
+    /**
+     * Luckgram (specs#82): translates each message with Luckgram AI after Telegram failed. Messages
+     * that fail get a null result (shown untranslated); the reason is shown once per batch.
+     */
+    private void luckgramFallback(long dialogId, boolean isTranscription, ArrayList<Integer> ids, ArrayList<Utilities.Callback4<Boolean, Integer, TLRPC.TL_textWithEntities, String>> callbacks, ArrayList<String> texts, String toLanguage) {
+        final boolean[] reported = new boolean[1];
+        final int count = Math.min(Math.min(ids.size(), callbacks.size()), texts.size());
+        for (int i = 0; i < count; ++i) {
+            final int id = ids.get(i);
+            final Utilities.Callback4<Boolean, Integer, TLRPC.TL_textWithEntities, String> callback = callbacks.get(i);
+            if (TextUtils.isEmpty(texts.get(i))) {
+                callback.run(isTranscription, id, null, toLanguage);
+                continue;
+            }
+            org.telegram.luckgram.translateout.LuckgramTranslate.viaAi(org.telegram.luckgram.translateout.TranslateFallbackLogic.SOURCE_CHAT, texts.get(i), toLanguage, (result, error) -> {
+                if (result != null) {
+                    final TLRPC.TL_textWithEntities resultWithEntities = new TLRPC.TL_textWithEntities();
+                    resultWithEntities.text = result;
+                    callback.run(isTranscription, id, resultWithEntities, toLanguage);
+                    return;
+                }
+                callback.run(isTranscription, id, null, toLanguage);
+                if (!reported[0]) {
+                    reported[0] = true;
+                    toggleTranslatingDialog(dialogId, false);
+                    NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR, org.telegram.luckgram.translateout.LuckgramTranslate.failureMessage(error));
+                }
+            });
         }
     }
 

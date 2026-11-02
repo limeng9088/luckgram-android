@@ -57,6 +57,7 @@ jobs:
             backup/LuckgramBackupFormat.java \
             notes/UserNotesText.java \
             translateout/TranslateOutLogic.java \
+            translateout/TranslateFallbackLogic.java \
             profileinfo/ProfileInfoLogic.java \
             sharedactivity/SharedActivityLogic.java \
             voice/DictationAudio.java \

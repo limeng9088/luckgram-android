@@ -88,6 +88,8 @@ import java.util.Locale;
 public class TranslateAlert2 extends BottomSheet implements NotificationCenter.NotificationCenterDelegate {
 
     private Integer reqId;
+    /** Luckgram (specs#82): pending Telegram timeout of the current translate() call. */
+    private Runnable telegramTimeout;
     private CharSequence reqText;
     private ArrayList<TLRPC.MessageEntity> reqMessageEntities;
     private TLRPC.InputPeer reqPeer;
@@ -308,6 +310,10 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
     }
 
     public void translate() {
+        if (telegramTimeout != null) {
+            AndroidUtilities.cancelRunOnUIThread(telegramTimeout);
+            telegramTimeout = null;
+        }
         if (reqId != null) {
             ConnectionsManager.getInstance(currentAccount).cancelRequest(reqId, true);
             reqId = null;
@@ -349,6 +355,10 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
                             richPreviewView.set(rich);
                             adapter.updateMainView(richPreviewView);
                         }
+                    } else if (reqText != null && reqText.length() > 0) {
+                        // Luckgram (specs#82): Telegram failed; translate the plain text with Luckgram AI
+                        org.telegram.luckgram.translateout.LuckgramTranslate.logTelegramFailure(org.telegram.luckgram.translateout.TranslateFallbackLogic.SOURCE_MESSAGE, err, false);
+                        translateAlt();
                     } else if (firstTranslation) {
                         dismiss();
                         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR, LocaleController.getString(R.string.TranslationFailedAlert2));
@@ -411,10 +421,35 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
 //            req.from_lang = fromLanguage;
 //        }
         req.to_lang = normalizeLanguage(lang);
+        // Luckgram (specs#82): if Telegram doesn't answer in time, stop waiting and use Luckgram AI
+        final boolean[] finished = new boolean[1];
+        final Runnable timeout = () -> {
+            if (finished[0] || isDismissed()) return;
+            finished[0] = true;
+            if (reqId != null) {
+                ConnectionsManager.getInstance(currentAccount).cancelRequest(reqId, true);
+                reqId = null;
+            }
+            org.telegram.luckgram.translateout.LuckgramTranslate.logTelegramFailure(org.telegram.luckgram.translateout.TranslateFallbackLogic.SOURCE_MESSAGE, null, true);
+            translateAlt();
+        };
+        telegramTimeout = timeout;
+        AndroidUtilities.runOnUIThread(timeout, org.telegram.luckgram.translateout.TranslateFallbackLogic.TELEGRAM_TIMEOUT_MS);
         reqId = ConnectionsManager.getInstance(currentAccount).sendRequest(req, (res, err) -> {
             AndroidUtilities.runOnUIThread(() -> {
+                if (finished[0]) return;
+                finished[0] = true;
+                AndroidUtilities.cancelRunOnUIThread(timeout);
+                if (telegramTimeout == timeout) telegramTimeout = null;
                 reqId = null;
-                if (err != null && "TRANSLATIONS_DISABLED_ALT".equalsIgnoreCase(err.text)) {
+                if (!(res instanceof TLRPC.TL_messages_translateResult &&
+                    !((TLRPC.TL_messages_translateResult) res).result.isEmpty() &&
+                    ((TLRPC.TL_messages_translateResult) res).result.get(0) != null &&
+                    ((TLRPC.TL_messages_translateResult) res).result.get(0).text != null
+                ) && reqText != null && reqText.length() > 0) {
+                    // Luckgram (specs#82): any Telegram failure (TRANSLATIONS_DISABLED_ALT, FLOOD_WAIT…)
+                    // falls back to Luckgram AI; the error is written to the diagnostic log
+                    org.telegram.luckgram.translateout.LuckgramTranslate.logTelegramFailure(org.telegram.luckgram.translateout.TranslateFallbackLogic.SOURCE_MESSAGE, err, false);
                     translateAlt();
                 } else if (res instanceof TLRPC.TL_messages_translateResult &&
                     !((TLRPC.TL_messages_translateResult) res).result.isEmpty() &&
@@ -448,41 +483,26 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.93 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.55 Safari/537.36"
     };
+    /**
+     * Luckgram (specs#82): the fallback when Telegram's translation fails is Luckgram AI, not
+     * Google's web translator (unreachable for many users). Shows the reason when it fails too.
+     */
     private void translateAlt() {
         final String text = reqText == null ? "" : reqText.toString();
-        String _fromLng = fromLanguage;
-        if (_fromLng != null) {
-            _fromLng = _fromLng.split("_")[0];
-        }
-        if ("nb".equals(_fromLng)) {
-            _fromLng = "no";
-        }
-        final String fromLng = _fromLng;
-        String _toLng = toLanguage;
-        if (_toLng != null) {
-            _toLng = _toLng.split("_")[0];
-        }
-        if ("nb".equals(_toLng)) {
-            _toLng = "no";
-        }
-        final String toLng = _toLng;
-
-        alternativeTranslate(text, fromLng, toLng, (res, rateLimit) -> {
+        final String toLng = toLanguage;
+        org.telegram.luckgram.translateout.LuckgramTranslate.viaAi(org.telegram.luckgram.translateout.TranslateFallbackLogic.SOURCE_MESSAGE, text, toLng, (res, error) -> {
+            if (isDismissed()) return;
             if (res != null) {
                 firstTranslation = false;
-                textView.setText(preprocessText(res));
+                textView.setText(preprocessText(Emoji.replaceEmoji(res, textView.getPaint().getFontMetricsInt(), false)));
                 adapter.updateMainView(textViewContainer);
             } else {
-                if (isDismissed()) return;
-//                if ("system".equals(MessagesController.getInstance(currentAccount).translationsManualEnabled)) {
-//                    translateSystem();
-//                    return;
-//                }
+                final String message = org.telegram.luckgram.translateout.LuckgramTranslate.failureMessage(error);
                 if (firstTranslation) {
                     dismiss();
-                    NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR, LocaleController.getString(rateLimit ? R.string.TranslationFailedAlert1 : R.string.TranslationFailedAlert2));
+                    NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR, message);
                 } else {
-                    BulletinFactory.of((FrameLayout) containerView, resourcesProvider).createErrorBulletin(LocaleController.getString(rateLimit ? R.string.TranslationFailedAlert1 : R.string.TranslationFailedAlert2)).show();
+                    BulletinFactory.of((FrameLayout) containerView, resourcesProvider).createErrorBulletin(message).show();
                     headerView.toLanguageTextView.setText(languageName(toLanguage = prevToLanguage));
                     adapter.updateMainView(textViewContainer);
                 }
@@ -519,6 +539,13 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
     }
 
     public static void alternativeTranslate(String text, String fromLng, String toLng, Utilities.Callback2<String, Boolean> done) {
+        if (true) {
+            // Luckgram (specs#82): Google's web translator is unreachable for many users; translate
+            // with Luckgram AI instead. The Boolean is "rate limited" = today's AI quota is used up.
+            org.telegram.luckgram.translateout.LuckgramTranslate.viaAi(org.telegram.luckgram.translateout.TranslateFallbackLogic.SOURCE_CHAT, text, toLng,
+                (res, error) -> done.run(res, error != null && org.telegram.luckgram.LuckgramAIError.QUOTA_EXCEEDED.equals(error.code)));
+            return;
+        }
         if (done == null) return;
         if (fromLng == null) {
             LanguageDetector.detectLanguage(text, lng -> {
