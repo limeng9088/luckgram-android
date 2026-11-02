@@ -2022,8 +2022,119 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (ev.getAction() == MotionEvent.ACTION_DOWN && ev.getY() < (getPaddingTop() + scrollYOffset)) {
                 return false;
             }
+            if (parentPage != null && parentPage.dialogsType == DIALOGS_TYPE_LUCKGRAM_HIDDEN && luckgramHiddenSwipe(ev)) {
+                return true;
+            }
 
             return super.dispatchTouchEvent(ev);
+        }
+
+        // ---- Luckgram 12: left swipe in the hidden list unhides (spec 12 §5)
+        // Acceptance (build 9210086): the ItemTouchHelper swipe never started on this page, while the same
+        // gesture works in the main list. The hidden list is the only page whose rows have a single fixed
+        // action, so it tracks the gesture itself here, before RecyclerView / ItemTouchHelper see it, and
+        // does not depend on the helper (getMovementFlags returns 0 for this page).
+        private DialogCell luckgramSwipeCell;
+        private float luckgramSwipeStartX, luckgramSwipeStartY, luckgramSwipeDx;
+        private boolean luckgramSwiping;
+        private VelocityTracker luckgramSwipeVelocity;
+
+        private boolean luckgramHiddenSwipe(MotionEvent ev) {
+            final int action = ev.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                luckgramSwipeReset();
+                if (actionBar.isActionModeShowed() || parentPage.dialogsItemAnimator.isRunning()) {
+                    return false;
+                }
+                View child = findChildViewUnder(ev.getX(), ev.getY());
+                if (child instanceof DialogCell && ((DialogCell) child).getDialogId() != 0) {
+                    luckgramSwipeCell = (DialogCell) child;
+                    luckgramSwipeStartX = ev.getX();
+                    luckgramSwipeStartY = ev.getY();
+                    luckgramSwipeVelocity = VelocityTracker.obtain();
+                    luckgramSwipeVelocity.addMovement(ev);
+                }
+                return false;
+            }
+            if (luckgramSwipeCell == null) {
+                return false;
+            }
+            if (luckgramSwipeVelocity != null) {
+                luckgramSwipeVelocity.addMovement(ev);
+            }
+            final float dx = ev.getX() - luckgramSwipeStartX;
+            final float dy = ev.getY() - luckgramSwipeStartY;
+            if (action == MotionEvent.ACTION_MOVE) {
+                if (!luckgramSwiping) {
+                    if (Math.abs(dy) > AndroidUtilities.touchSlop && Math.abs(dy) > Math.abs(dx)) {
+                        luckgramSwipeReset(); // a vertical scroll: leave it to the list
+                        return false;
+                    }
+                    if (dx < -AndroidUtilities.touchSlop && Math.abs(dx) > Math.abs(dy) * 1.5f) {
+                        luckgramSwiping = true;
+                        MotionEvent cancel = MotionEvent.obtain(ev);
+                        cancel.setAction(MotionEvent.ACTION_CANCEL);
+                        super.dispatchTouchEvent(cancel); // drop the press / long-press on the row
+                        cancel.recycle();
+                        if (getParent() != null) {
+                            getParent().requestDisallowInterceptTouchEvent(true);
+                        }
+                        luckgramSwipeCell.swipeCanceled = false;
+                    }
+                }
+                if (luckgramSwiping) {
+                    luckgramSwipeDx = Math.min(0, dx + AndroidUtilities.touchSlop);
+                    luckgramSwipeCell.setTranslationX(luckgramSwipeDx);
+                    invalidate();
+                    return true;
+                }
+                return false;
+            }
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                if (!luckgramSwiping) {
+                    luckgramSwipeReset();
+                    return false;
+                }
+                float velocityX = 0;
+                if (luckgramSwipeVelocity != null) {
+                    luckgramSwipeVelocity.computeCurrentVelocity(1000);
+                    velocityX = luckgramSwipeVelocity.getXVelocity();
+                }
+                final DialogCell cell = luckgramSwipeCell;
+                final boolean commit = action == MotionEvent.ACTION_UP
+                    && (-luckgramSwipeDx > cell.getMeasuredWidth() * 0.3f || velocityX < -dp(1000) && -luckgramSwipeDx > dp(48));
+                final long dialogId = cell.getDialogId();
+                ValueAnimator back = ValueAnimator.ofFloat(luckgramSwipeDx, 0f);
+                back.addUpdateListener(a -> {
+                    cell.setTranslationX((float) a.getAnimatedValue());
+                    invalidate();
+                });
+                back.addListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        cell.setTranslationX(0);
+                        if (commit) {
+                            luckgramSetHidden(dialogId, false);
+                        }
+                    }
+                });
+                back.setDuration(200);
+                back.setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT);
+                back.start();
+                luckgramSwipeReset();
+                return true;
+            }
+            return luckgramSwiping;
+        }
+
+        private void luckgramSwipeReset() {
+            luckgramSwipeCell = null;
+            luckgramSwiping = false;
+            luckgramSwipeDx = 0;
+            if (luckgramSwipeVelocity != null) {
+                luckgramSwipeVelocity.recycle();
+                luckgramSwipeVelocity = null;
+            }
         }
 
         private boolean drawMovingViewsOverlayed() {
@@ -2454,14 +2565,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     return makeMovementFlags(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0);
                 } else {
                     if (parentPage.dialogsType == DIALOGS_TYPE_LUCKGRAM_HIDDEN) {
-                        // Luckgram 12: inside the hidden list the swipe bounces back and unhides (handled on ACTION_UP)
-                        if (!allowSwipeDuringCurrentTouch) {
-                            return 0;
-                        }
-                        swipeFolderBack = false;
-                        swipingFolder = true;
-                        dialogCell.setSliding(true);
-                        return makeMovementFlags(0, ItemTouchHelper.LEFT);
+                        // Luckgram 12: the hidden list tracks its unhide swipe itself (DialogsRecyclerView.luckgramHiddenSwipe)
+                        return 0;
                     }
                     int currentDialogsType = initialDialogsType;
                     try {
