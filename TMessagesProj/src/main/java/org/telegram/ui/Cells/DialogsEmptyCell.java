@@ -46,7 +46,8 @@ public class DialogsEmptyCell extends LinearLayout {
     public final static int TYPE_WELCOME_NO_CONTACTS = 0,
         TYPE_WELCOME_WITH_CONTACTS = 1,
         TYPE_FILTER_NO_CHATS_TO_DISPLAY = 2,
-        TYPE_FILTER_ADDING_CHATS = 3;
+        TYPE_FILTER_ADDING_CHATS = 3,
+        TYPE_LUCKGRAM_HIDDEN = 4; // Luckgram 12: the hidden chats list is empty
     private final static int TYPE_UNSPECIFIED = -1;
 
     @Retention(RetentionPolicy.SOURCE)
@@ -55,7 +56,8 @@ public class DialogsEmptyCell extends LinearLayout {
             TYPE_WELCOME_NO_CONTACTS,
             TYPE_WELCOME_WITH_CONTACTS,
             TYPE_FILTER_NO_CHATS_TO_DISPLAY,
-            TYPE_FILTER_ADDING_CHATS
+            TYPE_FILTER_ADDING_CHATS,
+            TYPE_LUCKGRAM_HIDDEN
     })
     public @interface EmptyType {}
 
@@ -148,6 +150,12 @@ public class DialogsEmptyCell extends LinearLayout {
                     titleView.setText(LocaleController.getString(R.string.FilterNoChatsToDisplay));
                     help = LocaleController.getString(R.string.FilterNoChatsToDisplayInfo);
                 }
+                break;
+            case TYPE_LUCKGRAM_HIDDEN:
+                imageView.setAutoRepeat(false);
+                icon = R.raw.filter_no_chats;
+                titleView.setText(org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.emptyTitleText());
+                help = org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.emptyText();
                 break;
             default:
             case TYPE_FILTER_ADDING_CHATS:

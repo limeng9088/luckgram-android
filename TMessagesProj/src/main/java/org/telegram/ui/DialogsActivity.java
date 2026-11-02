@@ -1093,6 +1093,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             updateContextViewPosition();
             updateStoriesViewAlpha(storiesAlpha);
             super.dispatchDraw(canvas);
+            if (luckgramPulling && storiesOverscroll > 0) {
+                drawLuckgramPull(canvas, top + actionBarHeight);
+            }
             drawHeaderShadow(canvas, top + actionBarHeight);
 
             /*if (fragmentContextView != null && fragmentContextView.isCallStyle()) {
@@ -2141,10 +2144,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             super.requestLayout();
         }
 
-        // Luckgram 12 (hidden chats): pulling the list down past a threshold opens the hidden chats
-        // (like the archive pull; only when the archive pull is not in use).
-        private float luckgramPullStartY = -1f;
-        private boolean luckgramPullArmed;
+        // Luckgram 12 (hidden chats): the pull-down that opens the hidden chats rides on the stories
+        // over-scroll channel; see luckgramPullAllowed / setStoriesOvercroll / drawLuckgramPull.
 
         private void toggleArchiveHidden(boolean action, DialogCell dialogCell) {
             SharedConfig.toggleArchiveHidden();
@@ -2191,10 +2192,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             int action = e.getAction();
             if (action == MotionEvent.ACTION_DOWN) {
                 setOverScrollMode(View.OVER_SCROLL_ALWAYS);
-                luckgramPullStartY = e.getY();
-                luckgramPullArmed = parentPage.dialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect && folderId == 0 && !hasHiddenArchive()
-                        && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.canPullDown(currentAccount)
-                        && ((LinearLayoutManager) getLayoutManager()).findFirstCompletelyVisibleItemPosition() == 0;
             }
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 if (!parentPage.itemTouchhelper.isIdle() && parentPage.swipeController.swipingFolder) {
@@ -2211,7 +2208,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                                     TLRPC.Dialog dialog = getMessagesController().dialogs_dict.get(dialogId);
                                     if (dialog != null) {
                                         TLRPC.Chat chat = getMessagesController().getChat(-dialogId);
-                                        if (ChatObject.isCommunity(chat)) {
+                                        if (parentPage.dialogsType == DIALOGS_TYPE_LUCKGRAM_HIDDEN) {
+                                            // Luckgram 12: a swipe inside the hidden list unhides (spec 12 §5)
+                                            luckgramSetHidden(dialogId, false);
+                                        } else if (ChatObject.isCommunity(chat)) {
                                             ArrayList<Long> selectedDialogs = new ArrayList<>();
                                             selectedDialogs.add(dialogId);
                                             performSelectedDialogsAction(selectedDialogs, community_ungroup, true, false);
@@ -2256,15 +2256,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
             }
             boolean result = super.onTouchEvent(e);
-            if (luckgramPullArmed && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
-                luckgramPullArmed = false;
-                if (action == MotionEvent.ACTION_UP && e.getY() - luckgramPullStartY > dp(160) && ((LinearLayoutManager) getLayoutManager()).findFirstCompletelyVisibleItemPosition() == 0) {
-                    try {
-                        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
-                    } catch (Exception ignored) {}
-                    org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.open(DialogsActivity.this);
-                }
-            }
             if (parentPage.dialogsType == DIALOGS_TYPE_DEFAULT && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) && parentPage.archivePullViewState == ARCHIVE_ITEM_STATE_HIDDEN && hasHiddenArchive()) {
                 LinearLayoutManager layoutManager = (LinearLayoutManager) getLayoutManager();
                 int currentPosition = layoutManager.findFirstVisibleItemPosition();
@@ -2449,7 +2440,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 swipingFolder = false;
                 return 0;
             }
-            if (!onlySelect && parentPage.isDefaultDialogType() && slidingView == null && viewHolder.itemView instanceof DialogCell) {
+            if (!onlySelect && (parentPage.isDefaultDialogType() || parentPage.dialogsType == DIALOGS_TYPE_LUCKGRAM_HIDDEN) && slidingView == null && viewHolder.itemView instanceof DialogCell) {
                 DialogCell dialogCell = (DialogCell) viewHolder.itemView;
                 long dialogId = dialogCell.getDialogId();
                 if (actionBar.isActionModeShowed(null)) {
@@ -2462,6 +2453,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     swipeFolderBack = false;
                     return makeMovementFlags(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0);
                 } else {
+                    if (parentPage.dialogsType == DIALOGS_TYPE_LUCKGRAM_HIDDEN) {
+                        // Luckgram 12: inside the hidden list the swipe bounces back and unhides (handled on ACTION_UP)
+                        if (!allowSwipeDuringCurrentTouch) {
+                            return 0;
+                        }
+                        swipeFolderBack = false;
+                        swipingFolder = true;
+                        dialogCell.setSliding(true);
+                        return makeMovementFlags(0, ItemTouchHelper.LEFT);
+                    }
                     int currentDialogsType = initialDialogsType;
                     try {
                         currentDialogsType = parentPage.dialogsAdapter.getDialogsType();
@@ -4184,6 +4185,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         storiesOverscrollAnimator.cancel();
                     }
                     if (viewPage.listView.getScrollState() != RecyclerView.SCROLL_STATE_DRAGGING) {
+                        if (luckgramPullReady) {
+                            // Luckgram 12: released past the threshold -> open the hidden chats
+                            luckgramPullReady = false;
+                            org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.open(DialogsActivity.this);
+                        }
                         storiesOverscrollAnimator = ValueAnimator.ofFloat(storiesOverscroll, 0);
                         storiesOverscrollAnimator.addUpdateListener(animation -> {
                             setStoriesOvercroll(viewPage, (float) animation.getAnimatedValue());
@@ -4227,6 +4233,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         return super.scrollVerticallyBy(measuredDy, recycler, state);
                     }
                     final boolean hasStories = DialogsActivity.this.hasStories && communityId == 0 && !(actionBar != null && actionBar.isActionModeShowed());
+                    // Luckgram 12: the over-scroll past the top also serves the hidden-chats pull (with or without stories)
+                    final boolean luckgramPull = luckgramPullAllowed(viewPage);
                     int pTop = viewPage.listView.getPaddingTop();
                     int realTopPadding = pTop;
                     if (hasStories && !rightSlidingDialogContainer.hasFragment() && !fixScrollYAfterArchiveOpened) {
@@ -4370,16 +4378,18 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         if (firstView != null) {
                             firstView.invalidate();
                         }
-                        if (viewPage.archivePullViewState == ARCHIVE_ITEM_STATE_SHOWED && usedDy == 0 && dy < 0 && isDragging && !rightSlidingDialogContainer.hasFragment() && hasStories && progressToActionMode == 0) {
-                            float newOverScroll = storiesOverscroll - dy * AndroidUtilities.lerp( 0.2f, 0.5f, dialogStoriesCell.overscrollProgress());
+                        if (viewPage.archivePullViewState == ARCHIVE_ITEM_STATE_SHOWED && usedDy == 0 && dy < 0 && isDragging && !rightSlidingDialogContainer.hasFragment() && (hasStories || luckgramPull) && progressToActionMode == 0) {
+                            float coef = luckgramPull ? LUCKGRAM_PULL_COEF : AndroidUtilities.lerp( 0.2f, 0.5f, dialogStoriesCell.overscrollProgress());
+                            float newOverScroll = storiesOverscroll - dy * coef;
                             setStoriesOvercroll(viewPage, newOverScroll);
                         }
                         return usedDy;
                     }
 
                     int scrolled = super.scrollVerticallyBy(measuredDy, recycler, state);
-                    if (scrolled == 0 && dy < 0 && isDragging && !rightSlidingDialogContainer.hasFragment() && hasStories && progressToActionMode == 0) {
-                        float newOverScroll = storiesOverscroll - dy * dialogStoriesCell.getOverScrollCoef();
+                    if (scrolled == 0 && dy < 0 && isDragging && !rightSlidingDialogContainer.hasFragment() && (hasStories || luckgramPull) && progressToActionMode == 0) {
+                        float coef = luckgramPull ? LUCKGRAM_PULL_COEF : dialogStoriesCell.getOverScrollCoef();
+                        float newOverScroll = storiesOverscroll - dy * coef;
                         setStoriesOvercroll(viewPage, newOverScroll);
                     }
                     return scrolled;
@@ -5699,13 +5709,79 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         return fragmentView;
     }
 
+    // Luckgram 12 (hidden chats): how much of the finger travel past the top becomes list offset
+    // (~180dp of pull reach the 90dp threshold, like the archive pull), and whether the current pull
+    // is the hidden-chats one (decided when the over-scroll starts, so a mid-pull change can't flip it).
+    private static final float LUCKGRAM_PULL_COEF = 0.5f;
+    private static final int LUCKGRAM_PULL_THRESHOLD_DP = 90;
+    private boolean luckgramPulling;
+    private boolean luckgramPullReady;
+    private TextPaint luckgramPullPaint;
+
+    /** The pull-down past the top of this page opens the hidden chats (spec 12 §2). */
+    private boolean luckgramPullAllowed(ViewPage viewPage) {
+        return viewPage.isDefaultDialogType() && !onlySelect && folderId == 0 && communityId == 0
+                && !(actionBar != null && actionBar.isActionModeShowed())
+                && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.canPullDown(currentAccount);
+    }
+
+    /**
+     * Draws "pull down / release for hidden chats" in the gap the pull opens inside the header,
+     * right above the search field (with stories the stories row follows the pull at half speed,
+     * so the free gap is half the over-scroll). Called from the content view after its children.
+     */
+    private void drawLuckgramPull(Canvas canvas, float headerBottom) {
+        float gapBottom = headerBottom;
+        if (fragmentSearchField != null && fragmentSearchField.getVisibility() == View.VISIBLE && searchAnimationProgress == 0) {
+            gapBottom = fragmentSearchField.getY();
+        }
+        boolean storiesShown = hasStories && dialogStoriesCellVisible && dialogStoriesCell != null && dialogStoriesCell.getVisibility() == View.VISIBLE;
+        float gap = storiesOverscroll * (storiesShown ? 0.5f : 1f);
+        float alpha = Utilities.clamp((gap - dp(18)) / dp(14), 1f, 0f);
+        if (alpha <= 0) {
+            return;
+        }
+        if (luckgramPullPaint == null) {
+            luckgramPullPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+            luckgramPullPaint.setTextSize(dp(14));
+            luckgramPullPaint.setTypeface(AndroidUtilities.bold());
+            luckgramPullPaint.setTextAlign(Paint.Align.CENTER);
+        }
+        luckgramPullPaint.setColor(getThemedColor(luckgramPullReady ? Theme.key_actionBarDefaultTitle : Theme.key_actionBarDefaultSubtitle));
+        luckgramPullPaint.setAlpha((int) (luckgramPullPaint.getAlpha() * alpha));
+        float gapTop = gapBottom - gap;
+        float baseline = (gapTop + gapBottom) / 2f - (luckgramPullPaint.descent() + luckgramPullPaint.ascent()) / 2f;
+        String text = luckgramPullReady ? org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.releaseText() : org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.pullText();
+        canvas.drawText(text, fragmentView.getWidth() / 2f, baseline, luckgramPullPaint);
+    }
+
     private void setStoriesOvercroll(ViewPage viewPage, float storiesOverscroll) {
         if (this.storiesOverscroll == storiesOverscroll) {
             return;
         }
+        if (this.storiesOverscroll == 0 && storiesOverscroll > 0) {
+            luckgramPulling = luckgramPullAllowed(viewPage);
+        }
         this.storiesOverscroll = storiesOverscroll;
         if (this.storiesOverscroll == 0) {
             storiesOverscrollCalled = false;
+        }
+        if (luckgramPulling) {
+            // Luckgram 12: the hidden-chats pull replaces the "pull to open a story" over-scroll
+            boolean ready = storiesOverscroll > dp(LUCKGRAM_PULL_THRESHOLD_DP) && viewPage.listView.getScrollState() == RecyclerView.SCROLL_STATE_DRAGGING;
+            if (ready && !luckgramPullReady) {
+                try {
+                    viewPage.listView.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING);
+                } catch (Exception ignored) {}
+            }
+            luckgramPullReady = ready;
+            if (storiesOverscroll == 0) {
+                luckgramPulling = false;
+            }
+            viewPage.listView.setViewsOffset(storiesOverscroll);
+            viewPage.listView.setOverScrollMode(storiesOverscroll != 0 ? RecyclerView.OVER_SCROLL_NEVER : RecyclerView.OVER_SCROLL_ALWAYS);
+            fragmentView.invalidate();
+            return;
         }
         dialogStoriesCell.setOverscroll(storiesOverscroll);
         viewPage.listView.setViewsOffset(storiesOverscroll);

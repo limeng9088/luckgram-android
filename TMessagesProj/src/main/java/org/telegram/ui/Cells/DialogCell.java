@@ -3881,7 +3881,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     backgroundColor = Theme.getColor(Theme.key_chats_archiveBackground, resourcesProvider);
                     revealBackgroundColor = Theme.getColor(Theme.key_chats_archivePinBackground, resourcesProvider);
 
-                    if (ChatObject.isCommunity(chat)) {
+                    if (dialogsType == DialogsActivity.DIALOGS_TYPE_LUCKGRAM_HIDDEN) {
+                        // Luckgram 12: inside the hidden list a swipe always unhides, whatever the gesture setting
+                        swipeMessage = org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.unhideText();
+                        swipeMessageStringId = LUCKGRAM_SWIPE_UNHIDE_TEXT_ID;
+                        translationDrawable = Theme.dialogs_unpinArchiveDrawable;
+                    } else if (ChatObject.isCommunity(chat)) {
                         swipeMessage = getString(swipeMessageStringId = R.string.SwipeUngroupCommunity);
                         backgroundColor = revealBackgroundColor = Theme.getColor(Theme.key_dialogSwipeRemove, resourcesProvider);
                         translationDrawable = Theme.dialogs_swipeCommunityUngroup;

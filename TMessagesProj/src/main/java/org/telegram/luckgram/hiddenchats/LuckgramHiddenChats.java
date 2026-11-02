@@ -88,6 +88,21 @@ public final class LuckgramHiddenChats {
         return LuckgramStrings.get(count + " 个隐藏的聊天匹配", count + " hidden chat(s) match");
     }
 
+    /** Drawn above the first row while the chat list is pulled down (before the threshold). */
+    public static String pullText() {
+        return LuckgramStrings.get("继续下拉查看隐藏的聊天", "Pull down for hidden chats");
+    }
+
+    /** Drawn above the first row once the pull passed the threshold. */
+    public static String releaseText() {
+        return LuckgramStrings.get("松开查看隐藏的聊天", "Release for hidden chats");
+    }
+
+    /** Title of the empty hidden list. */
+    public static String emptyTitleText() {
+        return LuckgramStrings.get("没有隐藏的聊天", "No hidden chats");
+    }
+
     public static String lockText() {
         return LuckgramStrings.get("进入时需要验证", "Require passcode to open");
     }
@@ -109,7 +124,7 @@ public final class LuckgramHiddenChats {
     }
 
     public static String emptyText() {
-        return LuckgramStrings.get("长按聊天选择「隐藏」，它就会出现在这里。", "Long-press a chat and choose Hide; it will show up here.");
+        return LuckgramStrings.get("在聊天列表左滑聊天或长按选择「隐藏」，它就会出现在这里。", "Swipe a chat in the chat list, or long-press it and choose Hide; it will show up here.");
     }
 
     // ---------------------------------------------------------------- settings
