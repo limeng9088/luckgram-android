@@ -2,14 +2,11 @@ package org.telegram.luckgram.square;
 
 import android.content.Context;
 import android.graphics.Rect;
-import android.text.InputFilter;
-import android.text.InputType;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -24,8 +21,6 @@ import org.telegram.luckgram.discover.DiscoverBlocks;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
-import org.telegram.messenger.UserConfig;
-import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -100,7 +95,6 @@ public final class SquareUi {
 
     // ---------------------------------------------------------------- link (S6, silent)
 
-    private static final String KEY_USE_AVATAR = "square.use_avatar";
     private static JSONObject profile;
     /** Author id of this device's user in Square (from the profile response), if known. */
     public static String myAuthorId;
@@ -206,7 +200,8 @@ public final class SquareUi {
 
                 @Override
                 public void onError(LuckgramAIError error) {
-                    if ("not_found".equals(error.code) || "profile_required".equals(error.code) || error.httpStatus == 404) {
+                    if (isNoProfile(error)) {
+                        profile = null;
                         editProfile(f, null, then);
                     } else {
                         showError(f, error);
@@ -222,89 +217,53 @@ public final class SquareUi {
         if (!id.isEmpty()) myAuthorId = id;
     }
 
-    /** Edit (or first fill in) the Square profile; {@code then} runs after a successful save. */
+    /**
+     * Edit (or first fill in) the Square profile on {@link SquareProfileActivity}; {@code then} runs
+     * after a successful save (e.g. continues to the compose page).
+     */
     public static void editProfile(BaseFragment f, JSONObject current, Runnable then) {
-        Context ctx = f.getParentActivity();
-        if (ctx == null) return;
-        SquareLogic.Texts tx = tx();
-        JSONObject cur = current != null ? current : profile;
-        TLRPC.User me = UserConfig.getInstance(f.getCurrentAccount()).getCurrentUser();
-        String myUsername = UserObject.getPublicUsername(me);
+        if (f == null || f.getParentActivity() == null) return;
+        try {
+            f.presentFragment(new SquareProfileActivity(current != null ? current : profile, then));
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+    }
 
-        LinearLayout box = new LinearLayout(ctx);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(AndroidUtilities.dp(22), AndroidUtilities.dp(4), AndroidUtilities.dp(22), 0);
-        if (cur == null) {
-            TextView info = new TextView(ctx);
-            info.setText(tx.profileNeeded());
-            info.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-            info.setTextColor(Theme.getColor(Theme.key_dialogTextGray3));
-            box.addView(info, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 8));
-        }
-        EditText name = field(ctx, tx.displayName(), 64, false);
-        name.setText(cur != null ? cur.optString("display_name", "") : (me != null ? UserObject.getUserName(me) : ""));
-        box.addView(name, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-        EditText bio = field(ctx, tx.bio(), SquareLogic.PROFILE_BIO_MAX, true);
-        bio.setText(cur != null ? cur.optString("bio", "") : "");
-        box.addView(bio, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 8, 0, 0));
-        final String avatar = avatarBase64(f.getCurrentAccount(), me);
-        // The checkbox follows the user's last choice (stored per account), so turning the photo off
-        // stays off the next time the profile is edited instead of re-uploading it.
-        final boolean[] useAvatar = {avatar != null && LuckgramSettings.getBoolForAccount(f.getCurrentAccount(), KEY_USE_AVATAR, true)};
-        if (avatar != null) {
-            org.telegram.ui.Cells.CheckBoxCell photo = new org.telegram.ui.Cells.CheckBoxCell(ctx, 1);
-            photo.setText(tx.useTelegramAvatar(), "", useAvatar[0], false);
-            photo.setOnClickListener(v -> {
-                useAvatar[0] = !useAvatar[0];
-                photo.setChecked(useAvatar[0], true);
-            });
-            box.addView(photo, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, -22, 8, -22, 0));
-        }
-        final boolean[] showUsername = {cur != null ? !cur.optString("username", "").isEmpty() : false};
-        if (!TextUtils.isEmpty(myUsername)) {
-            org.telegram.ui.Cells.CheckBoxCell check = new org.telegram.ui.Cells.CheckBoxCell(ctx, 1);
-            check.setText(tx.useMyUsername(myUsername), "", showUsername[0], false);
-            check.setOnClickListener(v -> {
-                showUsername[0] = !showUsername[0];
-                check.setChecked(showUsername[0], true);
-            });
-            box.addView(check, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, -22, 8, -22, 0));
-        }
-        new AlertDialog.Builder(ctx)
-            .setTitle(cur == null ? tx.profileTitle() : tx.editProfile())
-            .setView(box)
-            .setPositiveButton(tx.save(), (d, w) -> {
-                String n = name.getText().toString().trim();
-                if (n.isEmpty()) return;
-                try {
-                    JSONObject body = new JSONObject()
-                        .put("display_name", n)
-                        .put("bio", bio.getText().toString().trim())
-                        .put("username", showUsername[0] && myUsername != null ? myUsername : "");
-                    // S11: avatar is base64 JPEG; omitted = keep, "" = remove.
-                    if (avatar != null) {
-                        body.put("avatar", useAvatar[0] ? avatar : "");
-                        LuckgramSettings.setBoolForAccount(f.getCurrentAccount(), KEY_USE_AVATAR, useAvatar[0]);
-                    }
-                    LuckgramAI.getInstance().requestJson("PUT", "/v1/square/profile", body, new LuckgramAI.Callback<JSONObject>() {
-                        @Override
-                        public void onResult(JSONObject result) {
-                            setProfile(result.optString("display_name", "").isEmpty() ? body : result);
-                            bulletin(f).createSimpleBulletin(R.raw.done, tx.saved()).show();
-                            if (then != null) then.run();
-                        }
-
-                        @Override
-                        public void onError(LuckgramAIError error) {
-                            showError(f, error);
-                        }
-                    });
-                } catch (Exception e) {
-                    FileLog.e(e);
+    /** The profile button: the current profile if there is one (loaded if needed), otherwise the first fill-in. */
+    public static void openProfileEditor(BaseFragment f) {
+        requireLink(f, () -> {
+            if (profile != null) {
+                editProfile(f, profile, null);
+                return;
+            }
+            LuckgramAI.getInstance().requestJson("GET", "/v1/square/profile", null, new LuckgramAI.Callback<JSONObject>() {
+                @Override
+                public void onResult(JSONObject result) {
+                    if (!result.optString("display_name", "").isEmpty()) setProfile(result);
+                    editProfile(f, profile, null);
                 }
-            })
-            .setNegativeButton(tx.cancel(), null)
-            .show();
+
+                @Override
+                public void onError(LuckgramAIError error) {
+                    if (isNoProfile(error)) {
+                        editProfile(f, null, null);
+                    } else {
+                        showError(f, error);
+                    }
+                }
+            });
+        });
+    }
+
+    /** Saved on {@link SquareProfileActivity}. */
+    static void onProfileSaved(JSONObject p) {
+        setProfile(p);
+    }
+
+    /** No Square profile yet: 404 (not_found) on GET /v1/square/profile, or 403 profile_required on a write. */
+    static boolean isNoProfile(LuckgramAIError error) {
+        return error != null && ("not_found".equals(error.code) || "profile_required".equals(error.code) || error.httpStatus == 404);
     }
 
     /** The account's small profile photo (already downloaded, ~160 px JPEG) as base64, or null. Same limit as 25. */
@@ -320,20 +279,6 @@ public final class SquareUi {
         }
     }
 
-    private static EditText field(Context ctx, String hint, int max, boolean multiline) {
-        EditText e = new EditText(ctx);
-        e.setHint(hint);
-        e.setTextColor(Theme.getColor(Theme.key_dialogTextBlack));
-        e.setHintTextColor(Theme.getColor(Theme.key_dialogTextHint));
-        e.setFilters(new InputFilter[]{new InputFilter.LengthFilter(max)});
-        if (multiline) {
-            e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-            e.setMaxLines(3);
-        } else {
-            e.setSingleLine(true);
-        }
-        return e;
-    }
 
     // ---------------------------------------------------------------- errors
 

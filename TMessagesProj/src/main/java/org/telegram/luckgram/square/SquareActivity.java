@@ -82,7 +82,7 @@ public class SquareActivity extends UniversalFragment {
                 } else if (id == MENU_COMPOSE) {
                     SquareUi.requireProfile(SquareActivity.this, () -> presentFragment(new SquareComposeActivity()));
                 } else if (id == MENU_PROFILE) {
-                    SquareUi.requireLink(SquareActivity.this, () -> SquareUi.requireProfile(SquareActivity.this, () -> SquareUi.editProfile(SquareActivity.this, null, null)));
+                    SquareUi.openProfileEditor(SquareActivity.this);
                 }
             }
         });
