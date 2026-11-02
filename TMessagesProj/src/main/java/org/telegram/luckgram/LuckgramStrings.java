@@ -127,6 +127,41 @@ public final class LuckgramStrings {
         }
     }
 
+    /** specs#72: the reason Telegram gave, instead of "network error". */
+    public static String telegramErrorMessage(int code, String text) {
+        switch (org.telegram.luckgram.diag.TelegramErrorKind.of(code, text)) {
+            case org.telegram.luckgram.diag.TelegramErrorKind.NO_PERMISSION:
+                return get("你没有权限读取这里的消息。", "You don't have permission to read messages here.");
+            case org.telegram.luckgram.diag.TelegramErrorKind.FLOOD_WAIT: {
+                int s = org.telegram.luckgram.diag.TelegramErrorKind.floodWaitSeconds(text);
+                return s > 0
+                    ? get("Telegram 限制了请求频率，请 " + s + " 秒后重试。", "Telegram is limiting requests. Please try again in " + s + " seconds.")
+                    : get("Telegram 限制了请求频率，请稍后重试。", "Telegram is limiting requests. Please try again later.");
+            }
+            case org.telegram.luckgram.diag.TelegramErrorKind.PRIVATE:
+                return get("这个频道或群组是私有的，或你已不在其中。", "This channel or group is private, or you're no longer a member.");
+            case org.telegram.luckgram.diag.TelegramErrorKind.NOT_FOUND:
+                return get("这个话题或消息已不存在。", "This topic or message no longer exists.");
+            case org.telegram.luckgram.diag.TelegramErrorKind.NETWORK:
+                return errorMessage(LuckgramAIError.NETWORK_ERROR);
+            default:
+                return get("Telegram 返回错误：", "Telegram returned an error: ") + code + " " + (text != null ? text : "");
+        }
+    }
+
+    public static String exportDiagLog() {
+        return get("导出诊断日志", "Export diagnostic log");
+    }
+
+    public static String exportDiagLogInfo() {
+        return get("只记录请求的时间、功能、状态和耗时，不含消息内容。出问题时可以导出发给我们。",
+            "Only the time, feature, status and duration of requests are recorded, never message content. Export it and send it to us if something goes wrong.");
+    }
+
+    public static String diagLogEmpty() {
+        return get("还没有诊断日志。", "There's no diagnostic log yet.");
+    }
+
     // --- groups
     public static String group(LuckgramFeature.Group group) {
         switch (group) {

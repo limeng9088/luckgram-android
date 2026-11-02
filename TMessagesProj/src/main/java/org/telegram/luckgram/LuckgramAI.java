@@ -5,6 +5,7 @@ import android.text.TextUtils;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.telegram.luckgram.diag.LuckgramNet;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.FileLog;
@@ -132,6 +133,8 @@ public final class LuckgramAI {
     public static final class Request {
         private volatile boolean cancelled;
         private volatile Closeable connection;
+        /** Feature or AI task named in the diagnostic log (specs#72); null if the route says enough. */
+        volatile String feature;
 
         public void cancel() {
             cancelled = true;
@@ -157,6 +160,8 @@ public final class LuckgramAI {
         public final String contentType;
         public final InputStream body;
         private final Closeable onClose;
+        /** The server's {@code X-Request-Id} header (specs#71), or null. */
+        public String requestId;
 
         public HttpResponse(int status, String contentType, InputStream body, Closeable onClose) {
             this.status = status;
@@ -186,7 +191,8 @@ public final class LuckgramAI {
         @Override
         public HttpResponse execute(String method, String path, Map<String, String> headers, byte[] body) throws IOException {
             // path is relative to the API server, or an absolute https URL (temporary files).
-            HttpURLConnection c = (HttpURLConnection) new URL(path.startsWith("https://") ? path : apiBaseUrl() + path).openConnection();
+            // specs#72: through the in-app SOCKS5 proxy when one is on.
+            HttpURLConnection c = LuckgramNet.open(new URL(path.startsWith("https://") ? path : apiBaseUrl() + path), LuckgramNet.currentRoute());
             c.setRequestMethod(method);
             c.setConnectTimeout(15_000);
             c.setReadTimeout(120_000);
@@ -203,7 +209,9 @@ public final class LuckgramAI {
             }
             int status = c.getResponseCode();
             InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
-            return new HttpResponse(status, c.getContentType(), in, c::disconnect);
+            HttpResponse res = new HttpResponse(status, c.getContentType(), in, c::disconnect);
+            res.requestId = c.getHeaderField("X-Request-Id");
+            return res;
         }
     }
 
@@ -387,7 +395,7 @@ public final class LuckgramAI {
             Map<String, String> headers = new LinkedHashMap<>();
             headers.put("Authorization", "Bearer " + t);
             headers.put("Accept", "application/json");
-            try (HttpResponse ignored = tr.execute(method, path, headers, null)) {
+            try (HttpResponse ignored = executeLogged(tr, null, method, path, headers, null)) {
                 // best effort; the server also expires the data
             } catch (Exception e) {
                 FileLog.e(e);
@@ -409,7 +417,7 @@ public final class LuckgramAI {
         if (req != null && req.cancelled) {
             throw new IOException("cancelled");
         }
-        try (HttpResponse res = transport().execute("PUT", url, headers, body)) {
+        try (HttpResponse res = executeLogged(transport(), "square-upload", "PUT", url, headers, body)) {
             if (req != null) req.connection = res;
             return res.status;
         }
@@ -442,7 +450,9 @@ public final class LuckgramAI {
                 return status;
             }
         }
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        LuckgramNet.Route route = LuckgramNet.currentRoute();
+        long start = System.currentTimeMillis();
+        HttpURLConnection c = LuckgramNet.open(new URL(url), route);
         c.setRequestMethod("PUT");
         c.setConnectTimeout(15_000);
         c.setReadTimeout(120_000);
@@ -451,22 +461,27 @@ public final class LuckgramAI {
         c.setDoOutput(true);
         c.setFixedLengthStreamingMode(file.length());
         if (req != null) req.connection = c::disconnect;
-        try (OutputStream os = c.getOutputStream(); java.io.FileInputStream in = new java.io.FileInputStream(file)) {
-            byte[] buf = new byte[64 * 1024];
-            int n;
-            long sent = 0;
-            final long total = file.length();
-            while ((n = in.read(buf)) > 0) {
-                if (req != null && req.cancelled) throw new IOException("cancelled");
-                os.write(buf, 0, n);
-                sent += n;
-                if (progress != null) progress.onProgress(sent, total);
-            }
-            os.flush();
-            if (progress != null) progress.onProgress(total, total);
-        }
         try {
-            return c.getResponseCode();
+            try (OutputStream os = c.getOutputStream(); java.io.FileInputStream in = new java.io.FileInputStream(file)) {
+                byte[] buf = new byte[64 * 1024];
+                int n;
+                long sent = 0;
+                final long total = file.length();
+                while ((n = in.read(buf)) > 0) {
+                    if (req != null && req.cancelled) throw new IOException("cancelled");
+                    os.write(buf, 0, n);
+                    sent += n;
+                    if (progress != null) progress.onProgress(sent, total);
+                }
+                os.flush();
+                if (progress != null) progress.onProgress(total, total);
+            }
+            int status = c.getResponseCode();
+            LuckgramNet.logHttp("square-upload", "PUT", url, status, null, start, route.label, c.getHeaderField("X-Request-Id"));
+            return status;
+        } catch (IOException | RuntimeException e) {
+            LuckgramNet.logHttp("square-upload", "PUT", url, 0, e, start, route.label, null);
+            throw e;
         } finally {
             c.disconnect();
         }
@@ -495,6 +510,7 @@ public final class LuckgramAI {
      */
     public Request chat(Context context, String task, String effect, List<Message> messages, boolean stream, ChatListener listener) {
         Request req = new Request();
+        req.feature = task;
         int chars = 0;
         JSONObject body = new JSONObject();
         try {
@@ -538,6 +554,7 @@ public final class LuckgramAI {
 
     public Request image(Context context, String prompt, Callback<Image> callback) {
         Request req = new Request();
+        req.feature = "image";
         final byte[] payload;
         try {
             payload = new JSONObject().put("prompt", prompt).toString().getBytes(StandardCharsets.UTF_8);
@@ -624,6 +641,7 @@ public final class LuckgramAI {
      */
     public Request transcribe(Context context, byte[] audio, String mimeType, String language, Callback<Transcription> callback) {
         Request req = new Request();
+        req.feature = "transcribe";
         if (audio == null || audio.length == 0 || mimeType == null || !mimeType.startsWith("audio/")) {
             deliverError(callback::onError, new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));
             return req;
@@ -788,9 +806,23 @@ public final class LuckgramAI {
             // CloudFront OAC -> Lambda Function URL requires the payload hash (docs/api-server.md §3.1 item 1).
             headers.put("x-amz-content-sha256", sha256Hex(body));
         }
-        HttpResponse res = transport().execute(method, path, headers, body);
+        HttpResponse res = executeLogged(transport(), req.feature, method, path, headers, body);
         req.connection = res;
         return res;
+    }
+
+    /** Runs one request and writes it to the diagnostic log (specs#72): metadata only, never the body. */
+    private HttpResponse executeLogged(Transport tr, String feature, String method, String path, Map<String, String> headers, byte[] body) throws IOException {
+        long start = System.currentTimeMillis();
+        String proxy = tr == mockTransport ? "mock" : LuckgramNet.currentRoute().label;
+        try {
+            HttpResponse res = tr.execute(method, path, headers, body);
+            LuckgramNet.logHttp(feature, method, path, res.status, null, start, proxy, res.requestId);
+            return res;
+        } catch (IOException | RuntimeException e) {
+            LuckgramNet.logHttp(feature, method, path, 0, e, start, proxy, null);
+            throw e;
+        }
     }
 
     private String ensureToken(Request req) throws Exception {

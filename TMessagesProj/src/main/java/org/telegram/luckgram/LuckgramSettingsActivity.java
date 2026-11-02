@@ -37,6 +37,7 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
     private static final int ID_AI_CONSENT = 10;
     private static final int ID_ACCOUNT = 11;
     private static final int ID_PRO = 12;
+    private static final int ID_DIAG_EXPORT = 13;
     private static final int ID_PLACEHOLDER_BASE = 20;
     private static final int ID_DEBUG_MOCK = 30;
     private static final int ID_DEBUG_SELFTEST = 31;
@@ -151,6 +152,10 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
             items.add(UItem.asShadow(LuckgramStrings.get("服务器：", "Server: ") + (LuckgramAI.getInstance().isUsingMock() ? "mock" : LuckgramAI.apiBaseUrl())));
         }
 
+        // specs#72: local diagnostic log (metadata only), exported as .txt.
+        items.add(UItem.asButton(ID_DIAG_EXPORT, LuckgramStrings.exportDiagLog()));
+        items.add(UItem.asShadow(LuckgramStrings.exportDiagLogInfo()));
+
         items.add(UItem.asCustomShadow(footerView));
     }
 
@@ -196,6 +201,12 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
                 break;
             case ID_PRO:
                 presentFragment(new org.telegram.luckgram.account.LuckgramProActivity());
+                break;
+            case ID_DIAG_EXPORT:
+                if (getParentActivity() != null) {
+                    org.telegram.luckgram.diag.LuckgramNet.export(getParentActivity(), LuckgramStrings.exportDiagLog(),
+                        () -> org.telegram.ui.Components.BulletinFactory.of(this).createSimpleBulletin(org.telegram.messenger.R.raw.info, LuckgramStrings.diagLogEmpty()).show());
+                }
                 break;
             case ID_AI_CONSENT:
                 if (LuckgramAI.getInstance().hasConsent()) {

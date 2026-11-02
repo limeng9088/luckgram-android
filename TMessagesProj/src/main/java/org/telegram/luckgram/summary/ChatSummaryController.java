@@ -103,8 +103,12 @@ public final class ChatSummaryController {
             fetchRequestId = 0;
             if (cancelled) return;
             if (!(res instanceof TLRPC.messages_Messages)) {
+                // specs#72: log it and show Telegram's reason; "network error" only without an answer.
+                int code = err != null ? err.code : 0;
+                String text = err != null ? err.text : null;
+                org.telegram.luckgram.diag.LuckgramNet.logTelegram("summary", threadId != 0 ? "messages.getReplies" : "messages.getHistory", code, text);
                 if (acc.isEmpty()) {
-                    done.onError(new LuckgramAIError(LuckgramAIError.NETWORK_ERROR, 0));
+                    done.onError(LuckgramAIError.fromTelegram(code, text));
                 } else {
                     finishLoad(acc, names, done);
                 }

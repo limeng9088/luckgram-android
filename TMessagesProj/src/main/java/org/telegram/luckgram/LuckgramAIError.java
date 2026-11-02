@@ -16,19 +16,44 @@ public final class LuckgramAIError {
     /** The user declined (or has not given) consent; nothing was sent. */
     public static final String CONSENT_DENIED = "consent_denied";
     public static final String CANCELLED = "cancelled";
+    /**
+     * Telegram refused a request made before the AI call (specs#72), e.g. loading history for a
+     * summary; {@link #telegramCode} and {@link #telegramText} say why.
+     */
+    public static final String TELEGRAM_ERROR = "telegram_error";
 
     public final String code;
     public final int httpStatus;
     /** From {@code error.retry_after_seconds} (or the Retry-After header) on 429 responses; 0 if absent. */
     public long retryAfterSeconds;
+    /** For {@link #TELEGRAM_ERROR}: Telegram's error code and text (e.g. 400, CHANNEL_PRIVATE). */
+    public int telegramCode;
+    public String telegramText;
 
     public LuckgramAIError(String code, int httpStatus) {
         this.code = code;
         this.httpStatus = httpStatus;
     }
 
+    /**
+     * The error for a failed Telegram request: {@link #TELEGRAM_ERROR} when Telegram answered with an
+     * error, {@link #NETWORK_ERROR} only when no answer came (specs#72).
+     */
+    public static LuckgramAIError fromTelegram(int code, String text) {
+        if (org.telegram.luckgram.diag.TelegramErrorKind.of(code, text) == org.telegram.luckgram.diag.TelegramErrorKind.NETWORK) {
+            return new LuckgramAIError(NETWORK_ERROR, 0);
+        }
+        LuckgramAIError e = new LuckgramAIError(TELEGRAM_ERROR, 0);
+        e.telegramCode = code;
+        e.telegramText = text;
+        return e;
+    }
+
     /** User-facing message in the current language. */
     public String getLocalizedMessage() {
+        if (TELEGRAM_ERROR.equals(code)) {
+            return LuckgramStrings.telegramErrorMessage(telegramCode, telegramText);
+        }
         return LuckgramStrings.errorMessage(code);
     }
 

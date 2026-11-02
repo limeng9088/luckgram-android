@@ -552,6 +552,8 @@ public class ImageLoader {
         protected Boolean doInBackground(Void... voids) {
             InputStream httpConnectionStream = null;
             boolean done = false;
+            org.telegram.luckgram.diag.LuckgramNet.Route luckgramRoute = null;
+            long luckgramStart = 0;
 
             if (!isCancelled()) {
                 try {
@@ -573,7 +575,14 @@ public class ImageLoader {
                     }
 
                     URL downloadUrl = new URL(overrideUrl != null ? overrideUrl : location);
-                    httpConnection = (HttpURLConnection) downloadUrl.openConnection();
+                    // specs#72: Luckgram square media follows the in-app SOCKS5 proxy and is logged.
+                    if (org.telegram.luckgram.diag.LuckgramNet.isApiUrl(downloadUrl.toString())) {
+                        luckgramRoute = org.telegram.luckgram.diag.LuckgramNet.currentRoute();
+                        luckgramStart = System.currentTimeMillis();
+                        httpConnection = org.telegram.luckgram.diag.LuckgramNet.open(downloadUrl, luckgramRoute);
+                    } else {
+                        httpConnection = (HttpURLConnection) downloadUrl.openConnection();
+                    }
                     httpConnection.addRequestProperty("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 10_0 like Mac OS X) AppleWebKit/602.1.38 (KHTML, like Gecko) Version/10.0 Mobile/14A5297c Safari/602.1");
                     httpConnection.setConnectTimeout(5000);
                     httpConnection.setReadTimeout(5000);
@@ -581,9 +590,15 @@ public class ImageLoader {
                     if (!isCancelled()) {
                         httpConnection.connect();
                         httpConnectionStream = httpConnection.getInputStream();
+                        if (luckgramRoute != null) {
+                            org.telegram.luckgram.diag.LuckgramNet.logHttp("media", "GET", downloadUrl.toString(), httpConnection.getResponseCode(), null, luckgramStart, luckgramRoute.label, httpConnection.getHeaderField("X-Request-Id"));
+                        }
                         fileOutputStream = new RandomAccessFile(cacheImage.tempFilePath, "rws");
                     }
                 } catch (Throwable e) {
+                    if (luckgramRoute != null) {
+                        org.telegram.luckgram.diag.LuckgramNet.logHttp("media", "GET", overrideUrl != null ? overrideUrl : cacheImage.imageLocation.path, 0, e, luckgramStart, luckgramRoute.label, null);
+                    }
                     boolean sentLogs = true;
                     if (e instanceof SocketTimeoutException) {
                         if (ApplicationLoader.isNetworkOnline()) {
