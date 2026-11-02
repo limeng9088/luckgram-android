@@ -12,14 +12,12 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.telegram.luckgram.LuckgramSettings;
 import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -57,12 +55,7 @@ public class LuckgramWelcomeActivity extends BaseFragment {
 
         column.addView(new View(context), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
 
-        ImageView logo = new ImageView(context);
-        logo.setImageResource(R.mipmap.luckgram_icon_monochrome);
-        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        logo.setContentDescription("Luckgram");
-        column.addView(logo, LayoutHelper.createLinear(200, 200));
-
+        // No logo in the middle (user decision 2026-11-02): only the tile pattern above the text.
         column.addView(new View(context), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1.2f));
 
         TextView welcomeTo = new TextView(context);

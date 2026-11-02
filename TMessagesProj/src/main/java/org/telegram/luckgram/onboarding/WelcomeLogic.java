@@ -42,7 +42,7 @@ public final class WelcomeLogic {
         SUMMARY,
         /** 25 people nearby + 26 square. */
         DISCOVER,
-        /** S7 Luckgram Pro, only while billing.enabled. */
+        /** S7 Luckgram Pro: always the last step; "Coming soon" while billing is off. */
         PRO
     }
 
@@ -83,17 +83,23 @@ public final class WelcomeLogic {
         return zh ? DEFAULT_PRIVACY_URL_ZH : DEFAULT_PRIVACY_URL_EN;
     }
 
-    /** The steps shown, in order; the Pro step only while billing is enabled. */
-    public static List<Step> steps(boolean billingEnabled) {
+    /** The steps shown, in order; the Pro page is always the last one (user decision 2026-11-02). */
+    public static List<Step> steps() {
         ArrayList<Step> out = new ArrayList<>();
         out.add(Step.AI);
         out.add(Step.AGENTS);
         out.add(Step.SUMMARY);
         out.add(Step.DISCOVER);
-        if (billingEnabled) {
-            out.add(Step.PRO);
-        }
+        out.add(Step.PRO);
         return out;
+    }
+
+    /**
+     * Whether the Pro step's subscribe button works. With billing off it shows "Coming soon",
+     * disabled; only "not now" can be tapped and nothing is requested from the server.
+     */
+    public static boolean canSubscribe(Step step, boolean billingEnabled) {
+        return step == Step.PRO && billingEnabled;
     }
 
     /** "n/N" over the steps actually shown; {@code index} is 0-based. */
@@ -237,12 +243,25 @@ public final class WelcomeLogic {
             }
         }
 
-        /** The Pro button with the cheapest plan, e.g. "订阅 · 250 ⭐ / 30 天". */
+        public String comingSoon() {
+            return t("即将推出", "Coming soon");
+        }
+
+        /** A plan's price from /v1/billing/plans, e.g. "500 ⭐ / 月" for 30 days; never written into the app. */
+        public String price(int stars, int days) {
+            if (stars <= 0) return "";
+            String per;
+            if (days == 30 || days == 31) per = t("月", "month");
+            else if (days == 365 || days == 366) per = t("年", "year");
+            else if (days > 0) per = t(days + " 天", days + " days");
+            else return stars + " ⭐";
+            return stars + " ⭐ / " + per;
+        }
+
+        /** The Pro button with a plan, e.g. "订阅 · 500 ⭐ / 月". */
         public String subscribe(int stars, int days) {
             if (stars <= 0) return primary(Step.PRO);
-            return days > 0
-                ? t("订阅 · " + stars + " ⭐ / " + days + " 天", "Subscribe · " + stars + " ⭐ / " + days + " days")
-                : t("订阅 · " + stars + " ⭐", "Subscribe · " + stars + " ⭐");
+            return t("订阅 · ", "Subscribe · ") + price(stars, days);
         }
 
         public String secondary(Step s) {

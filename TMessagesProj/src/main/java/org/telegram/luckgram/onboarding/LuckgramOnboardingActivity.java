@@ -34,8 +34,10 @@ import java.util.List;
  * specs#76: onboarding steps between the welcome page and login: "n/N"
  * and a progress bar on top, a big title, text, an optional bold question, an illustration card
  * (drawn in code, made-up content) and a white button with a "not now" text button under it.
- * The two buttons write the step's feature switches; the Pro step (only while billing.enabled)
- * remembers "Subscribe" and opens the Pro page after login, since paying needs a Telegram account.
+ * The two buttons write the step's feature switches. The Pro step is always last and shows the price
+ * from /v1/billing/plans (e.g. "500 ⭐ / 月"); while billing is enabled its "Subscribe" is remembered
+ * and opens the Pro page after login (paying needs a Telegram account), otherwise the button shows
+ * "Coming soon", disabled, and no payment is started.
  */
 public class LuckgramOnboardingActivity extends BaseFragment {
 
@@ -57,15 +59,15 @@ public class LuckgramOnboardingActivity extends BaseFragment {
     private TextView primaryButton;
     private TextView secondaryButton;
 
+    private boolean billingEnabled;
     private AccountLogic.Plan cheapestPlan;
     private LuckgramAI.Request plansRequest;
 
     @Override
     public boolean onFragmentCreate() {
-        steps = WelcomeLogic.steps(LuckgramSettings.remoteConfig().getBool("billing.enabled", false));
-        if (steps.contains(WelcomeLogic.Step.PRO)) {
-            loadPlans();
-        }
+        steps = WelcomeLogic.steps();
+        billingEnabled = LuckgramSettings.remoteConfig().getBool("billing.enabled", false);
+        loadPlans(); // price shown even before purchases open; no payment is started here
         return super.onFragmentCreate();
     }
 
@@ -143,6 +145,9 @@ public class LuckgramOnboardingActivity extends BaseFragment {
         if (!primary && !WelcomeLogic.hasSecondary(step)) {
             return;
         }
+        if (primary && step == WelcomeLogic.Step.PRO && !WelcomeLogic.canSubscribe(step, billingEnabled)) {
+            return; // "Coming soon"
+        }
         for (String key : WelcomeLogic.toggles(step)) {
             LuckgramSettings.setEnabled(key, primary);
         }
@@ -183,7 +188,14 @@ public class LuckgramOnboardingActivity extends BaseFragment {
             questionView.setVisibility(q != null ? View.VISIBLE : View.GONE);
             cardContainer.removeAllViews();
             cardContainer.addView(card(step), LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
-            primaryButton.setText(step == WelcomeLogic.Step.PRO && cheapestPlan != null ? texts.subscribe(cheapestPlan.stars, cheapestPlan.days) : texts.primary(step));
+            boolean comingSoon = step == WelcomeLogic.Step.PRO && !WelcomeLogic.canSubscribe(step, billingEnabled);
+            if (comingSoon) {
+                primaryButton.setText(texts.comingSoon());
+            } else {
+                primaryButton.setText(step == WelcomeLogic.Step.PRO && cheapestPlan != null ? texts.subscribe(cheapestPlan.stars, cheapestPlan.days) : texts.primary(step));
+            }
+            primaryButton.setEnabled(!comingSoon);
+            primaryButton.setAlpha(comingSoon ? 0.45f : 1f);
             String sec = texts.secondary(step);
             secondaryButton.setText(sec);
             secondaryButton.setVisibility(sec != null ? View.VISIBLE : View.INVISIBLE);
@@ -205,17 +217,18 @@ public class LuckgramOnboardingActivity extends BaseFragment {
             @Override
             public void onResult(JSONObject result) {
                 AccountLogic.Billing billing = AccountLogic.parseBilling(result);
+                billingEnabled = billing.enabled; // the server decides whether purchases are open
                 for (AccountLogic.Plan p : billing.plans) {
                     if (cheapestPlan == null || p.stars < cheapestPlan.stars) cheapestPlan = p;
                 }
-                if (steps != null && index < steps.size() && steps.get(index) == WelcomeLogic.Step.PRO && primaryButton != null && cheapestPlan != null) {
-                    primaryButton.setText(texts.subscribe(cheapestPlan.stars, cheapestPlan.days));
+                if (steps != null && index < steps.size() && steps.get(index) == WelcomeLogic.Step.PRO) {
+                    bind(false);
                 }
             }
 
             @Override
             public void onError(LuckgramAIError error) {
-                // The button stays "Subscribe"; the Pro page after login loads the plans again.
+                // No price shown; the button follows the remote config (Coming soon while off).
             }
         });
     }
@@ -404,6 +417,13 @@ public class LuckgramOnboardingActivity extends BaseFragment {
     private View proCard(Context c) {
         LinearLayout p = new LinearLayout(c);
         p.setOrientation(LinearLayout.VERTICAL);
+        if (cheapestPlan != null) {
+            TextView price = text(c, 22, 0xFFFFFFFF);
+            price.setTypeface(AndroidUtilities.bold());
+            price.setGravity(Gravity.CENTER);
+            price.setText(texts.price(cheapestPlan.stars, cheapestPlan.days));
+            p.addView(price, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 12));
+        }
         String[][] features = texts.proFeatures();
         String[] icons = {"✦", "⇄", "⭐"};
         int[] colors = {0xFF5E5CE6, 0xFF0A84FF, 0xFFFF9F0A};
