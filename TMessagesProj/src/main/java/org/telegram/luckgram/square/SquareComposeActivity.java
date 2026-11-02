@@ -53,7 +53,7 @@ import java.util.List;
  * removed, trimmed with the user's consent); everything goes up through presigned URLs, then the
  * post is created and is public at once.
  */
-public class SquareComposeActivity extends UniversalFragment {
+public class SquareComposeActivity extends UniversalFragment implements NotificationCenter.NotificationCenterDelegate {
 
     private static final int MENU_SEND = 1;
     private static final int ID_TEXT = 1;
