@@ -9220,7 +9220,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         checkUi_mainTabsVisible();
     }
 
-    @Override
     /** Luckgram 12: the hidden list never pulls, so it must not keep a row offset left by the list it was opened from. */
     private void luckgramResetInheritedOffset() {
         if (initialDialogsType != DIALOGS_TYPE_LUCKGRAM_HIDDEN || viewPages == null) {
@@ -9233,6 +9232,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
     }
 
+    @Override
     public void onTransitionAnimationEnd(boolean isOpen, boolean backward) {
         luckgramResetInheritedOffset();
         if (rightSlidingDialogContainer != null && rightSlidingDialogContainer.hasFragment()) {
