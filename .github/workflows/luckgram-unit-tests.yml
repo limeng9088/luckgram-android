@@ -58,6 +58,7 @@ jobs:
             notes/UserNotesText.java \
             translateout/TranslateOutLogic.java \
             translateout/TranslateFallbackLogic.java \
+            translateout/TranslateCache.java \
             profileinfo/ProfileInfoLogic.java \
             sharedactivity/SharedActivityLogic.java \
             voice/DictationAudio.java \

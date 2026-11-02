@@ -15,8 +15,8 @@ public final class TranslateFallbackLogic {
     public static final String SOURCE_MESSAGE = "translate_message";
     public static final String SOURCE_CHAT = "translate_chat";
 
-    /** Telegram gets this long before we stop waiting and fall back. */
-    public static final long TELEGRAM_TIMEOUT_MS = 15_000;
+    /** Telegram gets this long before we stop waiting and fall back (spec 01 「翻译服务」2). */
+    public static final long TELEGRAM_TIMEOUT_MS = 8_000;
 
     /** Logged instead of a Telegram error text when no error came. */
     public static final String TIMEOUT = "TIMEOUT";
@@ -115,19 +115,20 @@ public final class TranslateFallbackLogic {
         }
     }
 
-    /** The message shown when both Telegram and Luckgram AI failed. */
+    /**
+     * The message shown when both Telegram and Luckgram AI failed (spec 01 「翻译服务」4). Declining the
+     * AI consent means "Telegram only", so it gets the generic message.
+     */
     public static String failureMessage(int kind, boolean chinese) {
         switch (kind) {
             case FAIL_NETWORK:
-                return chinese ? "翻译失败：网络不通，请检查网络后重试。" : "Translation failed: no network connection. Please check your network and try again.";
+                return chinese ? "网络不通，请检查网络或代理" : "No connection. Please check your network or proxy.";
             case FAIL_QUOTA:
-                return chinese ? "翻译失败：今天的 AI 额度已用完，请明天再试。" : "Translation failed: today's AI quota is used up. Please try again tomorrow.";
+                return chinese ? "今日翻译次数已用完，明天再来" : "You've used all of today's translations. Please come back tomorrow.";
             case FAIL_TOO_LONG:
-                return chinese ? "翻译失败：文字太长，请分段翻译。" : "Translation failed: the text is too long. Please translate it in parts.";
-            case FAIL_CONSENT:
-                return chinese ? "翻译失败：Telegram 翻译不可用，需要同意使用 AI 服务才能改用 Luckgram 翻译。" : "Translation failed: Telegram translation is unavailable, and Luckgram translation needs your consent to use the AI service.";
+                return chinese ? "这段文字太长，无法翻译" : "This text is too long to translate.";
             default:
-                return chinese ? "翻译失败，请稍后再试。" : "Translation failed. Please try again later.";
+                return chinese ? "翻译失败，请稍后再试" : "Translation failed. Please try again later.";
         }
     }
 }

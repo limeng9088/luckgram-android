@@ -64,9 +64,13 @@ public class TranslateFallbackLogicTest {
     @Test
     public void failureMessagesSayWhy() {
         assertTrue(TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_NETWORK, true).contains("网络"));
-        assertTrue(TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_QUOTA, true).contains("额度"));
-        assertTrue(TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_TOO_LONG, true).contains("太长"));
-        assertTrue(TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_QUOTA, false).contains("quota"));
+        assertEquals("网络不通，请检查网络或代理", TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_NETWORK, true));
+        assertEquals("今日翻译次数已用完，明天再来", TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_QUOTA, true));
+        assertEquals("这段文字太长，无法翻译", TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_TOO_LONG, true));
+        assertEquals("翻译失败，请稍后再试", TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_OTHER, true));
+        // declining AI consent means "Telegram only": generic message
+        assertEquals(TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_OTHER, true),
+            TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_CONSENT, true));
         assertNotEquals(TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_NETWORK, false),
             TranslateFallbackLogic.failureMessage(TranslateFallbackLogic.FAIL_OTHER, false));
     }
