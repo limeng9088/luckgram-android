@@ -42,6 +42,22 @@ public final class LuckgramRemoteConfigFetcher {
         refresh();
     }
 
+    /**
+     * Refreshes in the background if the cached config is older than {@code maxAgeSeconds} (or its
+     * own ttl, whichever is shorter). For pages that quote config values to the user, such as the
+     * Square compose page's per-day limit, so a value changed on the server shows up within a
+     * minute instead of after the hour-long ttl. Honours the failure back-off like {@link #refreshIfStale()}.
+     */
+    public static void refreshIfOlderThan(long maxAgeSeconds) {
+        LuckgramRemoteConfig cached = LuckgramSettings.remoteConfig();
+        long ttl = cached.ttlSeconds > 0 ? cached.ttlSeconds : LuckgramRemoteConfigLogic.DEFAULT_TTL_SECONDS;
+        long maxAge = Math.max(1, Math.min(ttl, maxAgeSeconds));
+        if (!LuckgramRemoteConfigLogic.isStale(System.currentTimeMillis(), cached.fetchedAt, maxAge, lastFailureMs)) {
+            return;
+        }
+        refresh();
+    }
+
     /** Refreshes in the background now (debug page / tests). */
     public static void refresh() {
         String base = LuckgramAI.apiBaseUrl();

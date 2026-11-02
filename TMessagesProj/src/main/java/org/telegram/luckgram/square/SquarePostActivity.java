@@ -20,7 +20,6 @@ import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
@@ -123,7 +122,7 @@ public class SquarePostActivity extends UniversalFragment {
             public void onError(LuckgramAIError error) {
                 loadingPost = false;
                 if (error.httpStatus == 404 || "not_found".equals(error.code)) {
-                    BulletinFactory.of(SquarePostActivity.this).createErrorBulletin(tx.postGone()).show();
+                    SquareUi.bulletin(SquarePostActivity.this).createErrorBulletin(tx.postGone()).show();
                     SquareActivity.dirty = true;
                     finishFragment();
                     return;
@@ -257,7 +256,7 @@ public class SquarePostActivity extends UniversalFragment {
         String text = input.getText().toString();
         draft = text;
         if (!SquareLogic.isValidComment(text)) {
-            BulletinFactory.of(this).createErrorBulletin(SquareLogic.length(text.trim()) > SquareLogic.COMMENT_MAX ? tx.tooLong() : tx.needContent()).show();
+            SquareUi.bulletin(this).createErrorBulletin(SquareLogic.length(text.trim()) > SquareLogic.COMMENT_MAX ? tx.tooLong() : tx.needContent()).show();
             return;
         }
         SquareUi.requireProfile(this, () -> {
@@ -283,7 +282,7 @@ public class SquarePostActivity extends UniversalFragment {
                         }
                         SquareActivity.dirty = true;
                         update();
-                        BulletinFactory.of(SquarePostActivity.this).createSimpleBulletin(R.raw.done, tx.commentSent()).show();
+                        SquareUi.bulletin(SquarePostActivity.this).createSimpleBulletin(R.raw.done, tx.commentSent()).show();
                     }
 
                     @Override
@@ -347,7 +346,7 @@ public class SquarePostActivity extends UniversalFragment {
                 rethread();
                 SquareActivity.dirty = true;
                 update();
-                BulletinFactory.of(SquarePostActivity.this).createSimpleBulletin(R.raw.done, tx.deleted()).show();
+                SquareUi.bulletin(SquarePostActivity.this).createSimpleBulletin(R.raw.done, tx.deleted()).show();
             }
 
             @Override

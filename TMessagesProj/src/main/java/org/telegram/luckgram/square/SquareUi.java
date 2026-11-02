@@ -1,6 +1,7 @@
 package org.telegram.luckgram.square;
 
 import android.content.Context;
+import android.graphics.Rect;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -31,6 +32,7 @@ import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackupImageView;
+import org.telegram.ui.Components.Bulletin;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.LayoutHelper;
 
@@ -58,6 +60,42 @@ public final class SquareUi {
 
     public static long maxVideoSeconds() {
         return Math.max(1, LuckgramSettings.remoteLong("square.max_video_seconds", SquareLogic.DEFAULT_MAX_VIDEO_SECONDS));
+    }
+
+    // ---------------------------------------------------------------- bulletins
+
+    /**
+     * Bulletins (toasts) for the Square pages. They are attached to the page's own content view
+     * instead of the navigation container, and pushed up by however much the soft keyboard covers
+     * that view, so they stay visible on the compose page and above the comment box, where the
+     * keyboard is open (acceptance 2026-11-01: errors on the compose page were never seen).
+     * Falls back to the stock fragment bulletin when the page has no attached content view.
+     */
+    public static BulletinFactory bulletin(BaseFragment f) {
+        View v = f != null ? f.getFragmentView() : null;
+        if (!(v instanceof FrameLayout) || !v.isAttachedToWindow()) {
+            return BulletinFactory.of(f);
+        }
+        FrameLayout container = (FrameLayout) v;
+        if (!(container.getTag(R.id.bulletin_delegate_tag) instanceof Bulletin.Delegate)) {
+            Bulletin.addDelegate(container, new Bulletin.Delegate() {
+                @Override
+                public int getBottomOffset(int tag) {
+                    return keyboardOverlap(container);
+                }
+            });
+        }
+        return BulletinFactory.of(container, f.getResourceProvider());
+    }
+
+    /** How many px of the bottom of {@code view} the soft keyboard covers; 0 when the layout already shrank above it. */
+    static int keyboardOverlap(View view) {
+        Rect visible = new Rect();
+        view.getWindowVisibleDisplayFrame(visible);
+        if (visible.bottom <= 0) return 0;
+        int[] location = new int[2];
+        view.getLocationOnScreen(location);
+        return Math.max(0, location[1] + view.getHeight() - visible.bottom);
     }
 
     // ---------------------------------------------------------------- link (S6, silent)
@@ -135,13 +173,13 @@ public final class SquareUi {
     private static void autoLink(BaseFragment f, Runnable then) {
         final SquareLogic.Texts tx = tx();
         if (f.getParentActivity() != null) {
-            BulletinFactory.of(f).createSimpleBulletin(R.raw.chats_infotip, tx.connecting()).show();
+            bulletin(f).createSimpleBulletin(R.raw.chats_infotip, tx.connecting()).show();
         }
         SilentLink.ensure(f.getCurrentAccount(), ok -> {
             if (ok) {
                 then.run();
             } else if (f.getParentActivity() != null) {
-                BulletinFactory.of(f).createErrorBulletin(tx.connectFailed()).show();
+                bulletin(f).createErrorBulletin(tx.connectFailed()).show();
             }
         });
     }
@@ -252,7 +290,7 @@ public final class SquareUi {
                         @Override
                         public void onResult(JSONObject result) {
                             setProfile(result.optString("display_name", "").isEmpty() ? body : result);
-                            BulletinFactory.of(f).createSimpleBulletin(R.raw.done, tx.saved()).show();
+                            bulletin(f).createSimpleBulletin(R.raw.done, tx.saved()).show();
                             if (then != null) then.run();
                         }
 
@@ -321,7 +359,7 @@ public final class SquareUi {
             editProfile(f, null, null);
             return;
         }
-        BulletinFactory.of(f).createErrorBulletin(errorText(error)).show();
+        bulletin(f).createErrorBulletin(errorText(error)).show();
     }
 
     // ---------------------------------------------------------------- report / block / like
@@ -340,7 +378,7 @@ public final class SquareUi {
                         LuckgramAI.getInstance().requestJson("POST", "/v1/square/report", SquareLogic.reportBody(target, id, SquareLogic.REPORT_REASONS[which]), new LuckgramAI.Callback<JSONObject>() {
                             @Override
                             public void onResult(JSONObject result) {
-                                BulletinFactory.of(f).createSimpleBulletin(R.raw.done, tx.reported()).show();
+                                bulletin(f).createSimpleBulletin(R.raw.done, tx.reported()).show();
                             }
 
                             @Override
@@ -371,7 +409,7 @@ public final class SquareUi {
                 .setPositiveButton(tx.block(), (d, w) -> DiscoverBlocks.block(author.id, author.displayName, new LuckgramAI.Callback<JSONObject>() {
                     @Override
                     public void onResult(JSONObject result) {
-                        BulletinFactory.of(f).createSimpleBulletin(R.raw.done, tx.blocked()).show();
+                        bulletin(f).createSimpleBulletin(R.raw.done, tx.blocked()).show();
                         if (done != null) done.run();
                     }
 
