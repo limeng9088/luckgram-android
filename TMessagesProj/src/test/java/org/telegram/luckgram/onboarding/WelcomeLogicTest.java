@@ -89,7 +89,12 @@ public class WelcomeLogicTest {
         assertEquals("暂不开启", zh.secondary(WelcomeLogic.Step.AI));
         assertNull(en.secondary(WelcomeLogic.Step.SUMMARY));
         assertNull(en.question(WelcomeLogic.Step.DISCOVER));
-        assertEquals("Subscribe · 250 ⭐ / 30 days", en.subscribe(250, 30));
+        assertEquals("Subscribe · 500 ⭐ / month", en.subscribe(500, 30));
+        assertEquals("订阅 · 500 ⭐ / 月", zh.subscribe(500, 30));
+        assertEquals("500 ⭐ / 月", zh.price(500, 30));
+        assertEquals("3000 ⭐ / year", en.price(3000, 365));
+        assertEquals("100 ⭐ / 7 天", zh.price(100, 7));
+        assertEquals("", zh.price(0, 30));
         assertEquals("订阅", zh.subscribe(0, 30));
         for (WelcomeLogic.Step s : WelcomeLogic.Step.values()) {
             assertFalse(zh.title(s).isEmpty());
