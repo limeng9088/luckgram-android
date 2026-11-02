@@ -110,4 +110,16 @@ class SharedActivityLogicTest {
         assertEquals("最近消息 · 3 个共同群组（部分群组未加载完，点「刷新」重试）", SharedActivityLogic.header(3, true, true));
         assertEquals("Recent messages · 1 group in common (some groups didn't load, tap Refresh to retry)", SharedActivityLogic.header(1, true, false));
     }
+
+    @Test
+    void activityTabIsNeverAMediaSlot() {
+        // sharedMediaData in SharedMediaLayout has 9 slots; the 动态 tab id is 100.
+        assertFalse(SharedActivityLogic.isMediaSlot(SharedActivityLogic.TAB_ID, 9));
+        assertFalse(SharedActivityLogic.isMediaSlot(SharedActivityLogic.TAB_ID, 1000));
+        assertFalse(SharedActivityLogic.isMediaSlot(-1, 9));
+        assertFalse(SharedActivityLogic.isMediaSlot(9, 9));
+        assertFalse(SharedActivityLogic.isMediaSlot(14, 9)); // TAB_GIFTS
+        assertTrue(SharedActivityLogic.isMediaSlot(0, 9));   // TAB_PHOTOVIDEO
+        assertTrue(SharedActivityLogic.isMediaSlot(8, 9));
+    }
 }

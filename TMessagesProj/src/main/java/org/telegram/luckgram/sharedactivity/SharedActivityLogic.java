@@ -31,6 +31,18 @@ public final class SharedActivityLogic {
      */
     public static final long TIME_BUDGET_MS = 15_000;
 
+    /**
+     * Tab id of the 动态 page in SharedMediaLayout. It is not a media type: SharedMediaLayout keeps
+     * its per-media state in arrays indexed by tab id (sharedMediaData has 9 slots), so this id
+     * must never be used as such an index (16 P0: ArrayIndexOutOfBounds, index=100).
+     */
+    public static final int TAB_ID = 100;
+
+    /** True only when {@code tabType} is a real slot of a per-media array of {@code length}. */
+    public static boolean isMediaSlot(int tabType, int length) {
+        return tabType != TAB_ID && tabType >= 0 && tabType < length;
+    }
+
     /** Sit out a FLOOD_WAIT of {@code waitSeconds} only if it ends inside the time budget. */
     public static boolean canWaitFlood(int waitSeconds, long elapsedMs) {
         return waitSeconds >= 0 && waitSeconds <= MAX_FLOOD_WAIT_SECONDS
