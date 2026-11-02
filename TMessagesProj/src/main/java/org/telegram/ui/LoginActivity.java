@@ -1705,6 +1705,16 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         MediaDataController.getInstance(currentAccount).loadStickersByEmojiOrName(AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME, false, true);
 
         needFinishActivity(afterSignup, res.setup_password_required, res.otherwise_relogin_days);
+        // Luckgram specs#76: "Subscribe" on the onboarding Pro step -> the Pro page once logged in.
+        if (org.telegram.luckgram.LuckgramSettings.getBool(org.telegram.luckgram.onboarding.WelcomeLogic.OPEN_PRO_AFTER_LOGIN_KEY, false)) {
+            org.telegram.luckgram.LuckgramSettings.setBool(org.telegram.luckgram.onboarding.WelcomeLogic.OPEN_PRO_AFTER_LOGIN_KEY, false);
+            AndroidUtilities.runOnUIThread(() -> {
+                BaseFragment last = LaunchActivity.getSafeLastFragment();
+                if (last != null) {
+                    last.presentFragment(new org.telegram.luckgram.account.LuckgramProActivity());
+                }
+            }, 1500);
+        }
     }
 
     private void fillNextCodeParams(Bundle params, TL_account.sentEmailCode res) {

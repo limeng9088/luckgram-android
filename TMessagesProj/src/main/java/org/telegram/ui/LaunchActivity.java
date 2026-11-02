@@ -592,6 +592,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             } else {
                 MainTabsActivity mainTabsActivity = new MainTabsActivity();
                 actionBarLayout.addFragmentToStack(mainTabsActivity);
+                // Luckgram specs#78: "privacy policy updated" once when app.privacy_version goes up.
+                org.telegram.luckgram.onboarding.PrivacyDialog.checkUpdate(this);
             }
 
             try {
@@ -1094,6 +1096,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (LoginActivity.loadCurrentState(false, currentAccount).getInt("currentViewNum", 0) != 0) {
             return new LoginActivity();
         }
+        // Luckgram specs#76: welcome page + privacy policy while no account is logged in.
+        if (org.telegram.luckgram.onboarding.WelcomeLogic.shouldShowWelcome(UserConfig.getActivatedAccountsCount())) {
+            return new org.telegram.luckgram.onboarding.LuckgramWelcomeActivity();
+        }
         return new IntroActivity();
     }
 
@@ -1264,7 +1270,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                 layersActionBarLayout.rebuildLogout();
                 rightActionBarLayout.rebuildLogout();
             }
-            presentFragment(new IntroActivity().setOnLogout());
+            // Luckgram specs#76: after logging out of the last account, the welcome page again.
+            presentFragment(org.telegram.luckgram.onboarding.WelcomeLogic.shouldShowWelcome(UserConfig.getActivatedAccountsCount())
+                ? new org.telegram.luckgram.onboarding.LuckgramWelcomeActivity() : new IntroActivity().setOnLogout());
         }
     }
 
