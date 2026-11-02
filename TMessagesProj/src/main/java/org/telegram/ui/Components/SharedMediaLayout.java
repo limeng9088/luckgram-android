@@ -10385,11 +10385,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
         if (!org.telegram.luckgram.sharedactivity.SharedActivityLoader.isEnabled() || isStoriesView() || topicId != 0 || profileActivity == null) {
             return false;
         }
-        if (!DialogObject.isUserDialog(dialog_id) || dialog_id == profileActivity.getUserConfig().getClientUserId()) {
-            return false;
-        }
-        TLRPC.User user = profileActivity.getMessagesController().getUser(dialog_id);
-        return user != null && !user.bot && !UserObject.isDeleted(user);
+        return DialogObject.isUserDialog(dialog_id) && org.telegram.luckgram.sharedactivity.SharedActivityLoader.showsTab(profileActivity.getCurrentAccount(), dialog_id);
     }
 
     private class LuckgramActivityAdapter extends RecyclerListView.SelectionAdapter {
