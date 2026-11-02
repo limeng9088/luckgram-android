@@ -3671,6 +3671,26 @@ public class MessageObject {
 
     public boolean translated = false;
     public boolean summarized = false;
+
+    /**
+     * Luckgram spec 01 A: header + line + translation shown below the original text / caption in the
+     * same bubble (null = none). Not shown while Telegram's own translation or summary replaces the text.
+     */
+    public CharSequence luckgramTranslationBlock;
+    /** Luckgram spec 01 A.5: the saved translation state was already looked up. */
+    public boolean luckgramRestoreChecked;
+    private CharSequence luckgramCaptionBlock;
+
+    /** Luckgram spec 01 A: shows ({@code block} != null) or removes the in-bubble translation. */
+    public void luckgramSetTranslation(CharSequence block) {
+        luckgramTranslationBlock = block;
+        if (messageOwner == null || translated || summarized) {
+            return;
+        }
+        applyNewText(messageOwner.message);
+        generateCaption();
+        forceUpdate = true;
+    }
     public boolean updateTranslation(boolean force) {
         boolean replyUpdated = replyMessageObject != null && replyMessageObject != this && replyMessageObject.updateTranslation(force);
         TranslateController translateController = MessagesController.getInstance(currentAccount).getTranslateController();
@@ -3758,6 +3778,10 @@ public class MessageObject {
             fromUser = MessagesController.getInstance(currentAccount).getUser(messageOwner.from_id.user_id);
         }
         messageText = text;
+        if (luckgramTranslationBlock != null && !translated && !summarized && isMediaEmpty()) {
+            // Luckgram spec 01 A.1: the translation below the original, in the same bubble
+            messageText = new SpannableStringBuilder(text).append(luckgramTranslationBlock);
+        }
         final ArrayList<TLRPC.MessageEntity> entities = getEntities();
         final TextPaint paint;
         if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaGame) {
@@ -7632,7 +7656,8 @@ public class MessageObject {
         if (isRoundVideo()) return;
         if (caption != null &&
             (translated && (messageOwner.translatedText != null || summarized && messageOwner.translatedSummaryText != null)) == captionTranslated &&
-            summarized == captionSummarized
+            summarized == captionSummarized &&
+            luckgramCaptionBlock == luckgramTranslationBlock
         ) {
             return;
         }
@@ -7712,7 +7737,12 @@ public class MessageObject {
                 addUrlsByPattern(isOutOwner(), caption, true, 4, (int) getDuration(), false);
             }
             applyTimestampsHighlightForReplyMsg(caption);
+            if (luckgramTranslationBlock != null && !captionTranslated && !captionSummarized) {
+                // Luckgram spec 01 A.1: the caption's translation below it, in the same bubble
+                caption = new SpannableStringBuilder(caption).append(Emoji.replaceEmoji(luckgramTranslationBlock, Theme.chat_msgTextPaint.getFontMetricsInt(), false));
+            }
         }
+        luckgramCaptionBlock = luckgramTranslationBlock;
     }
 
     public static void addUrlsByPattern(boolean isOut, CharSequence charSequence, boolean botCommands, int patternType, int duration, boolean check) {
