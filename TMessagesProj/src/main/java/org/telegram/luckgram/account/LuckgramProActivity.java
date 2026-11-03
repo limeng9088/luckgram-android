@@ -50,6 +50,7 @@ public class LuckgramProActivity extends UniversalFragment {
     public void onResume() {
         super.onResume();
         load(null);
+        org.telegram.luckgram.pro.LuckgramPro.getInstance().refresh(); // 29: same state everywhere
     }
 
     @Override
@@ -167,6 +168,7 @@ public class LuckgramProActivity extends UniversalFragment {
             if (now != null && !now.equals(expiresBefore)) {
                 refreshesLeft = 0;
                 update();
+                org.telegram.luckgram.pro.LuckgramPro.getInstance().refresh(); // 29: payment went through
                 BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, tx.proActive()).show();
             } else if (refreshesLeft > 0) {
                 AndroidUtilities.runOnUIThread(refresh, AccountLogic.PRO_REFRESH_INTERVAL_MS);

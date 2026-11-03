@@ -7009,6 +7009,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         super.onResume();
         isResumed = true;
         org.telegram.luckgram.LuckgramRemoteConfigFetcher.refreshIfStale(); // Luckgram: remote config (S4)
+        org.telegram.luckgram.pro.LuckgramPro.getInstance().refreshIfStale(); // Luckgram 29: Pro state (/v1/me)
         org.telegram.luckgram.announce.LuckgramAnnouncements.refreshIfStale(); // Luckgram: announcements (S8)
         org.telegram.luckgram.update.LuckgramUpdates.checkIfDue(); // Luckgram: update check (S5)
         org.telegram.luckgram.nearby.NearbyController.restoreReminder(); // Luckgram 25: re-arm after reboot / force-stop

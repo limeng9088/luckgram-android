@@ -76,6 +76,7 @@ jobs:
             diag/TelegramErrorKind.java \
             diag/LuckgramEndpoints.java \
             account/AccountLogic.java \
+            pro/ProState.java \
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
             update/VersionLine.java \
