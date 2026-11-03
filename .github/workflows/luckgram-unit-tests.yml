@@ -77,6 +77,7 @@ jobs:
             account/AccountLogic.java \
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
+            update/VersionLine.java \
             nearby/NearbyLogic.java \
             discover/DiscoverMock.java \
             square/SquareLogic.java \

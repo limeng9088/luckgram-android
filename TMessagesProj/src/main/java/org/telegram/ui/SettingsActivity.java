@@ -128,7 +128,10 @@ import org.telegram.ui.Components.TextHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
+import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.luckgram.accounts.LuckgramAccounts;
+import org.telegram.luckgram.update.VersionLine;
+import org.telegram.messenger.BuildConfig;
 import org.telegram.luckgram.accounts.LuckgramAccountsActivity;
 import org.telegram.ui.Components.blur3.DownscaleScrollableNoiseSuppressor;
 import org.telegram.ui.Components.blur3.ViewGroupPartRenderer;
@@ -191,7 +194,6 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
     private View navigationBar;
 
-    private int versionViewPressCount = 0;
 
     public SettingsActivity() {
         this(null);
@@ -479,17 +481,21 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         versionView.setPadding(dp(21), dp(10), dp(21), dp(10));
         versionView.setGravity(Gravity.CENTER);
         versionView.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ALL));
+        // 28: tap copies the version line; long press opens the debug menu in internal builds only.
         versionView.setOnClickListener(v -> {
-            versionViewPressCount++;
-            if (versionViewPressCount < 2 && !BuildVars.DEBUG_PRIVATE_VERSION) {
-                try {
-                    Toast.makeText(getParentActivity(), getString(R.string.DebugMenuLongPress), Toast.LENGTH_SHORT).show();
-                } catch (Exception e) {
-                    FileLog.e(e);
-                }
+            CharSequence text = versionView.getText();
+            if (TextUtils.isEmpty(text)) {
                 return;
             }
+            AndroidUtilities.addToClipboard(text.toString());
+            BulletinFactory.of(this).createCopyBulletin(LuckgramStrings.get("已复制", "Copied")).show();
+        });
+        versionView.setOnLongClickListener(v -> {
+            if (BuildConfig.LUCKGRAM_STORE || ApplicationLoader.isHuaweiStoreBuild()) {
+                return false;
+            }
             openDebugMenu();
+            return true;
         });
 
         navigationBar = new View(context);
@@ -988,29 +994,16 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     }
 
     public String getVersionName() {
+        String versionName = BuildConfig.BUILD_VERSION_STRING;
+        int versionCode = 0;
         try {
             PackageInfo pInfo = ApplicationLoader.applicationContext.getPackageManager().getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
-            int code = pInfo.versionCode / 10;
-            String abi = "";
-            switch (pInfo.versionCode % 10) {
-                case 1:
-                case 2:
-                    abi = "store bundled " + Build.CPU_ABI + " " + Build.CPU_ABI2;
-                    break;
-                default:
-                case 9:
-                    if (ApplicationLoader.isStandaloneBuild()) {
-                        abi = "direct " + Build.CPU_ABI + " " + Build.CPU_ABI2;
-                    } else {
-                        abi = "universal " + Build.CPU_ABI + " " + Build.CPU_ABI2;
-                    }
-                    break;
-            }
-            return formatString(R.string.TelegramVersion, String.format(Locale.US, "v%s (%d)\n%s", pInfo.versionName, code, abi));
+            versionName = pInfo.versionName;
+            versionCode = pInfo.versionCode;
         } catch (Exception e) {
             FileLog.e(e);
         }
-        return null;
+        return VersionLine.format(versionName, BuildConfig.LUCKGRAM_BUILD, versionCode, BuildConfig.GIT_COMMIT);
     }
 
     @Override

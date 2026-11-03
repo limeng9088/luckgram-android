@@ -148,6 +148,26 @@ android {
         // S5: build number the release CI publishes to /v1/version (GitHub run number); 0 = local build.
         def luckgramBuild = System.getenv("GITHUB_RUN_NUMBER") ?: "0"
         buildConfigField "int", "LUCKGRAM_BUILD", (luckgramBuild ==~ /\d{1,9}/) ? luckgramBuild : "0"
+        // 28: short git commit shown in Settings ("Luckgram 13.0.3 (189) · 19e5f52").
+        // CI uses GITHUB_SHA; local builds ask git; anything else -> "unknown" (never fails the build).
+        def luckgramGitCommit = "unknown"
+        def githubSha = System.getenv("GITHUB_SHA") ?: ""
+        if (githubSha ==~ /[0-9a-f]{7,40}/) {
+            luckgramGitCommit = githubSha.substring(0, 7)
+        } else {
+            try {
+                def proc = ["git", "rev-parse", "--short=7", "HEAD"].execute(null, rootDir)
+                def out = proc.text.trim()
+                if (proc.waitFor() == 0 && out ==~ /[0-9a-f]{7,40}/) {
+                    luckgramGitCommit = out.substring(0, 7)
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        buildConfigField "String", "GIT_COMMIT", "\"" + luckgramGitCommit + "\""
+        // 28: store builds (Play / Huawei) pass -PLUCKGRAM_STORE=true; long-pressing the version row
+        // opens the debug menu only in internal builds (everything we ship from GitHub today).
+        buildConfigField "boolean", "LUCKGRAM_STORE", (project.findProperty("LUCKGRAM_STORE") == "true") ? "true" : "false"
 
         vectorDrawables.generatedDensities = ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']
 
