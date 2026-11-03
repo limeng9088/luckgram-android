@@ -109,6 +109,7 @@ public class CameraScanActivity extends BaseFragment {
     private Path path = new Path();
     private ImageView galleryButton;
     private ImageView flashButton;
+    private TextView luckgramMyQrButton;
     private AnimatorSet flashAnimator;
     private float backShadowAlpha = .5f;
     protected boolean shownAsBottomSheet = false;
@@ -176,6 +177,14 @@ public class CameraScanActivity extends BaseFragment {
         }
 
         default void onDismiss() {}
+
+        /** Luckgram (specs#92): text of a 「我的二维码」 button at the bottom, or null for none. */
+        default String luckgramMyQrText() {
+            return null;
+        }
+
+        /** Luckgram (specs#92): 「我的二维码」 tapped; the scanner is already closing. */
+        default void luckgramOpenMyQr() {}
     }
 
     public static BottomSheet showAsSheet(BaseFragment parentFragment, boolean gallery, int type, CameraScanActivityDelegate cameraDelegate) {
@@ -205,6 +214,7 @@ public class CameraScanActivity extends BaseFragment {
                 };
                 fragment.shownAsBottomSheet = true;
                 fragment.needGalleryButton = gallery;
+                fragment.setDelegate(cameraDelegate); // Luckgram: before createView (luckgramMyQrText)
                 actionBarLayout[0].addFragmentToStack(fragment);
                 actionBarLayout[0].showLastFragment();
                 actionBarLayout[0].getView().setPadding(backgroundPaddingLeft, 0, backgroundPaddingLeft, 0);
@@ -330,6 +340,9 @@ public class CameraScanActivity extends BaseFragment {
                         galleryButton.measure(MeasureSpec.makeMeasureSpec(dp(60), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(dp(60), MeasureSpec.EXACTLY));
                     }
                     flashButton.measure(MeasureSpec.makeMeasureSpec(dp(60), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(dp(60), MeasureSpec.EXACTLY));
+                    if (luckgramMyQrButton != null) {
+                        luckgramMyQrButton.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(dp(40), MeasureSpec.EXACTLY));
+                    }
                 }
                 titleTextView.measure(MeasureSpec.makeMeasureSpec(width - dp(72), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.UNSPECIFIED));
                 if (currentType == TYPE_QR_WEB_BOT) {
@@ -385,6 +398,12 @@ public class CameraScanActivity extends BaseFragment {
                     if (galleryButton != null) {
                         x = width / 2 - dp(35) - galleryButton.getMeasuredWidth();
                         galleryButton.layout(x, y, x + galleryButton.getMeasuredWidth(), y + galleryButton.getMeasuredHeight());
+                    }
+                    if (luckgramMyQrButton != null) {
+                        // Luckgram (specs#92): 「我的二维码」 at the bottom
+                        int bw = luckgramMyQrButton.getMeasuredWidth();
+                        int by = height - luckgramMyQrButton.getMeasuredHeight() - dp(32) - AndroidUtilities.navigationBarHeight;
+                        luckgramMyQrButton.layout((width - bw) / 2, by, (width + bw) / 2, by + luckgramMyQrButton.getMeasuredHeight());
                     }
                 }
 
@@ -725,6 +744,26 @@ public class CameraScanActivity extends BaseFragment {
                     });
                     presentFragment(fragment);
                 });
+            }
+
+            if (delegate != null && delegate.luckgramMyQrText() != null) {
+                luckgramMyQrButton = new TextView(context);
+                luckgramMyQrButton.setText(delegate.luckgramMyQrText());
+                luckgramMyQrButton.setTextColor(0xffffffff);
+                luckgramMyQrButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+                luckgramMyQrButton.setGravity(Gravity.CENTER);
+                luckgramMyQrButton.setPadding(dp(20), 0, dp(20), 0);
+                luckgramMyQrButton.setCompoundDrawablePadding(dp(8));
+                luckgramMyQrButton.setCompoundDrawablesWithIntrinsicBounds(R.drawable.msg_qrcode, 0, 0, 0);
+                luckgramMyQrButton.setBackground(Theme.createSimpleSelectorRoundRectDrawable(dp(20), 0x22ffffff, 0x44ffffff));
+                luckgramMyQrButton.setOnClickListener(v -> {
+                    CameraScanActivityDelegate d = delegate;
+                    finishFragment();
+                    if (d != null) {
+                        AndroidUtilities.runOnUIThread(d::luckgramOpenMyQr, 200);
+                    }
+                });
+                viewGroup.addView(luckgramMyQrButton);
             }
 
             flashButton = new ImageView(context);
@@ -1374,8 +1413,8 @@ public class CameraScanActivity extends BaseFragment {
                 return null;
             }
             if (needGalleryButton) {
-                Uri uri = Uri.parse(text);
-                String path = uri.getPath().replace("/", "");
+                // any text (Luckgram specs#92: the scanner decides what it is; the old unused
+                // Uri.getPath() here threw on plain text and opaque links)
             } else {
                 if (currentType == TYPE_QR_LOGIN && !text.startsWith("tg://login?token=")) {
                     onNoQrFound();
