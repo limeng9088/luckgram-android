@@ -58,9 +58,9 @@ public final class LuckgramAccounts {
 
     // ---------------------------------------------------------------- limit (32)
 
-    /** Pro status for the account limit. Wired to 29's LuckgramPro. */
+    /** Pro status for the account limit (29's unified state). */
     public static boolean isPro() {
-        return false;
+        return org.telegram.luckgram.pro.LuckgramPro.isPro();
     }
 
     private static long remoteMaxFree() {
@@ -170,15 +170,26 @@ public final class LuckgramAccounts {
             showLimitReached();
             return;
         }
+        showUpgrade(fragment, limitReachedText());
+    }
+
+    /** The "upgrade to Pro" prompt (29): one line of reason + "View Pro" → the Pro page. */
+    public static void showUpgrade(BaseFragment fragment, String reason) {
+        if (fragment == null || fragment.getParentActivity() == null) {
+            return;
+        }
         AlertDialog.Builder builder = new AlertDialog.Builder(fragment.getParentActivity(), fragment.getResourceProvider());
-        builder.setMessage(limitReachedText());
+        builder.setMessage(reason);
         builder.setPositiveButton(upgradeText(), (d, w) -> openUpgrade(fragment));
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         fragment.showDialog(builder.create());
     }
 
-    /** 29's upgrade entry. */
+    /** The Pro page (29). */
     public static void openUpgrade(BaseFragment fragment) {
+        if (fragment instanceof LuckgramProActivity) {
+            return; // already there
+        }
         fragment.presentFragment(new LuckgramProActivity());
     }
 

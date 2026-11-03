@@ -23,8 +23,8 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Luckgram 32: cloud backup (Pro). The 10 backup file is encrypted on this device with the user's
- * password (PBKDF2 + AES-GCM, {@link LuckgramBackupFormat}) and only that ciphertext is uploaded to
+ * Luckgram 32: cloud backup (Pro). The backup is encrypted on this device with the user's password
+ * (PBKDF2 + AES-GCM, {@link LuckgramBackupFormat}) and only that ciphertext is uploaded to
  * {@code /v1/backup} (S15). The password is never sent; it is kept on this device (Keystore) only
  * when the user turns on the weekly automatic backup.
  */
@@ -75,13 +75,13 @@ public final class CloudBackup {
     }
 
     public static String autoInfoText() {
-        return LuckgramStrings.get("开启时需要在本机记住备份密码（保存在系统 Keystore，不会上传）。关闭后会从本机删除这个密码。",
-                "Requires remembering the backup password on this device (kept in the system Keystore, never uploaded). Turning it off removes the password from this device.");
+        return LuckgramStrings.get("每周把本机所有已登录账号备份一次。需要在本机记住备份密码（保存在系统 Keystore，不会上传）；关闭后会从本机删除这个密码。",
+                "Backs up every account logged in on this device once a week. Needs the backup password remembered on this device (kept in the system Keystore, never uploaded); turning it off removes the password from this device.");
     }
 
     public static String rememberText() {
-        return LuckgramStrings.get("在本机记住备份密码（存系统 Keystore），用于每周自动备份",
-                "Remember the backup password on this device (system Keystore) for the weekly backup");
+        return LuckgramStrings.get("在本机记住备份密码（存系统 Keystore），开启每周自动备份",
+                "Remember the backup password on this device (system Keystore) and back up weekly");
     }
 
     public static String cloudWarningText() {
@@ -178,11 +178,11 @@ public final class CloudBackup {
     }
 
     /**
-     * Encrypts every logged-in account with {@code password} on a background thread (same file as
-     * 10's export) and uploads the ciphertext. Keys are wiped right after encryption.
+     * Encrypts the accounts in {@code slots} with {@code password} on a background thread
+     * ({@link LuckgramBackupFormat}) and uploads only the ciphertext. Keys are wiped right after
+     * encryption; nothing is written to disk.
      */
-    public static void upload(int account, String password, LuckgramAI.Callback<CloudBackupLogic.Meta> callback) {
-        List<Integer> slots = LuckgramAccounts.orderedAccounts();
+    public static void upload(int account, List<Integer> slots, String password, LuckgramAI.Callback<CloudBackupLogic.Meta> callback) {
         Utilities.globalQueue.postRunnable(() -> {
             ArrayList<LuckgramBackupFormat.Account> items = LuckgramBackup.collect(slots);
             String encoded = null;
@@ -302,6 +302,18 @@ public final class CloudBackup {
         }
     }
 
+    /** After a logout: once no account is left on this device, the remembered password and the weekly backup go. */
+    public static void onLogout() {
+        try {
+            if (anyLoggedInAccount() < 0) {
+                setAuto(null);
+                LuckgramSettings.prefs().edit().remove(KEY_LAST_TRY).apply();
+            }
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+    }
+
     /** Marks a successful upload so the weekly timer restarts. */
     public static void markUploaded() {
         LuckgramSettings.prefs().edit().putLong(KEY_LAST_AUTO, System.currentTimeMillis()).apply();
@@ -332,7 +344,7 @@ public final class CloudBackup {
         }
         LuckgramSettings.prefs().edit().putLong(KEY_LAST_TRY, now).apply();
         autoRunning = true;
-        upload(account, password, new LuckgramAI.Callback<CloudBackupLogic.Meta>() {
+        upload(account, LuckgramAccounts.orderedAccounts(), password, new LuckgramAI.Callback<CloudBackupLogic.Meta>() {
             @Override
             public void onResult(CloudBackupLogic.Meta result) {
                 autoRunning = false;

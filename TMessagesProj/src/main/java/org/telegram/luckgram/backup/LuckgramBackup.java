@@ -1,15 +1,8 @@
 package org.telegram.luckgram.backup;
 
-import android.app.Activity;
-import android.content.Intent;
-import android.net.Uri;
-
-import androidx.core.content.FileProvider;
-
 import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.luckgram.accounts.LuckgramAccounts;
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
@@ -20,61 +13,36 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.Vector;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 
 /**
- * Luckgram 10 (account backup): export logged-in accounts to an encrypted {@code .luckgram-backup}
- * file and restore them. The file format is {@link LuckgramBackupFormat}. Auth keys are only ever
- * held in memory and wiped as soon as they are used; nothing about them is logged.
+ * Luckgram 32 (cloud backup): reads the auth keys of the chosen accounts for the encrypted backup
+ * ({@link LuckgramBackupFormat}) and restores accounts from a decrypted one. Auth keys are only ever
+ * held in memory and wiped as soon as they are used; nothing about them is logged or written.
+ * (The file export / import of the deleted task 10 is gone: backups only go to the cloud.)
  */
 public final class LuckgramBackup {
 
     private LuckgramBackup() {
     }
 
-    public static final String FEATURE_KEY = "account_backup";
-    private static final long MAX_FILE_SIZE = 1024 * 1024;
-
     // ---------------------------------------------------------------- strings
 
-    public static String titleText() {
-        return LuckgramStrings.get("账号备份", "Account backup");
-    }
-
-    public static String subtitleText() {
-        return LuckgramStrings.get("把账号导出为加密文件，换手机后导入", "Export accounts to an encrypted file and import them on a new phone");
-    }
-
     public static String selectHeaderText() {
-        return LuckgramStrings.get("选择要导出的账号", "Accounts to export");
-    }
-
-    public static String exportText() {
-        return LuckgramStrings.get("导出为文件", "Export to file");
-    }
-
-    public static String restoreText() {
-        return LuckgramStrings.get("从备份恢复", "Restore from backup");
+        return LuckgramStrings.get("选择要备份的账号", "Accounts to back up");
     }
 
     public static String infoText() {
-        return LuckgramStrings.get("备份文件里只有登录信息和备注名，不包含消息、联系人或媒体。文件用你设置的密码加密，iPhone 和 Android 通用。",
-                "The file holds only the login and the local names, no messages, contacts or media. It is encrypted with your password and works on both iPhone and Android.");
+        return LuckgramStrings.get("备份里只有登录信息和备注名，不包含消息、联系人或媒体。用你设置的密码在本机加密，iPhone 和 Android 通用。",
+                "The backup holds only the logins and the local names, no messages, contacts or media. It is encrypted on this device with your password and works on both iPhone and Android.");
     }
 
     public static String warningText() {
-        return LuckgramStrings.get("这个文件等于你账号的钥匙。任何人拿到文件和密码就能登录你的账号。不要发给别人，不要存到不信任的地方。",
-                "This file is the key to your accounts. Anyone with the file and the password can log in to them. Don't send it to anyone and don't keep it anywhere you don't trust.");
+        return LuckgramStrings.get("这份备份等于你账号的钥匙。任何人拿到备份和密码就能登录你的账号。",
+                "This backup is the key to your accounts. Anyone with the backup and the password can log in to them.");
     }
 
     public static String passwordTitleText() {
@@ -110,7 +78,7 @@ public final class LuckgramBackup {
     }
 
     public static String notBackupText() {
-        return LuckgramStrings.get("这不是 Luckgram 备份文件，或文件已损坏", "This isn't a Luckgram backup file, or the file is damaged");
+        return LuckgramStrings.get("云备份已损坏或来自更新版本的 Luckgram", "The cloud backup is damaged or was made by a newer Luckgram");
     }
 
     public static String chooseAccountsText() {
@@ -125,16 +93,8 @@ public final class LuckgramBackup {
         return LuckgramStrings.get("恢复", "Restore");
     }
 
-    public static String workingText() {
-        return LuckgramStrings.get("正在处理…", "Working…");
-    }
-
     public static String selectAtLeastOneText() {
         return LuckgramStrings.get("请至少选择一个账号", "Select at least one account");
-    }
-
-    public static String exportFailedText() {
-        return LuckgramStrings.get("导出失败", "Export failed");
     }
 
     public static String noRoomText() {
@@ -157,7 +117,7 @@ public final class LuckgramBackup {
         return name == null || name.isEmpty() ? LuckgramStrings.get("账号 " + userId, "Account " + userId) : name + " · " + userId;
     }
 
-    // ---------------------------------------------------------------- export
+    // ---------------------------------------------------------------- read keys
 
     /** Reads the auth keys of {@code accounts} (account slots). Caller wipes the result. */
     public static ArrayList<LuckgramBackupFormat.Account> collect(List<Integer> accounts) {
@@ -187,87 +147,7 @@ public final class LuckgramBackup {
         return result;
     }
 
-    /** Encrypts on a background thread, writes the file and opens the share sheet. */
-    public static void export(Activity activity, List<Integer> accounts, String password, Utilities.Callback<Boolean> done) {
-        Utilities.globalQueue.postRunnable(() -> {
-            ArrayList<LuckgramBackupFormat.Account> items = collect(accounts);
-            File file = null;
-            try {
-                if (items.isEmpty()) {
-                    throw new IllegalStateException("no accounts");
-                }
-                byte[] data = LuckgramBackupFormat.encrypt(items, password);
-                File dir = new File(ApplicationLoader.applicationContext.getFilesDir(), "cache/luckgram-backup");
-                deleteOldFiles(dir);
-                if (!dir.exists() && !dir.mkdirs()) {
-                    throw new IllegalStateException("no dir");
-                }
-                String date = new SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(new Date());
-                file = new File(dir, "luckgram-" + date + "." + LuckgramBackupFormat.FILE_EXTENSION);
-                try (FileOutputStream out = new FileOutputStream(file)) {
-                    out.write(data);
-                }
-            } catch (Throwable e) {
-                FileLog.e("luckgram backup: export failed " + e.getClass().getSimpleName());
-                file = null;
-            } finally {
-                for (LuckgramBackupFormat.Account item : items) {
-                    item.wipe();
-                }
-            }
-            final File result = file;
-            AndroidUtilities.runOnUIThread(() -> {
-                if (result == null) {
-                    done.run(false);
-                    return;
-                }
-                try {
-                    Uri uri = FileProvider.getUriForFile(activity, ApplicationLoader.getApplicationId() + ".provider", result);
-                    Intent intent = new Intent(Intent.ACTION_SEND);
-                    intent.setType("application/octet-stream");
-                    intent.putExtra(Intent.EXTRA_STREAM, uri);
-                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    activity.startActivity(Intent.createChooser(intent, exportText()));
-                    done.run(true);
-                } catch (Throwable e) {
-                    FileLog.e(e);
-                    done.run(false);
-                }
-            });
-        });
-    }
-
-    /** Backup files from earlier exports are only kept until the next one. */
-    private static void deleteOldFiles(File dir) {
-        File[] files = dir.listFiles();
-        if (files == null) {
-            return;
-        }
-        for (File f : files) {
-            //noinspection ResultOfMethodCallIgnored
-            f.delete();
-        }
-    }
-
-    // ---------------------------------------------------------------- import
-
-    public static byte[] readFile(Uri uri) throws Exception {
-        try (InputStream in = ApplicationLoader.applicationContext.getContentResolver().openInputStream(uri)) {
-            if (in == null) {
-                throw new IllegalStateException("no stream");
-            }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            int n;
-            while ((n = in.read(buffer)) > 0) {
-                out.write(buffer, 0, n);
-                if (out.size() > MAX_FILE_SIZE) {
-                    throw new IllegalStateException("too large");
-                }
-            }
-            return out.toByteArray();
-        }
-    }
+    // ---------------------------------------------------------------- restore
 
     public static boolean isLoggedIn(long userId) {
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {

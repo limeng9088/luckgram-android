@@ -16167,6 +16167,7 @@ public class MessagesController extends BaseController implements NotificationCe
         org.telegram.luckgram.translateout.TranslateOutController.clearAccount(currentAccount); // Luckgram: translate-out per-chat languages
         org.telegram.luckgram.quickreplies.QuickRepliesStore.clearAccount(currentAccount); // Luckgram: quick reply templates
         org.telegram.luckgram.keywordfolders.KeywordFolderController.getInstance(currentAccount).clearAccountData();
+        org.telegram.luckgram.backup.CloudBackup.onLogout(); // Luckgram 32: last account gone -> forget the remembered backup password
 
         boolean shouldHandle = true;
         ArrayList<NotificationCenter.NotificationCenterDelegate> observers = getNotificationCenter().getObservers(NotificationCenter.appDidLogout);
