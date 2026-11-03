@@ -32,6 +32,11 @@ public final class LuckgramAiConversation {
     public String systemPrompt;
     /** Extra top-level fields of every /v1/ai/chat request of this conversation, or null (spec 30: {@code agent_id}). */
     public JSONObject requestParams;
+    /**
+     * {@code model_tier} sent with every request, or null for the standard model (spec 29: "premium",
+     * set by the model choice). Not saved: a reopened conversation starts on the standard model.
+     */
+    public transient String modelTier;
     public long createdAt;
     public long updatedAt;
     public final ArrayList<Message> messages = new ArrayList<>();

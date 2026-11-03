@@ -404,7 +404,15 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         notifyInserted();
         streaming = reply;
         updateSendButton();
-        request = LuckgramAI.getInstance().chat(getParentActivity(), conv.task, null, conv.requestParams, messages, true, new LuckgramAI.ChatListener() {
+        final String tier = conv.modelTier; // spec 29: premium model, sent as model_tier
+        org.json.JSONObject params = conv.requestParams;
+        if (tier != null) {
+            try {
+                params = new org.json.JSONObject(params != null ? params.toString() : "{}").put("model_tier", tier);
+            } catch (Exception ignore) {
+            }
+        }
+        request = LuckgramAI.getInstance().chat(getParentActivity(), conv.task, null, params, messages, true, new LuckgramAI.ChatListener() {
             @Override
             public void onDelta(String delta, String text) {
                 if (streaming != reply) return;
@@ -419,12 +427,14 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
                 if (streaming != reply) return;
                 reply.text = text;
                 finishReply(conv, reply, null);
+                if (tier != null) org.telegram.luckgram.pro.ProModelChoice.onPremiumReply();
             }
 
             @Override
             public void onError(LuckgramAIError error) {
                 if (streaming != reply) return;
                 finishReply(conv, reply, error);
+                org.telegram.luckgram.pro.ProModelChoice.onError(LuckgramAiChatActivity.this, conv, error); // spec 29
             }
         });
     }

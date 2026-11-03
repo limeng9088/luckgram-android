@@ -198,6 +198,9 @@ public static VideoAds make(
         if (UserConfig.getInstance(currentAccount).isPremium() && MessagesController.getInstance(currentAccount).isSponsoredDisabled()) {
             return;
         }
+        if (org.telegram.luckgram.pro.LuckgramPro.isPro()) {
+            return; // Luckgram 29: no sponsored messages for Pro
+        }
 
         loading = true;
 

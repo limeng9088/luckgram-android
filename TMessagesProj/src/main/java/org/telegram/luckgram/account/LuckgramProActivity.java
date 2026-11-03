@@ -6,15 +6,21 @@ import org.json.JSONObject;
 import org.telegram.luckgram.LuckgramAI;
 import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.luckgram.LuckgramStrings;
+import org.telegram.luckgram.pro.LuckgramPro;
+import org.telegram.luckgram.pro.ProPerks;
+import org.telegram.luckgram.pro.ProState;
+import org.telegram.luckgram.pro.ProUi;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.R;
 import org.telegram.messenger.browser.Browser;
+import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalFragment;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.TimeZone;
 
 /**
@@ -23,6 +29,8 @@ import java.util.TimeZone;
  * <p>Buying: {@code POST /v1/billing/checkout} → open the Stars invoice link (the payment form opens
  * inside this app) → the bot credits the payment; this page re-reads {@code GET /v1/billing/plans}
  * when it comes back and a few more times until the end date changes.
+ *
+ * <p>specs#87 (29): also the AI credits line and the perk rows that are live ({@code pro.perks}).
  */
 public class LuckgramProActivity extends UniversalFragment {
 
@@ -30,6 +38,7 @@ public class LuckgramProActivity extends UniversalFragment {
     private static final int ID_LINK = 2;
     private static final int ID_CHECKING = 3;
     private static final int ID_COMMUNITY = 4;
+    private static final int ID_CREDITS = 5;
     private static final int ID_PLAN_BASE = 100;
     private static final int ID_CLOUD_BACKUP = 50; // Luckgram 32
 
@@ -44,6 +53,7 @@ public class LuckgramProActivity extends UniversalFragment {
     private final Runnable refresh = this::refreshAfterPurchase;
     // specs#89 (31): the community row follows the Pro state (perks)
     private final org.telegram.luckgram.pro.LuckgramPro.Listener proListener = state -> update();
+    private final ProPerks.Texts perkTexts = new ProPerks.Texts(LuckgramStrings.isChinese());
 
     @Override
     protected CharSequence getTitle() {
@@ -55,7 +65,7 @@ public class LuckgramProActivity extends UniversalFragment {
         super.onResume();
         org.telegram.luckgram.pro.LuckgramPro.getInstance().addListener(proListener);
         load(null);
-        org.telegram.luckgram.pro.LuckgramPro.getInstance().refresh(); // 29: same state everywhere
+        LuckgramPro.getInstance().refresh(); // 29: same state everywhere
     }
 
     @Override
@@ -119,6 +129,13 @@ public class LuckgramProActivity extends UniversalFragment {
         }
         String state = billing.pro ? tx.proUntil(AccountLogic.date(billing.proExpiresAt, TimeZone.getDefault())) : tx.free();
         items.add(UItem.asButton(ID_STATUS, tx.proTitle(), state).setEnabled(false));
+        ProState pro = LuckgramPro.getInstance().state();
+        if (pro.isPro(System.currentTimeMillis())) {
+            int total = pro.creditsTotal > 0 ? pro.creditsTotal : ProUi.numbers().monthlyCredits;
+            items.add(UItem.asButton(ID_CREDITS, perkTexts.creditsTitle(),
+                perkTexts.creditsValue(pro.creditsRemaining, total, pro.creditsResetsAtMs, TimeZone.getDefault())).setEnabled(false));
+        }
+        addPerks(items);
         if (!billing.enabled) {
             items.add(UItem.asShadow(tx.notOnSale()));
             return;
@@ -136,6 +153,21 @@ public class LuckgramProActivity extends UniversalFragment {
             items.add(UItem.asButton(ID_PLAN_BASE + i, tx.plan(p), tx.stars(p.stars)));
         }
         items.add(UItem.asShadow(tx.proInfo()));
+    }
+
+    /** 29 需求 2: the live perks in their fixed order, under the status. */
+    private void addPerks(ArrayList<UItem> items) {
+        List<ProPerks.Row> rows = ProUi.liveRows();
+        if (rows.isEmpty() || getContext() == null) return;
+        items.add(UItem.asShadow(null));
+        ProUi.Colors colors = new ProUi.Colors(getThemedColor(Theme.key_windowBackgroundGray),
+            getThemedColor(Theme.key_windowBackgroundWhiteBlackText), getThemedColor(Theme.key_windowBackgroundWhiteGrayText),
+            0xFFFFFFFF, getThemedColor(Theme.key_windowBackgroundWhiteBlueText4));
+        android.widget.FrameLayout box = new android.widget.FrameLayout(getContext());
+        box.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundWhite));
+        box.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(12), AndroidUtilities.dp(16), AndroidUtilities.dp(12));
+        box.addView(ProUi.perksView(getContext(), rows, colors));
+        items.add(UItem.asCustom(box));
     }
 
     @Override
@@ -207,7 +239,7 @@ public class LuckgramProActivity extends UniversalFragment {
             if (now != null && !now.equals(expiresBefore)) {
                 refreshesLeft = 0;
                 update();
-                org.telegram.luckgram.pro.LuckgramPro.getInstance().refresh(); // 29: payment went through
+                LuckgramPro.getInstance().refresh(); // 29: payment went through
                 BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, tx.proActive()).show();
             } else if (refreshesLeft > 0) {
                 AndroidUtilities.runOnUIThread(refresh, AccountLogic.PRO_REFRESH_INTERVAL_MS);
