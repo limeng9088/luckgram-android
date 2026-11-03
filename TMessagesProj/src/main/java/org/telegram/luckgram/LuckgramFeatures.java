@@ -77,6 +77,10 @@ public final class LuckgramFeatures {
             .confirmEnable(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::confirmEnable)
             .confirmDisable(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::confirmDisable)
             .hiddenWhen(org.telegram.luckgram.doublebottom.LuckgramDoubleBottom::isActive));
+        add(toggle(org.telegram.luckgram.procommunity.ProCommunityLogic.FEATURE_KEY, ACCOUNT_PRIVACY, true,
+            "Pro 社群", "Pro community",
+            "Luckgram Pro 页显示「加入 Pro 社群」，一键进 Pro 用户私密群", "Show \"Join the Pro community\" on the Luckgram Pro page to join the private Pro group")
+            .subpage(org.telegram.luckgram.account.LuckgramProActivity::new));
 
         // ---- 消息与语言 / Messages & Language
         add(toggle(org.telegram.luckgram.selectall.SelectAllFromSender.SETTING_KEY, MESSAGES_LANGUAGE, true,

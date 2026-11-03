@@ -80,6 +80,7 @@ jobs:
             account/AccountLogic.java \
             pro/ProState.java \
             account/AccountLimit.java \
+            procommunity/ProCommunityLogic.java \
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
             update/VersionLine.java \

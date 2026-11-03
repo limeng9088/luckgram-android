@@ -29,6 +29,7 @@ public class LuckgramProActivity extends UniversalFragment {
     private static final int ID_STATUS = 1;
     private static final int ID_LINK = 2;
     private static final int ID_CHECKING = 3;
+    private static final int ID_COMMUNITY = 4;
     private static final int ID_PLAN_BASE = 100;
     private static final int ID_CLOUD_BACKUP = 50; // Luckgram 32
 
@@ -41,6 +42,8 @@ public class LuckgramProActivity extends UniversalFragment {
     private int refreshesLeft;
     private LuckgramAI.Request inFlight;
     private final Runnable refresh = this::refreshAfterPurchase;
+    // specs#89 (31): the community row follows the Pro state (perks)
+    private final org.telegram.luckgram.pro.LuckgramPro.Listener proListener = state -> update();
 
     @Override
     protected CharSequence getTitle() {
@@ -50,6 +53,7 @@ public class LuckgramProActivity extends UniversalFragment {
     @Override
     public void onResume() {
         super.onResume();
+        org.telegram.luckgram.pro.LuckgramPro.getInstance().addListener(proListener);
         load(null);
         org.telegram.luckgram.pro.LuckgramPro.getInstance().refresh(); // 29: same state everywhere
     }
@@ -58,6 +62,7 @@ public class LuckgramProActivity extends UniversalFragment {
     public void onFragmentDestroy() {
         AndroidUtilities.cancelRunOnUIThread(refresh);
         if (inFlight != null) inFlight.cancel();
+        org.telegram.luckgram.pro.LuckgramPro.getInstance().removeListener(proListener);
         super.onFragmentDestroy();
     }
 
@@ -90,6 +95,12 @@ public class LuckgramProActivity extends UniversalFragment {
         items.add(UItem.asHeader(tx.proTitle()));
         fillBillingItems(items);
         fillCloudBackupItems(items);
+        if (org.telegram.luckgram.procommunity.LuckgramProCommunity.showRow()) {
+            // specs#89 (31): Pro community, its own section below cloud backup (same as iOS);
+            // free users get the upgrade prompt on tap
+            items.add(UItem.asButton(ID_COMMUNITY, org.telegram.luckgram.procommunity.LuckgramProCommunity.TEXTS.join()).accent());
+            items.add(UItem.asShadow(org.telegram.luckgram.procommunity.LuckgramProCommunity.TEXTS.info()));
+        }
     }
 
     /** Luckgram 32: "Cloud backup" section; free users get the upgrade prompt. */
@@ -135,6 +146,12 @@ public class LuckgramProActivity extends UniversalFragment {
             } else {
                 org.telegram.luckgram.accounts.LuckgramAccounts.showUpgrade(this, org.telegram.luckgram.backup.CloudBackup.proOnlyText());
             }
+            return;
+        }
+        if (item.id == ID_COMMUNITY) {
+            // free users: same upgrade prompt as cloud backup on this page (32); 29's sheet replaces both
+            org.telegram.luckgram.procommunity.LuckgramProCommunity.join(this, () ->
+                org.telegram.luckgram.accounts.LuckgramAccounts.showUpgrade(this, org.telegram.luckgram.procommunity.LuckgramProCommunity.TEXTS.proOnly()));
             return;
         }
         if (busy || billing == null) return;
