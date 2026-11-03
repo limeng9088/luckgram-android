@@ -363,6 +363,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     private ImageView proxyButtonView;
     // Luckgram 10: "Restore from backup" on the phone number page
     private TextView luckgramRestoreView;
+    /** Luckgram 97: "OK" on the code card hides it for the rest of this login. */
+    private boolean luckgramCodeCardDismissed;
     private ProxyDrawable proxyDrawable;
 
     // Open animation stuff
@@ -3601,6 +3603,33 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         private LoadingTextView timeText;
 
         private FrameLayout bottomContainer;
+        // Luckgram 97: "code sent to Telegram" card + help button (AUTH_TYPE_MESSAGE only)
+        private View luckgramHintFrame;
+        private org.telegram.luckgram.onboarding.CodeHelpCard luckgramCodeCard;
+
+        private void luckgramAddCodeHelp(Context context) {
+            if (!luckgramCodeCardDismissed) {
+                luckgramCodeCard = new org.telegram.luckgram.onboarding.CodeHelpCard(context, () -> {
+                    luckgramCodeCardDismissed = true;
+                    if (luckgramCodeCard != null) {
+                        luckgramCodeCard.setVisibility(GONE);
+                    }
+                    if (luckgramHintFrame != null) {
+                        luckgramHintFrame.setVisibility(VISIBLE);
+                    }
+                });
+                addView(luckgramCodeCard, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 20, 0, 0));
+                // The card replaces the big laptop animation so everything fits on small screens.
+                if (luckgramHintFrame != null) {
+                    luckgramHintFrame.setVisibility(GONE);
+                }
+            }
+            addView(org.telegram.luckgram.onboarding.CodeHelpCard.helpButton(context, () -> {
+                if (getParentActivity() != null) {
+                    org.telegram.luckgram.onboarding.CodeHelpCard.showHelp(getParentActivity());
+                }
+            }), LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 6, 0, 0));
+        }
         private ViewSwitcher errorViewSwitcher;
         private LoadingTextView problemText;
         private FrameLayout problemFrame;
@@ -3773,6 +3802,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
                 FrameLayout frameLayout = new FrameLayout(context);
                 addView(frameLayout, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, 16, 0, 0));
+                luckgramHintFrame = frameLayout;
 
                 int size = currentType == AUTH_TYPE_MESSAGE ? 128 : 64;
                 if (currentType == AUTH_TYPE_MESSAGE) {
@@ -3804,6 +3834,9 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 };
 
                 addView(codeFieldContainer, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 42, Gravity.CENTER_HORIZONTAL, 0, 32, 0, 0));
+            }
+            if (currentType == AUTH_TYPE_MESSAGE) {
+                luckgramAddCodeHelp(context);
             }
             if (currentType == AUTH_TYPE_FLASH_CALL) {
                 codeFieldContainer.setVisibility(GONE);
