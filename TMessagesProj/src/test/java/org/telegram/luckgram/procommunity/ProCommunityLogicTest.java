@@ -36,7 +36,7 @@ public class ProCommunityLogicTest {
 
     @Test
     public void nonTelegramOrMissingLinkIsBad() throws Exception {
-        assertEquals(ProCommunityLogic.Invite.BAD_ANSWER, ProCommunityLogic.parse(new JSONObject("{\"invite_link\":\"https://evil.example/+x\"}")).kind);
+        assertEquals(ProCommunityLogic.Invite.BAD_ANSWER, ProCommunityLogic.parse(new JSONObject("{\"invite_link\":\"https://luckgram.cc/+x\"}")).kind);
         assertEquals(ProCommunityLogic.Invite.BAD_ANSWER, ProCommunityLogic.parse(new JSONObject("{}")).kind);
         assertEquals(ProCommunityLogic.Invite.BAD_ANSWER, ProCommunityLogic.parse(null).kind);
     }
