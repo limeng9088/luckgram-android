@@ -34,8 +34,12 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.ArrayList;
+import java.util.List;
 
-/** spec 22 需求 1: presets, the user's agents and "创建你自己的智能体". */
+/**
+ * spec 22 需求 1: presets, the user's agents and "创建你自己的智能体". spec 30: with the market on,
+ * this list is the "我的" tab (plus market agents the user has chatted with) next to "市场".
+ */
 public class LuckgramAgentsActivity extends BaseFragment {
 
     /** spec 22 平台入口提示: the one registration line, called from the AI assistant's registry. */
@@ -60,11 +64,20 @@ public class LuckgramAgentsActivity extends BaseFragment {
 
     private final ArrayList<Row> rows = new ArrayList<>();
     private RecyclerListView listView;
+    /** spec 30: the "市场" tab, created when first shown. */
+    private LuckgramAgentMarketView marketView;
 
     @Override
     public void onResume() {
         super.onResume();
         reload();
+        if (marketView != null) marketView.onResume();
+    }
+
+    @Override
+    public void onFragmentDestroy() {
+        if (marketView != null) marketView.onDestroy();
+        super.onFragmentDestroy();
     }
 
     private void reload() {
@@ -76,6 +89,12 @@ public class LuckgramAgentsActivity extends BaseFragment {
         for (LuckgramAgents.Agent a : LuckgramAgents.custom(currentAccount)) rows.add(new Row(TYPE_AGENT, null, a));
         rows.add(new Row(TYPE_CREATE, null, null));
         rows.add(new Row(TYPE_SHADOW, null, null));
+        List<LuckgramAgents.Agent> market = LuckgramAgents.marketAgents(currentAccount); // spec 30 需求 6
+        if (!market.isEmpty()) {
+            rows.add(new Row(TYPE_HEADER, LuckgramStrings.get("来自市场", "From the market"), null));
+            for (LuckgramAgents.Agent a : market) rows.add(new Row(TYPE_AGENT, null, a));
+            rows.add(new Row(TYPE_SHADOW, null, null));
+        }
         if (listView != null && listView.getAdapter() != null) listView.getAdapter().notifyDataSetChanged();
     }
 
@@ -156,6 +175,19 @@ public class LuckgramAgentsActivity extends BaseFragment {
             return true;
         });
         frame.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        if (LuckgramAgentMarket.isEnabled()) { // spec 30 需求 1: "我的" | "市场"
+            View tabs = LuckgramAgentMarketView.createTabs(context, market -> {
+                if (market && marketView == null) {
+                    marketView = new LuckgramAgentMarketView(context, this);
+                    frame.addView(marketView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 44, 0, 0));
+                }
+                if (marketView != null) marketView.setVisibility(market ? View.VISIBLE : View.GONE);
+                listView.setVisibility(market ? View.GONE : View.VISIBLE);
+                if (!market) reload();
+            });
+            ((FrameLayout.LayoutParams) listView.getLayoutParams()).topMargin = dp(44);
+            frame.addView(tabs, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 44, Gravity.TOP));
+        }
         reload();
         return fragmentView;
     }
@@ -168,6 +200,12 @@ public class LuckgramAgentsActivity extends BaseFragment {
             LuckgramAgents.setPinned(currentAccount, agent.id, !pinned);
             reload();
         });
+        if (agent.market != null) {
+            o.add(R.drawable.msg_delete, LuckgramStrings.get("从「我的」移除", "Remove from My agents"), true, () -> {
+                LuckgramAgentMarket.remove(currentAccount, agent.market.id);
+                reload();
+            });
+        }
         if (!agent.preset) {
             o.add(R.drawable.msg_edit, LuckgramStrings.get("编辑", "Edit"), () -> presentFragment(new LuckgramAgentEditActivity(agent.id)));
             o.add(R.drawable.msg_delete, LuckgramStrings.get("删除", "Delete"), true, () -> LuckgramAgentEditActivity.confirmDelete(this, agent, this::reload));

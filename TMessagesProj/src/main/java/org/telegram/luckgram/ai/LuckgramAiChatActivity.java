@@ -404,8 +404,15 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         notifyInserted();
         streaming = reply;
         updateSendButton();
-        final String tier = conv.modelTier;
-        request = LuckgramAI.getInstance().chat(getParentActivity(), conv.task, null, tier, messages, true, new LuckgramAI.ChatListener() {
+        final String tier = conv.modelTier; // spec 29: premium model, sent as model_tier
+        org.json.JSONObject params = conv.requestParams;
+        if (tier != null) {
+            try {
+                params = new org.json.JSONObject(params != null ? params.toString() : "{}").put("model_tier", tier);
+            } catch (Exception ignore) {
+            }
+        }
+        request = LuckgramAI.getInstance().chat(getParentActivity(), conv.task, null, params, messages, true, new LuckgramAI.ChatListener() {
             @Override
             public void onDelta(String delta, String text) {
                 if (streaming != reply) return;

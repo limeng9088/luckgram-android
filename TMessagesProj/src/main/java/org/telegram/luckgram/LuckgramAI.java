@@ -664,8 +664,11 @@ public final class LuckgramAI {
         return chat(context, task, effect, null, messages, stream, listener);
     }
 
-    /** @param modelTier {@code model_tier} (spec 29 / S12: "premium" costs 1 AI credit), or null for the standard model. */
-    public Request chat(Context context, String task, String effect, String modelTier, List<Message> messages, boolean stream, ChatListener listener) {
+    /**
+     * @param params extra top-level request fields (e.g. {@code agent_id} for task=agent, S13), or
+     *               null; they never replace {@code task}, {@code messages} or {@code stream}.
+     */
+    public Request chat(Context context, String task, String effect, JSONObject params, List<Message> messages, boolean stream, ChatListener listener) {
         Request req = new Request();
         req.feature = task;
         int chars = 0;
@@ -680,8 +683,11 @@ public final class LuckgramAI {
             if (effect != null && TASK_WRITING.equals(task)) {
                 body.put("effect", effect);
             }
-            if (modelTier != null) {
-                body.put("model_tier", modelTier);
+            if (params != null) {
+                for (java.util.Iterator<String> it = params.keys(); it.hasNext(); ) {
+                    String k = it.next();
+                    if (!body.has(k)) body.put(k, params.get(k));
+                }
             }
         } catch (Exception e) {
             deliverError(listener::onError, new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));

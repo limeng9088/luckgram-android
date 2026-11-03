@@ -78,9 +78,11 @@ public final class ProModelChoice {
             return;
         }
         if (LuckgramAIError.NOT_PRO.equals(error.code)) {
+            boolean premium = conv != null && conv.modelTier != null;
             if (conv != null) conv.modelTier = null;
             LuckgramPro.getInstance().refresh();
-            LuckgramUpgradeSheet.show(fragment, ProPerks.Reason.PREMIUM_MODEL);
+            // the premium model, or something else Pro-only (e.g. a Pro market agent, 30)
+            LuckgramUpgradeSheet.show(fragment, premium ? ProPerks.Reason.PREMIUM_MODEL : ProPerks.Reason.PRO_ONLY);
             return;
         }
         LuckgramUpgradeSheet.handle(fragment, error);

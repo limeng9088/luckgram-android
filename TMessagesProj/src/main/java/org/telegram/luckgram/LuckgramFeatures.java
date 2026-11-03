@@ -53,6 +53,8 @@ public final class LuckgramFeatures {
     public static final String AI_SUMMARY = "ai_summary";
     /** spec 22 */
     public static final String AI_AGENTS = "ai_agents";
+    /** spec 30 */
+    public static final String AI_AGENT_MARKET = "ai_agent_market";
     /** spec 23 */
     public static final String AI_IMAGE = "ai_image";
 
@@ -70,10 +72,6 @@ public final class LuckgramFeatures {
             "View channels and groups hidden only in store versions of Telegram; tap for the 18+ content setting")
             .subpage(() -> new org.telegram.ui.ThemeActivity(org.telegram.ui.ThemeActivity.THEME_TYPE_BASIC))
             .confirmEnable(org.telegram.luckgram.unblock.StoreRestrictionsFeature::confirmEnable));
-        add(toggle(org.telegram.luckgram.backup.LuckgramBackup.FEATURE_KEY, ACCOUNT_PRIVACY, true,
-            "账号备份", "Account backup",
-            "把账号导出为加密文件，换手机后导入", "Export accounts to an encrypted file and import them on a new phone")
-            .subpage(org.telegram.luckgram.backup.LuckgramBackupActivity::new));
         add(toggle(org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.FEATURE_KEY, ACCOUNT_PRIVACY, false,
             "双重空间", "Double space",
             "用第二个密码解锁时只显示选定的账号", "A second passcode that shows only the accounts you pick")
@@ -81,6 +79,10 @@ public final class LuckgramFeatures {
             .confirmEnable(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::confirmEnable)
             .confirmDisable(org.telegram.luckgram.doublebottom.LuckgramDoubleBottomActivity::confirmDisable)
             .hiddenWhen(org.telegram.luckgram.doublebottom.LuckgramDoubleBottom::isActive));
+        add(toggle(org.telegram.luckgram.procommunity.ProCommunityLogic.FEATURE_KEY, ACCOUNT_PRIVACY, true,
+            "Pro 社群", "Pro community",
+            "Luckgram Pro 页显示「加入 Pro 社群」，一键进 Pro 用户私密群", "Show \"Join the Pro community\" on the Luckgram Pro page to join the private Pro group")
+            .subpage(org.telegram.luckgram.account.LuckgramProActivity::new));
 
         // ---- 消息与语言 / Messages & Language
         add(toggle(org.telegram.luckgram.selectall.SelectAllFromSender.SETTING_KEY, MESSAGES_LANGUAGE, true,
@@ -154,6 +156,9 @@ public final class LuckgramFeatures {
         add(toggle(AI_AGENTS, AI, true,
             "AI 智能体", "AI agents",
             "AI 助手里的旅行规划师、文案写手等，也能自己创建", "Travel planner, copywriter and more in the AI assistant, or make your own"));
+        add(toggle(AI_AGENT_MARKET, AI, true,
+            "智能体市场", "Agent market",
+            "「智能体」里的「市场」：按分类浏览、搜索更多智能体，部分 Pro 专享", "\"Market\" in Agents: browse and search more agents by category, some for Pro"));
         add(toggle(AI_ASSISTANT_ROW, AI, true,
             "聊天列表置顶「Luckgram AI」", "Pin \"Luckgram AI\" in the chat list",
             "在聊天列表顶部显示一行 AI 助手入口", "Show an AI assistant row at the top of the chat list"));

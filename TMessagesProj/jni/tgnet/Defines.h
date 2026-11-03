@@ -27,8 +27,9 @@
 #define DOWNLOAD_CONNECTIONS_COUNT 8
 #define UPLOAD_CONNECTIONS_COUNT 4
 #define CONNECTION_BACKGROUND_KEEP_TIME 10000
-// Luckgram 09 (more accounts): keep equal to UserConfig.MAX_ACCOUNT_COUNT (LuckgramAccounts.MAX_ACCOUNTS)
-#define MAX_ACCOUNT_COUNT 20
+// Luckgram 09/32 (more accounts): keep equal to UserConfig.MAX_ACCOUNT_COUNT (AccountLimit.SLOT_CAPACITY = 50;
+// free 20 / Pro 50 is enforced at runtime in Java)
+#define MAX_ACCOUNT_COUNT 50
 #define USE_DELEGATE_HOST_RESOLVE
 
 #define USE_IPV4_ONLY 0

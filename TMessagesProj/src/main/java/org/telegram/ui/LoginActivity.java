@@ -758,7 +758,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             emailChangeSkipButton.setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), 0);
             emailChangeSkipButton.setText(getString(R.string.YourEmailSkip));
             emailChangeSkipButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
-            sizeNotifierFrameLayout.addView(emailChangeSkipButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 30, Gravity.TOP | Gravity.RIGHT, 0, 16, 16, 0));
+            sizeNotifierFrameLayout.addView(emailChangeSkipButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 30, Gravity.TOP | Gravity.RIGHT, 0, 16, 56, 0));
             emailChangeSkipButton.setOnClickListener(v -> {
                 if (emailChangeSkipCallback != null) {
                     emailChangeSkipCallback.run();
@@ -770,18 +770,18 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         proxyButtonView = new ImageView(context);
         proxyButtonView.setImageDrawable(proxyDrawable = new ProxyDrawable(context));
         proxyButtonView.setOnClickListener(v -> presentFragment(new ProxyListActivity()));
-        proxyButtonView.setAlpha(0f);
-        proxyButtonView.setVisibility(View.GONE);
+        // Luckgram 91: the proxy entry is always visible on every login page (top right, rightmost).
+        proxyButtonView.setContentDescription(getString(R.string.ProxySettings));
         sizeNotifierFrameLayout.addView(proxyButtonView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 16, 16));
         updateProxyButton(false, true);
 
         luckgramRestoreView = new TextView(context);
-        luckgramRestoreView.setText(org.telegram.luckgram.backup.LuckgramBackup.restoreText());
+        luckgramRestoreView.setText(org.telegram.luckgram.backup.CloudBackup.restoreText());
         luckgramRestoreView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
         luckgramRestoreView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
         luckgramRestoreView.setGravity(Gravity.CENTER_VERTICAL);
         luckgramRestoreView.setPadding(dp(8), 0, dp(8), 0);
-        luckgramRestoreView.setOnClickListener(v -> presentFragment(new org.telegram.luckgram.backup.LuckgramBackupActivity(true)));
+        luckgramRestoreView.setOnClickListener(v -> org.telegram.luckgram.backup.CloudBackupActivity.startRestoreFromLogin(this));
         sizeNotifierFrameLayout.addView(luckgramRestoreView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 56, 16));
         luckgramUpdateRestoreButton();
 
@@ -790,7 +790,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         radialProgressView.setAlpha(0);
         radialProgressView.setScaleX(0.1f);
         radialProgressView.setScaleY(0.1f);
-        sizeNotifierFrameLayout.addView(radialProgressView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.TOP, 0, 16, 16, 0));
+        sizeNotifierFrameLayout.addView(radialProgressView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.TOP, 0, 16, 56, 0));
 
         floatingButtonIcon = new TransformableLoginButtonView(context);
         floatingButtonIcon.setTransformType(TransformableLoginButtonView.TRANSFORM_OPEN_ARROW);
@@ -934,6 +934,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             ConnectionsManager.getInstance(currentAccount).setAppPaused(false, false);
         }
         AndroidUtilities.requestAdjustResize(getParentActivity(), classGuid);
+        updateProxyButton(false, true); // Luckgram 91: state after returning from the proxy settings
         if (fragmentView != null) {
             fragmentView.requestLayout();
         }
@@ -1657,13 +1658,12 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         onAuthSuccess(res);
     }
 
-    /** Luckgram 10: the restore entry is shown on the phone number page of a normal login. */
+    /** Luckgram 32: "Restore from cloud" on the phone number page of a normal login (no switch). */
     private void luckgramUpdateRestoreButton() {
         if (luckgramRestoreView == null) {
             return;
         }
-        boolean show = activityMode == MODE_LOGIN && currentViewNum == VIEW_PHONE_INPUT
-                && org.telegram.luckgram.LuckgramSettings.isEnabled(org.telegram.luckgram.backup.LuckgramBackup.FEATURE_KEY);
+        boolean show = activityMode == MODE_LOGIN && currentViewNum == VIEW_PHONE_INPUT;
         luckgramRestoreView.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
@@ -8515,7 +8515,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         backButtonView.setColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         backButtonView.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector)));
 
-        proxyDrawable.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText), PorterDuff.Mode.SRC_IN));
+        updateProxyButton(false, true);
         proxyButtonView.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector)));
 
         radialProgressView.setProgressColor(Theme.getColor(Theme.key_chats_actionBackground));
@@ -8813,7 +8813,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
     private int currentConnectionState;
 
     private void updateProxyButton(boolean animated, boolean force) {
-        if (proxyDrawable == null) {
+        if (proxyDrawable == null || proxyButtonView == null) {
             return;
         }
         int state = getConnectionsManager().getConnectionState();
@@ -8826,15 +8826,12 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         final boolean proxyEnabled = preferences.getBoolean("proxy_enabled", false) && !TextUtils.isEmpty(proxyAddress);
         final boolean connected = currentConnectionState == ConnectionsManager.ConnectionStateConnected || currentConnectionState == ConnectionsManager.ConnectionStateUpdating;
         final boolean connecting = currentConnectionState == ConnectionsManager.ConnectionStateConnecting || currentConnectionState == ConnectionsManager.ConnectionStateWaitingForNetwork || currentConnectionState == ConnectionsManager.ConnectionStateConnectingToProxy;
-        if (proxyEnabled) {
-            proxyDrawable.setConnected(true, connected, animated);
-            showProxyButton(true, animated);
-        } else if (getMessagesController().blockedCountry && !SharedConfig.proxyList.isEmpty() || connecting) {
-            proxyDrawable.setConnected(true, connected, animated);
-            showProxyButtonDelayed();
-        } else {
-            showProxyButton(false, animated);
-        }
+        // Luckgram 91: always shown. Off: grey outline; on + connecting: spinner; on + connected: filled accent.
+        proxyDrawable.setConnected(proxyEnabled, proxyEnabled && connected, animated);
+        int color = Theme.getColor(proxyEnabled ? Theme.key_windowBackgroundWhiteBlueIcon : Theme.key_windowBackgroundWhiteGrayIcon);
+        proxyDrawable.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
+        proxyButtonView.invalidate();
+        showProxyButton(true, false);
     }
     
     private boolean proxyButtonVisible;

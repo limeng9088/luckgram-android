@@ -55,6 +55,7 @@ jobs:
             roundvideo/RoundVideoGeometry.java \
             unblock/StoreRestrictions.java \
             backup/LuckgramBackupFormat.java \
+            backup/CloudBackupLogic.java \
             notes/UserNotesText.java \
             translateout/TranslateOutLogic.java \
             translateout/TranslateFallbackLogic.java \
@@ -79,13 +80,16 @@ jobs:
             account/AccountLogic.java \
             pro/ProState.java \
             pro/ProPerks.java \
+            account/AccountLimit.java \
+            procommunity/ProCommunityLogic.java \
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
             update/VersionLine.java \
             nearby/NearbyLogic.java \
             discover/DiscoverMock.java \
             square/SquareLogic.java \
-            discover/BlockLogic.java; do
+            discover/BlockLogic.java \
+            agents/AgentMarketLogic.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"

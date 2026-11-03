@@ -32,13 +32,15 @@ import java.util.TimeZone;
  *
  * <p>specs#87 (29): also the AI credits line and the perk rows that are live ({@code pro.perks}).
  */
-public class LuckgramProActivity extends UniversalFragment implements LuckgramPro.Listener {
+public class LuckgramProActivity extends UniversalFragment {
 
     private static final int ID_STATUS = 1;
     private static final int ID_LINK = 2;
     private static final int ID_CHECKING = 3;
-    private static final int ID_CREDITS = 4;
+    private static final int ID_COMMUNITY = 4;
+    private static final int ID_CREDITS = 5;
     private static final int ID_PLAN_BASE = 100;
+    private static final int ID_CLOUD_BACKUP = 50; // Luckgram 32
 
     private final AccountLogic.Texts tx = new AccountLogic.Texts(LuckgramStrings.isChinese());
 
@@ -49,18 +51,9 @@ public class LuckgramProActivity extends UniversalFragment implements LuckgramPr
     private int refreshesLeft;
     private LuckgramAI.Request inFlight;
     private final Runnable refresh = this::refreshAfterPurchase;
+    // specs#89 (31): the community row follows the Pro state (perks)
+    private final org.telegram.luckgram.pro.LuckgramPro.Listener proListener = state -> update();
     private final ProPerks.Texts perkTexts = new ProPerks.Texts(LuckgramStrings.isChinese());
-
-    @Override
-    public boolean onFragmentCreate() {
-        LuckgramPro.getInstance().addListener(this);
-        return super.onFragmentCreate();
-    }
-
-    @Override
-    public void onProStateChanged(ProState state) {
-        update();
-    }
 
     @Override
     protected CharSequence getTitle() {
@@ -70,15 +63,16 @@ public class LuckgramProActivity extends UniversalFragment implements LuckgramPr
     @Override
     public void onResume() {
         super.onResume();
+        org.telegram.luckgram.pro.LuckgramPro.getInstance().addListener(proListener);
         load(null);
         LuckgramPro.getInstance().refresh(); // 29: same state everywhere
     }
 
     @Override
     public void onFragmentDestroy() {
-        LuckgramPro.getInstance().removeListener(this);
         AndroidUtilities.cancelRunOnUIThread(refresh);
         if (inFlight != null) inFlight.cancel();
+        org.telegram.luckgram.pro.LuckgramPro.getInstance().removeListener(proListener);
         super.onFragmentDestroy();
     }
 
@@ -109,6 +103,25 @@ public class LuckgramProActivity extends UniversalFragment implements LuckgramPr
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         items.add(UItem.asHeader(tx.proTitle()));
+        fillBillingItems(items);
+        fillCloudBackupItems(items);
+        if (org.telegram.luckgram.procommunity.LuckgramProCommunity.showRow()) {
+            // specs#89 (31): Pro community, its own section below cloud backup (same as iOS);
+            // free users get the upgrade prompt on tap
+            items.add(UItem.asButton(ID_COMMUNITY, org.telegram.luckgram.procommunity.LuckgramProCommunity.TEXTS.join()).accent());
+            items.add(UItem.asShadow(org.telegram.luckgram.procommunity.LuckgramProCommunity.TEXTS.info()));
+        }
+    }
+
+    /** Luckgram 32: "Cloud backup" section; free users get the upgrade prompt. */
+    private void fillCloudBackupItems(ArrayList<UItem> items) {
+        items.add(UItem.asHeader(org.telegram.luckgram.backup.CloudBackup.headerText()));
+        items.add(UItem.asButton(ID_CLOUD_BACKUP, R.drawable.msg_archive, org.telegram.luckgram.backup.CloudBackup.headerText(),
+                org.telegram.luckgram.pro.LuckgramPro.isPro() ? "" : "Pro"));
+        items.add(UItem.asShadow(org.telegram.luckgram.backup.CloudBackup.proOnlyText()));
+    }
+
+    private void fillBillingItems(ArrayList<UItem> items) {
         if (billing == null) {
             items.add(loading ? UItem.asButtonLoadingValue(ID_STATUS, tx.proTitle()) : UItem.asButton(ID_STATUS, tx.proTitle(), "—").setEnabled(false));
             items.add(UItem.asShadow(null));
@@ -159,6 +172,20 @@ public class LuckgramProActivity extends UniversalFragment implements LuckgramPr
 
     @Override
     protected void onClick(UItem item, View view, int position, float x, float y) {
+        if (item.id == ID_CLOUD_BACKUP) {
+            if (org.telegram.luckgram.pro.LuckgramPro.isPro()) {
+                presentFragment(new org.telegram.luckgram.backup.CloudBackupActivity());
+            } else {
+                org.telegram.luckgram.accounts.LuckgramAccounts.showUpgrade(this, org.telegram.luckgram.backup.CloudBackup.proOnlyText());
+            }
+            return;
+        }
+        if (item.id == ID_COMMUNITY) {
+            // free users: same upgrade prompt as cloud backup on this page (32); 29's sheet replaces both
+            org.telegram.luckgram.procommunity.LuckgramProCommunity.join(this, () ->
+                org.telegram.luckgram.accounts.LuckgramAccounts.showUpgrade(this, org.telegram.luckgram.procommunity.LuckgramProCommunity.TEXTS.proOnly()));
+            return;
+        }
         if (busy || billing == null) return;
         if (item.id == ID_LINK) {
             presentFragment(new LuckgramAccountActivity());

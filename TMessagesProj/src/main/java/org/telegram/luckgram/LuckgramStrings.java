@@ -122,9 +122,11 @@ public final class LuckgramStrings {
             case LuckgramAIError.CANCELLED:
                 return get("已取消。", "Cancelled.");
             case LuckgramAIError.NOT_PRO:
-                return get("这是 Pro 专享功能。", "This feature is for Pro members.");
+                return get("此功能需要 Luckgram Pro。", "This needs Luckgram Pro.");
             case LuckgramAIError.CREDITS_EXHAUSTED:
-                return get("本月 AI 点数已用完。", "You've used all AI credits for this month.");
+                return get("本周期的 AI 点数已用完。", "No AI credits left in this period.");
+            case LuckgramAIError.AGENT_UNAVAILABLE:
+                return get("这个智能体已下架。", "This agent is no longer available.");
             case LuckgramAIError.UPSTREAM_UNAVAILABLE:
             default:
                 return get("AI 服务暂时不可用，请稍后再试。", "The AI service is temporarily unavailable. Please try again later.");

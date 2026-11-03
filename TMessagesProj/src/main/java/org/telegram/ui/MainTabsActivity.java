@@ -612,25 +612,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         // Luckgram 09: always offer "Add account"; at the limit it says "at most 20 accounts"
         if (true) {
             o.add(R.drawable.msg_addbot, getString(R.string.AddAccount), () -> {
-                int freeAccounts = 0;
-                Integer availableAccount = null;
-                for (int a = UserConfig.MAX_ACCOUNT_COUNT - 1; a >= 0; a--) {
-                    if (!UserConfig.getInstance(a).isClientActivated()) {
-                        freeAccounts++;
-                        if (availableAccount == null) {
-                            availableAccount = a;
-                        }
-                    }
-                }
-                if (!UserConfig.hasPremiumOnAccounts()) {
-                    freeAccounts -= (UserConfig.MAX_ACCOUNT_COUNT - UserConfig.MAX_ACCOUNT_DEFAULT_COUNT);
-                }
-                if (freeAccounts > 0 && availableAccount != null) {
-                    presentFragment(new LoginActivity(availableAccount));
-                } else {
-                    // Luckgram 09: limit is 20 for everyone, no Premium upsell
-                    org.telegram.luckgram.accounts.LuckgramAccounts.showLimitReached();
-                }
+                // Luckgram 32: free 20 / Pro 50 (remote config); free users at the limit get the Pro upgrade
+                org.telegram.luckgram.accounts.LuckgramAccounts.addAccount(this);
             });
         }
 
