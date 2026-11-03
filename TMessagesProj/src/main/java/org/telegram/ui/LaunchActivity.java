@@ -7012,6 +7012,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         org.telegram.luckgram.pro.LuckgramPro.getInstance().refreshIfStale(); // Luckgram 29: Pro state (/v1/me)
         org.telegram.luckgram.announce.LuckgramAnnouncements.refreshIfStale(); // Luckgram: announcements (S8)
         org.telegram.luckgram.update.LuckgramUpdates.checkIfDue(); // Luckgram: update check (S5)
+        org.telegram.luckgram.backup.CloudBackup.runAutoIfDue(); // Luckgram 32: weekly cloud backup (Pro, opt-in)
         org.telegram.luckgram.nearby.NearbyController.restoreReminder(); // Luckgram 25: re-arm after reboot / force-stop
         org.telegram.luckgram.update.LuckgramUpdates.showForceIfNeeded(this);
         pipActivityHandler.onResume();

@@ -14699,18 +14699,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     new SearchResult(500, getString(R.string.EditName), 0, () -> f.presentFragment(new ChangeNameActivity(resourcesProvider))),
                     new SearchResult(501, getString(R.string.ChangePhoneNumber), 0, () -> f.presentFragment(new ActionIntroActivity(ActionIntroActivity.ACTION_TYPE_CHANGE_PHONE_NUMBER))).withLink("tg://settings/edit/change-number"),
                     new SearchResult(502, getString(R.string.AddAnotherAccount), 0, () -> {
-                        int freeAccount = -1;
-                        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
-                            if (!UserConfig.getInstance(a).isClientActivated()) {
-                                freeAccount = a;
-                                break;
-                            }
-                        }
-                        if (freeAccount >= 0) {
-                            f.presentFragment(new LoginActivity(freeAccount));
-                        } else {
-                            org.telegram.luckgram.accounts.LuckgramAccounts.showLimitReached();
-                        }
+                        org.telegram.luckgram.accounts.LuckgramAccounts.addAccount(f);
                     }).withLink("tg://settings/edit/add-account"),
                     // TODO:
 //                    new SearchResult(503, getString(R.string.UserBio), 0, () -> {

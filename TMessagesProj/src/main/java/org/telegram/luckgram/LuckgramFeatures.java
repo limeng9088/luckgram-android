@@ -70,10 +70,6 @@ public final class LuckgramFeatures {
             "View channels and groups hidden only in store versions of Telegram; tap for the 18+ content setting")
             .subpage(() -> new org.telegram.ui.ThemeActivity(org.telegram.ui.ThemeActivity.THEME_TYPE_BASIC))
             .confirmEnable(org.telegram.luckgram.unblock.StoreRestrictionsFeature::confirmEnable));
-        add(toggle(org.telegram.luckgram.backup.LuckgramBackup.FEATURE_KEY, ACCOUNT_PRIVACY, true,
-            "账号备份", "Account backup",
-            "把账号导出为加密文件，换手机后导入", "Export accounts to an encrypted file and import them on a new phone")
-            .subpage(org.telegram.luckgram.backup.LuckgramBackupActivity::new));
         add(toggle(org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.FEATURE_KEY, ACCOUNT_PRIVACY, false,
             "双重空间", "Double space",
             "用第二个密码解锁时只显示选定的账号", "A second passcode that shows only the accounts you pick")

@@ -55,6 +55,7 @@ jobs:
             roundvideo/RoundVideoGeometry.java \
             unblock/StoreRestrictions.java \
             backup/LuckgramBackupFormat.java \
+            backup/CloudBackupLogic.java \
             notes/UserNotesText.java \
             translateout/TranslateOutLogic.java \
             translateout/TranslateFallbackLogic.java \
@@ -78,6 +79,7 @@ jobs:
             diag/LuckgramEndpoints.java \
             account/AccountLogic.java \
             pro/ProState.java \
+            account/AccountLimit.java \
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
             update/VersionLine.java \
