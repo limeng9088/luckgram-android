@@ -684,6 +684,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         default void didPressSponsoredClose(ChatMessageCell cell) {
         }
 
+        /** Luckgram spec 01 A.2: the one-tap translate button next to a received message. */
+        default void luckgramDidPressTranslate(ChatMessageCell cell) {
+        }
+
         default void didPressSummarize(ChatMessageCell cell, boolean byReply) {
         }
 
@@ -1675,6 +1679,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     private boolean sideButtonPressed;
     private boolean drawSummarizeButton;
     private boolean summarizeButtonPressed;
+    /** Luckgram spec 01 A.2: one-tap translate button beside a received message. */
+    private boolean luckgramTranslateButton;
+    private boolean luckgramTranslatePressed;
+    private float luckgramTranslateX, luckgramTranslateY;
+    private android.graphics.drawable.Drawable luckgramTranslateIcon;
     private int pressedSideButton;
     private boolean inQuickShareMode;
     private Path sideButtonPath1, sideButtonPath2;
@@ -5195,6 +5204,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                         summarizeButtonPressed = true;
                         result = true;
                         invalidate();
+                    } else if (luckgramTranslateHit(x, y)) {
+                        luckgramTranslatePressed = true;
+                        result = true;
+                        invalidate();
                     }
                     if (result) {
                         startCheckLongPress();
@@ -5339,6 +5352,19 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
                             pressedSideButton = 0;
                         }
+                    }
+                    invalidate();
+                } else if (luckgramTranslatePressed) {
+                    if (event.getAction() == MotionEvent.ACTION_UP) {
+                        playSoundEffect(SoundEffectConstants.CLICK);
+                        if (delegate != null) {
+                            delegate.luckgramDidPressTranslate(this);
+                        }
+                        luckgramTranslatePressed = false;
+                    } else if (event.getAction() == MotionEvent.ACTION_CANCEL) {
+                        luckgramTranslatePressed = false;
+                    } else if (event.getAction() == MotionEvent.ACTION_MOVE && !luckgramTranslateHit(x, y)) {
+                        luckgramTranslatePressed = false;
                     }
                     invalidate();
                 } else if (summarizeButtonPressed) {
@@ -6986,6 +7012,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 }
             }
             drawSummarizeButton = TranslateController.isSummarizable(messageObject);
+            luckgramUpdateTranslateButton(messageObject);
             hasReplyQuote = false;
             isReplyQuote = false;
             isReplyTaskOrPollOption = false;
@@ -21433,6 +21460,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
         drawSideButton(canvas);
         drawSummarizeButton(canvas);
+        luckgramDrawTranslateButton(canvas);
     }
 
     public void drawAnimatedEmojis(Canvas canvas, float alpha) {
@@ -21773,6 +21801,76 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 canvas.restoreToCount(restoreToSponosoredAlpha);
             }
         }
+    }
+
+    /** Luckgram spec 01 A.2: recomputes whether the one-tap translate button shows. */
+    public void luckgramUpdateTranslateButton(MessageObject messageObject) {
+        final boolean lastInGroup = currentPosition == null || currentMessagesGroup == null || (currentPosition.flags & MessageObject.POSITION_FLAG_BOTTOM) != 0 && (currentPosition.flags & MessageObject.POSITION_FLAG_RIGHT) != 0;
+        MessageObject target = messageObject;
+        if (currentMessagesGroup != null && org.telegram.luckgram.translatein.LuckgramTranslateIn.textOf(messageObject) == null) {
+            target = currentMessagesGroup.findCaptionMessageObject();
+        }
+        final MessageObject detected = target;
+        luckgramTranslateButton = lastInGroup && !drawSummarizeButton && detected != null &&
+            org.telegram.luckgram.translatein.LuckgramTranslateIn.showButton(detected, () -> {
+                if (currentMessageObject != null && (currentMessageObject == detected || currentMessagesGroup != null && currentMessageObject.getGroupId() == detected.getGroupId())) {
+                    final boolean was = luckgramTranslateButton;
+                    luckgramUpdateTranslateButton(currentMessageObject);
+                    if (was != luckgramTranslateButton) {
+                        invalidate();
+                        if (getParent() instanceof View) {
+                            ((View) getParent()).invalidate();
+                        }
+                    }
+                }
+            });
+    }
+
+    private boolean luckgramTranslateHit(float x, float y) {
+        return luckgramTranslateButton &&
+            x >= luckgramTranslateX - dp(4) && x <= luckgramTranslateX + dp(36) &&
+            y >= luckgramTranslateY - dp(4) && y <= luckgramTranslateY + dp(36);
+    }
+
+    private void luckgramDrawTranslateButton(Canvas canvas) {
+        if (!luckgramTranslateButton || currentMessageObject == null || SizeNotifierFrameLayout.drawingBlur) {
+            return;
+        }
+        float x = transitionParams.lastBackgroundRight + dp(8);
+        if (currentMessagesGroup != null) {
+            x += currentMessagesGroup.transitionParams.offsetRight - animationOffsetX;
+        }
+        float y;
+        if (drawSideButton != 0 && sideButtonVisible) {
+            y = sideStartY - dp(40);
+        } else {
+            y = layoutHeight + transitionParams.deltaBottom - dp(41);
+            if (currentMessagesGroup != null) {
+                y += currentMessagesGroup.transitionParams.offsetBottom;
+            }
+            if (currentMessageObject.shouldDrawReactions() && !reactionsLayoutInBubble.isSmall && reactionsLayoutInBubble.drawServiceShaderBackground > 0) {
+                y -= reactionsLayoutInBubble.getCurrentTotalHeight(transitionParams.animateChangeProgress);
+            }
+        }
+        y = Math.max(y, getPaddingTop() + dp(4));
+        if (x + dp(32) >= getMeasuredWidth()) {
+            return;
+        }
+        luckgramTranslateX = x;
+        luckgramTranslateY = y;
+        rect.set(x, y, x + dp(32), y + dp(32));
+        applyServiceShaderMatrix();
+        canvas.drawRoundRect(rect, dp(16), dp(16), getThemedPaint(luckgramTranslatePressed ? Theme.key_paint_chatActionBackgroundSelected : Theme.key_paint_chatActionBackground));
+        if (hasGradientService()) {
+            canvas.drawRoundRect(rect, dp(16), dp(16), Theme.chat_actionBackgroundGradientDarkenPaint);
+        }
+        if (luckgramTranslateIcon == null) {
+            luckgramTranslateIcon = getContext().getResources().getDrawable(R.drawable.msg_translate).mutate();
+        }
+        luckgramTranslateIcon.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_chat_serviceIcon), PorterDuff.Mode.MULTIPLY));
+        final int w = dp(20);
+        luckgramTranslateIcon.setBounds((int) (x + dp(16) - w / 2f), (int) (y + dp(16) - w / 2f), (int) (x + dp(16) + w / 2f), (int) (y + dp(16) + w / 2f));
+        luckgramTranslateIcon.draw(canvas);
     }
 
     private SummaryIcon summarizeIcon;

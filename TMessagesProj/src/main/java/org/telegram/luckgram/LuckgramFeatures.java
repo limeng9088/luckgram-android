@@ -92,6 +92,10 @@ public final class LuckgramFeatures {
         add(toggle("translate_out", MESSAGES_LANGUAGE, true,
             "发送前翻译", "Translate before sending",
             "在输入框里先翻译成对方的语言再发送", "Translate your message into the other person's language before sending"));
+        add(toggle(org.telegram.luckgram.translatein.TranslateInLogic.FEATURE_KEY, MESSAGES_LANGUAGE, true,
+            "收到消息翻译", "Translate received messages",
+            "长按或点消息旁的图标，译文显示在原文下方", "Long-press or tap the icon next to a message; the translation appears below the original")
+            .subpage(org.telegram.luckgram.translatein.TranslateInSettingsActivity::new));
         add(toggle("quick_replies", MESSAGES_LANGUAGE, true,
             "快捷回复", "Quick replies",
             "把常用回复存成模板，输入框里一点就填入", "Save frequent replies as templates and insert them with one tap")

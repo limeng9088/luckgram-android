@@ -5140,6 +5140,23 @@ public class ChatActivityEnterView extends FrameLayout implements
             ;*/
         }
 
+        if (shouldShowTranslateOut() && !translateOutBusy) {
+            // Luckgram spec 01 C.2: translate from the send button's long-press menu
+            options.add(R.drawable.msg_translate, TranslateOutStrings.translateTo(), () -> {
+                if (messageSendPreview != null) {
+                    messageSendPreview.dismiss(false);
+                    messageSendPreview = null;
+                }
+                showTranslateOutLanguages();
+            });
+            options.add(R.drawable.msg_translate, TranslateOutStrings.button(), () -> {
+                if (messageSendPreview != null) {
+                    messageSendPreview.dismiss(false);
+                    messageSendPreview = null;
+                }
+                translateOut(null);
+            });
+        }
         if (sendWithoutSoundButtonValue) {
             options.add(R.drawable.input_notify_off, getString(R.string.SendWithoutSound), () -> {
                 sentFromPreview = System.currentTimeMillis();

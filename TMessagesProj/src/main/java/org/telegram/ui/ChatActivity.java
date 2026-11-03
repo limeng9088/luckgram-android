@@ -1249,6 +1249,70 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_VIEW_REPLIES_OR_THREAD = 27;
     public final static int OPTION_STATISTICS = 28;
     public final static int OPTION_TRANSLATE = 29;
+
+    /**
+     * Luckgram spec 01 A: the message whose text / caption gets translated in the bubble, or null when
+     * Telegram's own translation sheet applies (feature off, rich article, no text).
+     */
+    private MessageObject luckgramTranslateTarget(MessageObject message, MessageObject.GroupedMessages group) {
+        if (!org.telegram.luckgram.translatein.LuckgramTranslateIn.isEnabled() || message == null) {
+            return null;
+        }
+        if (org.telegram.luckgram.translatein.LuckgramTranslateIn.textOf(message) != null
+            || org.telegram.luckgram.translatein.LuckgramTranslateIn.voiceTextOf(message) != null) {
+            return message;
+        }
+        if (group != null) {
+            for (MessageObject m : group.messages) {
+                if (org.telegram.luckgram.translatein.LuckgramTranslateIn.textOf(m) != null) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Luckgram spec 01 A.1/A.2: long-press 「翻译」/「撤销翻译」 and the one-tap button. */
+    public void luckgramToggleTranslation(MessageObject target) {
+        if (target == null) {
+            return;
+        }
+        final org.telegram.luckgram.translatein.LuckgramTranslateIn.Done done = (ok, error) -> {
+            if (ok) {
+                luckgramRefreshMessage(target);
+            } else if (error != null) {
+                BulletinFactory.of(this).createSimpleBulletin(R.raw.error, error).show();
+            }
+        };
+        if (org.telegram.luckgram.translatein.LuckgramTranslateIn.voiceTextOf(target) != null) {
+            org.telegram.luckgram.translatein.LuckgramTranslateIn.toggleVoice(target, done);
+        } else {
+            org.telegram.luckgram.translatein.LuckgramTranslateIn.toggle(target, done);
+        }
+    }
+
+    private void luckgramRefreshMessage(MessageObject target) {
+        if (chatAdapter == null || chatListView == null) {
+            return;
+        }
+        final MessageObject.GroupedMessages group = target.getGroupId() != 0 ? groupedMessagesMap.get(target.getGroupId()) : null;
+        if (group != null) {
+            group.calculate();
+        }
+        for (int i = 0; i < chatListView.getChildCount(); i++) {
+            final View child = chatListView.getChildAt(i);
+            if (child instanceof ChatMessageCell) {
+                final ChatMessageCell c = (ChatMessageCell) child;
+                final MessageObject m = c.getMessageObject();
+                if (m == target || group != null && m != null && m.getGroupId() == target.getGroupId()) {
+                    final int position = chatListView.getChildAdapterPosition(child);
+                    if (position >= 0) {
+                        chatAdapter.notifyItemChanged(position);
+                    }
+                }
+            }
+        }
+    }
     /** Luckgram: "Ask AI" (feature 18). */
     public final static int OPTION_LUCKGRAM_ASK_AI = 0x4C47A1;
     public final static int OPTION_TRANSCRIBE = 30;
@@ -32159,7 +32223,17 @@ public class ChatActivity extends BaseFragment implements
                         }
                         processSelectedOption(options.get(i));
                     });
-                    if (option == OPTION_TRANSLATE) {
+                    if (option == OPTION_TRANSLATE && luckgramTranslateTarget(message, groupedMessages) != null) {
+                        // Luckgram spec 01 A.1: translate in the bubble (or undo), instead of Telegram's sheet
+                        final MessageObject target = luckgramTranslateTarget(message, groupedMessages);
+                        cell.setTextAndIcon(org.telegram.luckgram.translatein.TranslateInLogic.menuLabel(
+                            org.telegram.luckgram.translatein.LuckgramTranslateIn.isTranslated(target) || org.telegram.luckgram.translatein.LuckgramTranslateIn.isVoiceTranslated(target),
+                            org.telegram.luckgram.LuckgramStrings.isChinese()), R.drawable.msg_translate);
+                        cell.setOnClickListener(e -> {
+                            closeMenu();
+                            luckgramToggleTranslation(target);
+                        });
+                    } else if (option == OPTION_TRANSLATE) {
                         final boolean translateEnabled = getMessagesController().getTranslateController().isContextTranslateEnabled();
                         String toLangDefault = LocaleController.getInstance().getCurrentLocale().getLanguage();
                         String toLang = TranslateAlert2.getToLanguage();
@@ -37159,6 +37233,13 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void didPressMessageUrl(CharacterStyle url, boolean longPress, MessageObject messageObject, ChatMessageCell cell) {
+        if (url instanceof org.telegram.luckgram.translatein.LuckgramTranslateIn.TranslateLinkSpan) {
+            // Luckgram spec 01 B.1: 「翻译」 under a voice transcription
+            if (!longPress) {
+                luckgramToggleTranslation(messageObject);
+            }
+            return;
+        }
         if (url == null || getParentActivity() == null) {
             return;
         }
@@ -38340,6 +38421,8 @@ public class ChatActivity extends BaseFragment implements
                     //}
 
                     messageCell.setShowTopic(true);
+                    // Luckgram spec 01 A.5: a message translated earlier shows its translation again
+                    org.telegram.luckgram.translatein.LuckgramTranslateIn.restore(message);
                     messageCell.setMessageObject(message, groupedMessages, pinnedBottom, pinnedTop, firstInChat, lastInChatList);
                     messageCell.setSpoilersSuppressed(chatListView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE);
                     messageCell.setHighlighted(highlightMessageId != Integer.MAX_VALUE && message.getId() == highlightMessageId);
@@ -40202,6 +40285,12 @@ public class ChatActivity extends BaseFragment implements
         public void didPressSponsoredClose(ChatMessageCell cell) {
             selectedObject = cell.getMessageObject();
             hideAds();
+        }
+
+        @Override
+        public void luckgramDidPressTranslate(ChatMessageCell cell) {
+            final MessageObject m = cell.getMessageObject();
+            luckgramToggleTranslation(luckgramTranslateTarget(m, cell.getCurrentMessagesGroup()));
         }
 
         @Override
