@@ -37245,10 +37245,11 @@ public class ChatActivity extends BaseFragment implements
             // specs#93: tap 「英语 → 中文」 to pick another language; this message is translated again
             if (!longPress && messageObject != null) {
                 final boolean voice = ((org.telegram.luckgram.translatein.LuckgramTranslateIn.LanguageSpan) url).voice;
+                final MessageObject target = messageObject;
                 org.telegram.luckgram.translatein.LuckgramTranslateIn.pickTargetLanguage(this, lang ->
-                    org.telegram.luckgram.translatein.LuckgramTranslateIn.retranslate(messageObject, voice, (ok, error) -> {
+                    org.telegram.luckgram.translatein.LuckgramTranslateIn.retranslate(target, voice, (ok, error) -> {
                         if (ok) {
-                            luckgramRefreshMessage(messageObject);
+                            luckgramRefreshMessage(target);
                         } else if (error != null) {
                             BulletinFactory.of(this).createSimpleBulletin(R.raw.error, error).show();
                         }
