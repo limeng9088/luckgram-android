@@ -303,7 +303,8 @@ public final class LuckgramBackup {
                 account.wipe();
                 continue;
             }
-            int slot = freeSlot(preferredSlot, usedSlots);
+            // Luckgram 32: restore stays within the free / Pro account limit
+            int slot = LuckgramAccounts.activatedCount() + usedSlots.size() < LuckgramAccounts.maxAccounts() ? freeSlot(preferredSlot, usedSlots) : -1;
             if (slot < 0) {
                 result.noRoom++;
                 account.wipe();

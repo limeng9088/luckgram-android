@@ -18,7 +18,7 @@ import javax.crypto.spec.GCMParameterSpec;
  * Keeps the device token encrypted with a non-exportable AES key in the Android Keystore.
  * Only the ciphertext is written to SharedPreferences. Keystore entries are removed on uninstall.
  */
-final class LuckgramSecureStore {
+public final class LuckgramSecureStore {
 
     private static final String KEYSTORE = "AndroidKeyStore";
     private static final String ALIAS = "luckgram_device_token_key";
@@ -45,7 +45,7 @@ final class LuckgramSecureStore {
         return gen.generateKey();
     }
 
-    static synchronized String get(String prefKey) {
+    public static synchronized String get(String prefKey) {
         String stored = LuckgramSettings.prefs().getString(prefKey, null);
         if (stored == null) {
             return null;
@@ -67,7 +67,7 @@ final class LuckgramSecureStore {
         }
     }
 
-    static synchronized void set(String prefKey, String value) {
+    public static synchronized void set(String prefKey, String value) {
         if (value == null) {
             LuckgramSettings.prefs().edit().remove(prefKey).apply();
             return;

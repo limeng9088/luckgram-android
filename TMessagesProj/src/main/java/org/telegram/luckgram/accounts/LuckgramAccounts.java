@@ -4,6 +4,13 @@ import android.text.TextUtils;
 import android.widget.Toast;
 
 import org.telegram.luckgram.LuckgramSettings;
+import org.telegram.luckgram.account.AccountLimit;
+import org.telegram.luckgram.account.LuckgramProActivity;
+import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.R;
+import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.ui.LoginActivity;
 import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
@@ -32,8 +39,11 @@ public final class LuckgramAccounts {
     private LuckgramAccounts() {
     }
 
-    /** Maximum number of accounts logged in at the same time (spec 09: 20). */
-    public static final int MAX_ACCOUNTS = 20;
+    /**
+     * Account slots compiled into the app (UserConfig.MAX_ACCOUNT_COUNT, tgnet Defines.h). The
+     * number of accounts a user may log in is {@link #maxAccounts()} (32: 20 free / 50 Pro).
+     */
+    public static final int MAX_ACCOUNTS = AccountLimit.SLOT_CAPACITY;
     /** The settings account list shows this many accounts before it collapses. */
     public static final int COLLAPSED_COUNT = 5;
     /** Accounts that keep the background (push) connection; the rest are woken by push. */
@@ -46,8 +56,55 @@ public final class LuckgramAccounts {
 
     // ---------------------------------------------------------------- strings
 
+    // ---------------------------------------------------------------- limit (32)
+
+    /** Pro status for the account limit. Wired to 29's LuckgramPro. */
+    public static boolean isPro() {
+        return false;
+    }
+
+    private static long remoteMaxFree() {
+        return LuckgramSettings.remoteLong(AccountLimit.KEY_MAX_FREE, AccountLimit.DEFAULT_MAX_FREE);
+    }
+
+    private static long remoteMaxPro() {
+        return LuckgramSettings.remoteLong(AccountLimit.KEY_MAX_PRO, AccountLimit.DEFAULT_MAX_PRO);
+    }
+
+    /** How many accounts this user may have logged in at once (free 20 / Pro 50, remote config). */
+    public static int maxAccounts() {
+        return AccountLimit.limit(isPro(), remoteMaxFree(), remoteMaxPro());
+    }
+
+    public static boolean canAddAccount() {
+        return AccountLimit.canAdd(activatedCount(), maxAccounts());
+    }
+
+    /** First unused slot when another account may be added, else -1. */
+    public static int freeSlotForNewAccount() {
+        if (!canAddAccount()) {
+            return -1;
+        }
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (!UserConfig.getInstance(a).isClientActivated()) {
+                return a;
+            }
+        }
+        return -1;
+    }
+
     public static String limitReachedText() {
-        return LuckgramStrings.get("最多可登录 " + MAX_ACCOUNTS + " 个账号", "You can log in to at most " + MAX_ACCOUNTS + " accounts");
+        int max = maxAccounts();
+        String text = LuckgramStrings.get("最多可登录 " + max + " 个账号", "You can log in to at most " + max + " accounts");
+        if (AccountLimit.offerUpgrade(isPro(), remoteMaxFree(), remoteMaxPro())) {
+            int pro = AccountLimit.maxPro(remoteMaxFree(), remoteMaxPro());
+            text += LuckgramStrings.get("。升级 Pro 可登录 " + pro + " 个账号", ". Upgrade to Pro to log in to " + pro + " accounts");
+        }
+        return text;
+    }
+
+    public static String upgradeText() {
+        return LuckgramStrings.get("查看 Pro", "View Pro");
     }
 
     public static String showAllText(int count) {
@@ -100,6 +157,38 @@ public final class LuckgramAccounts {
             Toast.makeText(ApplicationLoader.applicationContext, limitReachedText(), Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
             FileLog.e(e);
+        }
+    }
+
+    /** At the limit: free users get the upgrade entry (29), Pro users the plain message. */
+    public static void showLimitReached(BaseFragment fragment) {
+        if (fragment == null || fragment.getParentActivity() == null) {
+            showLimitReached();
+            return;
+        }
+        if (!AccountLimit.offerUpgrade(isPro(), remoteMaxFree(), remoteMaxPro())) {
+            showLimitReached();
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(fragment.getParentActivity(), fragment.getResourceProvider());
+        builder.setMessage(limitReachedText());
+        builder.setPositiveButton(upgradeText(), (d, w) -> openUpgrade(fragment));
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        fragment.showDialog(builder.create());
+    }
+
+    /** 29's upgrade entry. */
+    public static void openUpgrade(BaseFragment fragment) {
+        fragment.presentFragment(new LuckgramProActivity());
+    }
+
+    /** "Add account": opens login in a free slot, or explains the limit. */
+    public static void addAccount(BaseFragment fragment) {
+        int slot = freeSlotForNewAccount();
+        if (slot >= 0) {
+            fragment.presentFragment(new LoginActivity(slot));
+        } else {
+            showLimitReached(fragment);
         }
     }
 

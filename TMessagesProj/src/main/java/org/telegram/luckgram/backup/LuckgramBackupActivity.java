@@ -4,6 +4,7 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
@@ -16,6 +17,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.telegram.luckgram.LuckgramAI;
+import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.luckgram.accounts.LuckgramAccounts;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
@@ -26,6 +29,7 @@ import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Cells.CheckBoxCell;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
@@ -49,6 +53,21 @@ public class LuckgramBackupActivity extends UniversalFragment {
     private static final int ID_EXPORT = 1;
     private static final int ID_RESTORE = 2;
     private static final int REQUEST_PICK_FILE = 8410;
+    // Luckgram 32: cloud backup (Pro)
+    private static final int ID_CLOUD_PRO = 10;
+    private static final int ID_CLOUD_UPLOAD = 11;
+    private static final int ID_CLOUD_RESTORE = 12;
+    private static final int ID_CLOUD_DELETE = 13;
+    private static final int ID_CLOUD_AUTO = 14;
+
+    private static final int CLOUD_LOADING = 0;
+    private static final int CLOUD_NONE = 1;
+    private static final int CLOUD_READY = 2;
+    private static final int CLOUD_ERROR = 3;
+    private int cloudState = CLOUD_LOADING;
+    private CloudBackupLogic.Meta cloudMeta;
+    private String cloudError;
+    private boolean cloudRequested;
 
     /** Wrong-password back-off, shared by every restore in this process: 1, 2, 4… seconds. */
     private static int failedAttempts;
@@ -89,6 +108,68 @@ public class LuckgramBackupActivity extends UniversalFragment {
         }
         items.add(UItem.asButton(ID_RESTORE, R.drawable.msg_download, LuckgramBackup.restoreText()).accent());
         items.add(UItem.asShadow(LuckgramBackup.infoText()));
+        fillCloudItems(items);
+    }
+
+    /** Luckgram 32: "Cloud backup" section. Free users see one row that opens the Pro upgrade. */
+    private void fillCloudItems(ArrayList<UItem> items) {
+        items.add(UItem.asHeader(CloudBackup.headerText()));
+        if (fromLogin) {
+            items.add(UItem.asButton(ID_CLOUD_RESTORE, R.drawable.msg_download, CloudBackup.restoreText()).accent());
+            items.add(UItem.asShadow(CloudBackup.anyLoggedInAccount() >= 0 ? CloudBackup.cloudWarningText() : CloudBackup.needAccountText()));
+            return;
+        }
+        if (!LuckgramAccounts.isPro()) {
+            items.add(UItem.asButton(ID_CLOUD_PRO, R.drawable.msg_settings_premium, CloudBackup.uploadText(), "Pro"));
+            items.add(UItem.asShadow(CloudBackup.proOnlyText() + "\n\n" + CloudBackup.cloudWarningText()));
+            return;
+        }
+        if (!cloudRequested) {
+            cloudRequested = true;
+            loadCloud();
+        }
+        items.add(UItem.asButton(ID_CLOUD_UPLOAD, R.drawable.msg_archive, CloudBackup.uploadText()).accent());
+        if (cloudState == CLOUD_READY) {
+            items.add(UItem.asButton(ID_CLOUD_RESTORE, R.drawable.msg_download, CloudBackup.restoreText()).accent());
+            items.add(UItem.asButton(ID_CLOUD_DELETE, R.drawable.msg_delete, CloudBackup.deleteText()).red());
+        }
+        items.add(UItem.asSwitch(ID_CLOUD_AUTO, CloudBackup.autoText()).setChecked(CloudBackup.isAutoEnabled()));
+        String status;
+        if (cloudState == CLOUD_READY && cloudMeta != null) {
+            status = CloudBackup.statusText(cloudMeta);
+        } else if (cloudState == CLOUD_NONE) {
+            status = CloudBackup.noneText();
+        } else if (cloudState == CLOUD_ERROR) {
+            status = cloudError;
+        } else {
+            status = CloudBackup.loadingText();
+        }
+        items.add(UItem.asShadow(status + "\n\n" + CloudBackup.autoInfoText() + "\n\n" + CloudBackup.cloudWarningText()));
+    }
+
+    private void loadCloud() {
+        cloudState = CLOUD_LOADING;
+        CloudBackup.fetch(currentAccount, new LuckgramAI.Callback<CloudBackupLogic.Meta>() {
+            @Override
+            public void onResult(CloudBackupLogic.Meta result) {
+                cloudMeta = result;
+                cloudState = result != null ? CLOUD_READY : CLOUD_NONE;
+                updateList();
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                cloudError = CloudBackup.errorText(error);
+                cloudState = CLOUD_ERROR;
+                updateList();
+            }
+        });
+    }
+
+    private void updateList() {
+        if (listView != null && listView.adapter != null) {
+            listView.adapter.update(true);
+        }
     }
 
     @Override
@@ -113,6 +194,127 @@ public class LuckgramBackupActivity extends UniversalFragment {
             askNewPassword(accounts);
         } else if (item.id == ID_RESTORE) {
             pickFile();
+        } else if (item.id == ID_CLOUD_PRO) {
+            LuckgramAccounts.openUpgrade(this);
+        } else if (item.id == ID_CLOUD_UPLOAD) {
+            askNewPassword(null);
+        } else if (item.id == ID_CLOUD_RESTORE) {
+            restoreFromCloud();
+        } else if (item.id == ID_CLOUD_DELETE) {
+            confirmDeleteCloud();
+        } else if (item.id == ID_CLOUD_AUTO) {
+            if (CloudBackup.isAutoEnabled()) {
+                CloudBackup.setAuto(null);
+                updateList();
+            } else {
+                askNewPassword(null, true);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- cloud (32)
+
+    private AlertDialog showProgress() {
+        Activity activity = getParentActivity();
+        if (activity == null) {
+            return null;
+        }
+        AlertDialog progress = new AlertDialog(activity, AlertDialog.ALERT_TYPE_SPINNER);
+        progress.setCanCancel(false);
+        progress.show();
+        return progress;
+    }
+
+    private static void dismiss(AlertDialog dialog) {
+        if (dialog != null) {
+            dialog.dismiss();
+        }
+    }
+
+    /** Encrypts on this device and uploads only the ciphertext. {@code remember}: keep the password for the weekly backup. */
+    private void runCloudUpload(String password, boolean remember) {
+        AlertDialog progress = showProgress();
+        CloudBackup.upload(currentAccount, password, new LuckgramAI.Callback<CloudBackupLogic.Meta>() {
+            @Override
+            public void onResult(CloudBackupLogic.Meta result) {
+                dismiss(progress);
+                if (remember) {
+                    CloudBackup.setAuto(password);
+                }
+                CloudBackup.markUploaded();
+                cloudMeta = result;
+                cloudState = CLOUD_READY;
+                toast(CloudBackup.uploadedText());
+                updateList();
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                dismiss(progress);
+                toast(CloudBackup.errorText(error));
+            }
+        });
+    }
+
+    private void restoreFromCloud() {
+        int account = fromLogin ? CloudBackup.anyLoggedInAccount() : currentAccount;
+        if (account < 0) {
+            toast(CloudBackup.needAccountText());
+            return;
+        }
+        AlertDialog progress = showProgress();
+        CloudBackup.download(account, new LuckgramAI.Callback<byte[]>() {
+            @Override
+            public void onResult(byte[] file) {
+                dismiss(progress);
+                if (file == null) {
+                    toast(CloudBackup.noneText());
+                    return;
+                }
+                askPassword(file);
+            }
+
+            @Override
+            public void onError(LuckgramAIError error) {
+                dismiss(progress);
+                toast(CloudBackup.errorText(error));
+            }
+        });
+    }
+
+    private void confirmDeleteCloud() {
+        Context context = getParentActivity();
+        if (context == null) {
+            return;
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(context, getResourceProvider());
+        builder.setTitle(CloudBackup.deleteText());
+        builder.setMessage(CloudBackup.deleteConfirmText());
+        builder.setPositiveButton(LocaleController.getString(R.string.Delete), (d, w) -> {
+            AlertDialog progress = showProgress();
+            CloudBackup.delete(currentAccount, new LuckgramAI.Callback<Boolean>() {
+                @Override
+                public void onResult(Boolean result) {
+                    dismiss(progress);
+                    cloudMeta = null;
+                    cloudState = CLOUD_NONE;
+                    toast(CloudBackup.deletedText());
+                    updateList();
+                }
+
+                @Override
+                public void onError(LuckgramAIError error) {
+                    dismiss(progress);
+                    toast(CloudBackup.errorText(error));
+                }
+            });
+        });
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        AlertDialog dialog = builder.create();
+        showDialog(dialog);
+        TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (button != null) {
+            button.setTextColor(Theme.getColor(Theme.key_text_RedBold, getResourceProvider()));
         }
     }
 
@@ -131,6 +333,15 @@ public class LuckgramBackupActivity extends UniversalFragment {
     // ---------------------------------------------------------------- export
 
     private void askNewPassword(ArrayList<Integer> accounts) {
+        askNewPassword(accounts, false);
+    }
+
+    /**
+     * Two password fields. {@code accounts == null}: cloud upload (32), with the "remember on this
+     * device" box; {@code rememberOnly}: turning on the weekly backup, which needs the box.
+     */
+    private void askNewPassword(ArrayList<Integer> accounts, boolean rememberOnly) {
+        final boolean cloud = accounts == null;
         Context context = getParentActivity();
         if (context == null) {
             return;
@@ -139,7 +350,7 @@ public class LuckgramBackupActivity extends UniversalFragment {
         container.setOrientation(LinearLayout.VERTICAL);
 
         TextView warning = new TextView(context);
-        warning.setText(LuckgramBackup.warningText());
+        warning.setText(cloud ? LuckgramBackup.warningText() + "\n\n" + CloudBackup.cloudWarningText() : LuckgramBackup.warningText());
         warning.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         warning.setTextColor(Theme.getColor(Theme.key_text_RedBold, getResourceProvider()));
         container.addView(warning, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 24, 4, 24, 8));
@@ -148,11 +359,21 @@ public class LuckgramBackupActivity extends UniversalFragment {
         EditTextBoldCursor second = passwordField(context, LuckgramBackup.passwordRepeatHintText());
         container.addView(first, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 6, 20, 6));
         container.addView(second, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 6, 20, 6));
+        final CheckBoxCell remember;
+        if (cloud) {
+            remember = new CheckBoxCell(context, CheckBoxCell.TYPE_CHECK_BOX_DEFAULT, getResourceProvider());
+            remember.setBackground(Theme.getSelectorDrawable(false));
+            remember.setText(CloudBackup.rememberText(), "", rememberOnly || CloudBackup.isAutoEnabled(), false);
+            remember.setOnClickListener(v -> remember.setChecked(!remember.isChecked(), true));
+            container.addView(remember, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 8, 4, 8, 0));
+        } else {
+            remember = null;
+        }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(context, getResourceProvider());
         builder.setTitle(LuckgramBackup.passwordTitleText());
         builder.setView(container);
-        builder.setPositiveButton(LuckgramBackup.exportText(), (d, w) -> {
+        builder.setPositiveButton(cloud ? CloudBackup.uploadText() : LuckgramBackup.exportText(), (d, w) -> {
             String password = first.getText().toString();
             if (password.length() < LuckgramBackupFormat.MIN_PASSWORD_LENGTH) {
                 AndroidUtilities.shakeView(first);
@@ -164,10 +385,22 @@ public class LuckgramBackupActivity extends UniversalFragment {
                 toast(LuckgramBackup.passwordMismatchText());
                 return;
             }
+            boolean keep = remember != null && remember.isChecked();
+            if (rememberOnly && !keep) {
+                AndroidUtilities.shakeView(remember);
+                return;
+            }
             d.dismiss();
             first.setText("");
             second.setText("");
-            runExport(accounts, password);
+            if (cloud) {
+                if (!keep && CloudBackup.isAutoEnabled()) {
+                    CloudBackup.setAuto(null);
+                }
+                runCloudUpload(password, keep);
+            } else {
+                runExport(accounts, password);
+            }
         });
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), (d, w) -> d.dismiss());
         AlertDialog dialog = builder.create();
