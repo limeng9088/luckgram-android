@@ -168,10 +168,17 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         menu.addItem(MENU_NEW, R.drawable.msg_add).setContentDescription(LuckgramStrings.get("新对话", "New chat"));
         menu.addItem(MENU_HISTORY, R.drawable.msg_recent).setContentDescription(LuckgramStrings.get("历史对话", "Chat history"));
 
+        // specs#96: this view starts below the action bar (no overlay), so the wallpaper must not
+        // skip an action bar + status bar height at its top (that left a white block).
         SizeNotifierFrameLayout content = new SizeNotifierFrameLayout(context) {
             @Override
             protected boolean isActionBarVisible() {
-                return true;
+                return false;
+            }
+
+            @Override
+            protected boolean isStatusBarVisible() {
+                return false;
             }
         };
         content.setBackgroundImage(Theme.getCachedWallpaper(), Theme.isWallpaperMotion());
@@ -184,7 +191,7 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         // extension point 3: entries at the top of the page
         HorizontalScrollView headerScroll = new HorizontalScrollView(context);
         headerScroll.setHorizontalScrollBarEnabled(false);
-        headerScroll.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundWhite));
+        // specs#96: no panel of its own — the chips float on the wallpaper like the quick buttons
         headerStrip = new LinearLayout(context);
         headerStrip.setOrientation(LinearLayout.HORIZONTAL);
         headerStrip.setPadding(dp(8), dp(6), dp(8), dp(6));
@@ -232,6 +239,13 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
             quickRow.addView(chip(context, action.title(), action.icon, v -> action.callback.run(this)));
         }
         column.addView(quickScroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        // specs#96: the same top shadow as Telegram's message panel (ChatActivityEnterView)
+        View composeShadow = new View(context);
+        android.graphics.drawable.Drawable shadow = context.getResources().getDrawable(R.drawable.compose_panel_shadow).mutate();
+        shadow.setColorFilter(new android.graphics.PorterDuffColorFilter(getThemedColor(Theme.key_chat_messagePanelShadow), android.graphics.PorterDuff.Mode.SRC_IN));
+        composeShadow.setBackground(shadow);
+        column.addView(composeShadow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 3));
 
         FrameLayout inputPanel = new FrameLayout(context);
         inputPanel.setBackgroundColor(getThemedColor(Theme.key_chat_messagePanelBackground));
