@@ -1277,6 +1277,14 @@ public class ChatActivity extends BaseFragment implements
         if (target == null) {
             return;
         }
+        final boolean voice = org.telegram.luckgram.translatein.LuckgramTranslateIn.voiceTextOf(target) != null;
+        final boolean translated = voice ? org.telegram.luckgram.translatein.LuckgramTranslateIn.isVoiceTranslated(target)
+            : org.telegram.luckgram.translatein.LuckgramTranslateIn.isTranslated(target);
+        if (!translated && !org.telegram.luckgram.translatein.LuckgramTranslateIn.hasTargetLanguage()) {
+            // specs#93: the first translation asks for the language, then translates this message
+            org.telegram.luckgram.translatein.LuckgramTranslateIn.pickTargetLanguage(this, lang -> luckgramToggleTranslation(target));
+            return;
+        }
         final org.telegram.luckgram.translatein.LuckgramTranslateIn.Done done = (ok, error) -> {
             if (ok) {
                 luckgramRefreshMessage(target);
@@ -37233,6 +37241,21 @@ public class ChatActivity extends BaseFragment implements
     }
 
     private void didPressMessageUrl(CharacterStyle url, boolean longPress, MessageObject messageObject, ChatMessageCell cell) {
+        if (url instanceof org.telegram.luckgram.translatein.LuckgramTranslateIn.LanguageSpan) {
+            // specs#93: tap 「英语 → 中文」 to pick another language; this message is translated again
+            if (!longPress && messageObject != null) {
+                final boolean voice = ((org.telegram.luckgram.translatein.LuckgramTranslateIn.LanguageSpan) url).voice;
+                org.telegram.luckgram.translatein.LuckgramTranslateIn.pickTargetLanguage(this, lang ->
+                    org.telegram.luckgram.translatein.LuckgramTranslateIn.retranslate(messageObject, voice, (ok, error) -> {
+                        if (ok) {
+                            luckgramRefreshMessage(messageObject);
+                        } else if (error != null) {
+                            BulletinFactory.of(this).createSimpleBulletin(R.raw.error, error).show();
+                        }
+                    }));
+            }
+            return;
+        }
         if (url instanceof org.telegram.luckgram.translatein.LuckgramTranslateIn.TranslateLinkSpan) {
             // Luckgram spec 01 B.1: 「翻译」 under a voice transcription
             if (!longPress) {

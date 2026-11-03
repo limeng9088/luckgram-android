@@ -50,11 +50,12 @@ public class TranslateInLogicTest {
     }
 
     @Test
-    public void targetLanguageDefaultsToAppLanguage() {
-        assertEquals("es", TranslateInLogic.targetLanguage("es", "zh"));
-        assertEquals("zh", TranslateInLogic.targetLanguage("", "zh"));
-        assertEquals("zh", TranslateInLogic.targetLanguage(null, "zh"));
-        assertEquals("en", TranslateInLogic.targetLanguage(null, null));
+    public void targetLanguageIsOnlyTheUsersChoice() {
+        // specs#93: never defaults to the app / system language
+        assertEquals("es", TranslateInLogic.targetLanguage("es"));
+        assertEquals("ja", TranslateInLogic.targetLanguage(" ja "));
+        org.junit.Assert.assertNull(TranslateInLogic.targetLanguage(""));
+        org.junit.Assert.assertNull(TranslateInLogic.targetLanguage(null));
     }
 
     @Test

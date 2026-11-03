@@ -70,15 +70,15 @@ public final class TranslateInLogic {
         return !isExcluded(b, doNotTranslate);
     }
 
-    /** The target language: the user's choice, otherwise the app language, otherwise English. */
-    public static String targetLanguage(String chosen, String appLanguage) {
+    /**
+     * The target language the user chose, or null when they have not chosen yet (specs#93: no
+     * default from the app / system language; the first translation asks).
+     */
+    public static String targetLanguage(String chosen) {
         if (chosen != null && !chosen.trim().isEmpty()) {
             return chosen.trim();
         }
-        if (appLanguage != null && !appLanguage.trim().isEmpty()) {
-            return appLanguage.trim();
-        }
-        return "en";
+        return null;
     }
 
     /** spec 01 A.1: 「已翻译 · 英语 → 中文」 above the separator; without a known source just the target. */
