@@ -41,8 +41,9 @@ public class TranslateInSettingsActivity extends UniversalFragment {
 
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
+        final String to = LuckgramTranslateIn.targetLanguage();
         items.add(UItem.asButton(ID_TO_LANG, s("翻译成", "Translate to"),
-            TranslateOutController.languageName(TranslateInLogic.base(LuckgramTranslateIn.targetLanguage()))));
+            to == null ? s("未选择（第一次翻译时选）", "Not set (asked the first time)") : TranslateOutController.languageName(TranslateInLogic.base(to))));
         items.add(UItem.asButton(ID_DO_NOT_TRANSLATE, s("不翻译的语言", "Do not translate"), LuckgramTranslateIn.doNotTranslateSummary()));
         items.add(UItem.asShadow(s(
             "长按消息选「翻译」，或点消息旁的翻译图标，译文显示在原文下方。「不翻译的语言」的消息不显示翻译图标，长按仍可翻译。",

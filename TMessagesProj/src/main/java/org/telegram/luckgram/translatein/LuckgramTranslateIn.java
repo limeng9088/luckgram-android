@@ -75,10 +75,71 @@ public final class LuckgramTranslateIn {
         return LuckgramSettings.isEnabled(TranslateInLogic.FEATURE_KEY);
     }
 
-    /** spec 01 A.4: 「翻译成」, default the app language. */
+    /** spec 01 A.4 / specs#93: 「翻译成」 as the user chose it, or null before the first choice. */
     public static String targetLanguage() {
-        return TranslateInLogic.targetLanguage(LuckgramSettings.getString(TranslateInLogic.KEY_TO_LANG, ""),
-            LocaleController.getInstance().getCurrentLocale().getLanguage());
+        return TranslateInLogic.targetLanguage(LuckgramSettings.getString(TranslateInLogic.KEY_TO_LANG, ""));
+    }
+
+    public static boolean hasTargetLanguage() {
+        return targetLanguage() != null;
+    }
+
+    /**
+     * specs#93: the language list (common first, searchable). The choice is saved as the default for
+     * every chat, then {@code then} runs with it.
+     */
+    public static void pickTargetLanguage(org.telegram.ui.ActionBar.BaseFragment fragment, Callback then) {
+        if (fragment == null || fragment.getParentActivity() == null) {
+            return;
+        }
+        new org.telegram.luckgram.translateout.TranslateOutLanguageSheet(fragment.getParentActivity(), fragment.getCurrentAccount(),
+            TranslateInLogic.base(targetLanguage()), fragment.getResourceProvider(), code -> {
+                setTargetLanguage(code);
+                if (then != null) {
+                    then.run(code);
+                }
+            }).show();
+    }
+
+    public interface Callback {
+        void run(String lang);
+    }
+
+    /** specs#93: the header 「英语 → 中文」 of a translation; tapping it changes the language. */
+    public static final class LanguageSpan extends android.text.style.ClickableSpan {
+        public final boolean voice;
+
+        LanguageSpan(boolean voice) {
+            this.voice = voice;
+        }
+
+        @Override
+        public void onClick(@NonNull android.view.View widget) {
+        }
+
+        @Override
+        public void updateDrawState(@NonNull android.text.TextPaint ds) {
+            ds.setUnderlineText(false);
+        }
+    }
+
+    /** specs#93: translate this message again into the (new) target language. */
+    public static void retranslate(MessageObject msg, boolean voice, Done done) {
+        if (voice) {
+            final String text = voiceTextOf(msg);
+            if (text != null && isVoiceTranslated(msg)) {
+                forgetKey("v" + stateKey(msg, text));
+                msg.luckgramVoiceTranslationBlock = null;
+            }
+            toggleVoice(msg, done);
+        } else {
+            final String text = textOf(msg);
+            if (text != null && isTranslated(msg)) {
+                forget(msg, text);
+                msg.luckgramSetTranslation(null);
+            }
+            toggle(msg, done);
+        }
     }
 
     public static void setTargetLanguage(String lang) {
@@ -174,6 +235,10 @@ public final class LuckgramTranslateIn {
             return;
         }
         final String toLang = targetLanguage();
+        if (toLang == null) {
+            done.run(false, null); // specs#93: ChatActivity asks first
+            return;
+        }
         translate(msg.currentAccount, TranslateFallbackLogic.SOURCE_MESSAGE, text, toLang, (translated, fromLang, error) -> {
             if (translated == null) {
                 done.run(false, LuckgramTranslate.failureMessage(error));
@@ -187,7 +252,7 @@ public final class LuckgramTranslateIn {
                 from = null;
             }
             remember(msg, text, translated, from, toLang);
-            msg.luckgramSetTranslation(buildBlock(msg, translated, from, toLang));
+            msg.luckgramSetTranslation(buildBlock(msg, translated, from, toLang, false));
             done.run(true, null);
         });
     }
@@ -210,7 +275,7 @@ public final class LuckgramTranslateIn {
             return;
         }
         final String[] langs = TranslateInLogic.decodeLanguages(e.fromLang);
-        msg.luckgramSetTranslation(buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage()));
+        msg.luckgramSetTranslation(buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage(), false));
     }
 
     // ---------------------------------------------------------------- voice transcriptions (spec 01 B)
@@ -325,6 +390,10 @@ public final class LuckgramTranslateIn {
             return;
         }
         final String toLang = targetLanguage();
+        if (toLang == null) {
+            done.run(false, null); // specs#93: ChatActivity asks first
+            return;
+        }
         translate(msg.currentAccount, TranslateFallbackLogic.SOURCE_VOICE, text, toLang, (translated, fromLang, error) -> {
             if (translated == null) {
                 done.run(false, LuckgramTranslate.failureMessage(error));
@@ -336,7 +405,7 @@ public final class LuckgramTranslateIn {
             }
             state().put(key, translated, TranslateInLogic.encodeLanguages(from, toLang), System.currentTimeMillis());
             scheduleSave();
-            msg.luckgramVoiceTranslationBlock = buildBlock(msg, translated, from, toLang);
+            msg.luckgramVoiceTranslationBlock = buildBlock(msg, translated, from, toLang, true);
             refreshVoice(msg);
             done.run(true, null);
         });
@@ -352,7 +421,7 @@ public final class LuckgramTranslateIn {
             return;
         }
         final String[] langs = TranslateInLogic.decodeLanguages(e.fromLang);
-        msg.luckgramVoiceTranslationBlock = buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage());
+        msg.luckgramVoiceTranslationBlock = buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage(), true);
     }
 
     // ---------------------------------------------------------------- translation service
@@ -427,7 +496,7 @@ public final class LuckgramTranslateIn {
     // ---------------------------------------------------------------- rendering
 
     /** The part appended to the bubble text: header, thin line, translation (spec 01 A.1). */
-    public static CharSequence buildBlock(MessageObject msg, String translation, String fromLang, String toLang) {
+    public static CharSequence buildBlock(MessageObject msg, String translation, String fromLang, String toLang, boolean voice) {
         final boolean out = msg.isOutOwner();
         final int color = Theme.getColor(out ? Theme.key_chat_outTimeText : Theme.key_chat_inTimeText);
         final String fromName = fromLang == null ? null : TranslateOutController.languageName(TranslateInLogic.base(fromLang));
@@ -438,6 +507,7 @@ public final class LuckgramTranslateIn {
         sb.append(header);
         sb.setSpan(new RelativeSizeSpan(0.8f), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         sb.setSpan(new ForegroundColorSpan(color), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new LanguageSpan(voice), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); // specs#93
         sb.append('\n');
         start = sb.length();
         sb.append(' ');

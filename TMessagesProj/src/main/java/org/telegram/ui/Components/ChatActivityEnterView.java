@@ -6202,6 +6202,11 @@ public class ChatActivityEnterView extends FrameLayout implements
             doTranslateOut(source, lang);
             return;
         }
+        if (TextUtils.isEmpty(TranslateOutController.getSavedLanguage(currentAccount, dialog_id))) {
+            // specs#93: first use in this chat asks for the language (saved for the chat), no English default
+            showTranslateOutLanguages();
+            return;
+        }
         setTranslateOutBusy(true);
         TranslateOutController.resolveLanguage(currentAccount, dialog_id, parentFragment.messages, resolved -> {
             setTranslateOutBusy(false);
