@@ -11,6 +11,12 @@ public final class LuckgramAIError {
     public static final String INPUT_TOO_LARGE = "input_too_large";
     public static final String INVALID_REQUEST = "invalid_request";
     public static final String INVALID_TOKEN = "invalid_token";
+    /** S12 / S13: needs Luckgram Pro (e.g. a Pro-only market agent). */
+    public static final String NOT_PRO = "not_pro";
+    /** S12: no AI credits left for a premium request. */
+    public static final String CREDITS_EXHAUSTED = "credits_exhausted";
+    /** S13: the market agent was taken down. */
+    public static final String AGENT_UNAVAILABLE = "agent_unavailable";
     // Codes produced by the client itself
     public static final String NETWORK_ERROR = "network_error";
     /** The user declined (or has not given) consent; nothing was sent. */

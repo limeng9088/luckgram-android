@@ -14,7 +14,8 @@ import java.util.UUID;
  * <p>Extension point "conversation properties" (spec 18 需求 8): {@link #task} and
  * {@link #systemPrompt} are sent with every request of this conversation; {@link #key} lets a
  * feature find its own conversation again (e.g. one per agent, spec 22) through
- * {@link LuckgramAiStore#findOrCreate}.
+ * {@link LuckgramAiStore#findOrCreate}. {@link #requestParams} adds fields to every request
+ * (e.g. {@code agent_id} of a market agent, spec 30).
  */
 public final class LuckgramAiConversation {
 
@@ -29,6 +30,8 @@ public final class LuckgramAiConversation {
     public String task = LuckgramAI.TASK_CHAT;
     /** Extra system instruction sent first with every request, or null. */
     public String systemPrompt;
+    /** Extra top-level fields of every /v1/ai/chat request of this conversation, or null (spec 30: {@code agent_id}). */
+    public JSONObject requestParams;
     public long createdAt;
     public long updatedAt;
     public final ArrayList<Message> messages = new ArrayList<>();
@@ -148,6 +151,7 @@ public final class LuckgramAiConversation {
         if (key != null) o.put("key", key);
         if (title != null) o.put("title", title);
         if (systemPrompt != null) o.put("system", systemPrompt);
+        if (requestParams != null && requestParams.length() > 0) o.put("params", requestParams);
         JSONArray arr = new JSONArray();
         for (Message m : messages) {
             if (!m.pending) {
@@ -165,6 +169,7 @@ public final class LuckgramAiConversation {
         c.title = o.has("title") ? o.optString("title") : null;
         c.task = o.optString("task", LuckgramAI.TASK_CHAT);
         c.systemPrompt = o.has("system") ? o.optString("system") : null;
+        c.requestParams = o.optJSONObject("params");
         c.createdAt = o.optLong("created");
         c.updatedAt = o.optLong("updated", c.createdAt);
         JSONArray arr = o.optJSONArray("messages");

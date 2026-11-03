@@ -404,7 +404,7 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         notifyInserted();
         streaming = reply;
         updateSendButton();
-        request = LuckgramAI.getInstance().chat(getParentActivity(), conv.task, messages, true, new LuckgramAI.ChatListener() {
+        request = LuckgramAI.getInstance().chat(getParentActivity(), conv.task, null, conv.requestParams, messages, true, new LuckgramAI.ChatListener() {
             @Override
             public void onDelta(String delta, String text) {
                 if (streaming != reply) return;
