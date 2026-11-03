@@ -79,6 +79,9 @@ public final class LuckgramFeatures {
             .hiddenWhen(org.telegram.luckgram.doublebottom.LuckgramDoubleBottom::isActive));
 
         // ---- 消息与语言 / Messages & Language
+        add(toggle(org.telegram.luckgram.compactinput.LuckgramCompactInput.FEATURE_KEY, MESSAGES_LANGUAGE, true,
+            "精简输入栏", "Compact input bar",
+            "输入栏只留表情、语音和「+」，附件和 Luckgram 功能都在「+」面板里", "Keep only emoji, voice and \"+\" in the input bar; attachments and Luckgram tools live in the \"+\" panel"));
         add(toggle(org.telegram.luckgram.selectall.SelectAllFromSender.SETTING_KEY, MESSAGES_LANGUAGE, true,
             "全选某人的消息", "Select all from sender",
             "长按消息一次选中这个人在本聊天的全部消息", "Long-press a message to select everything its sender wrote here"));

@@ -443,6 +443,8 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     private final static int POPUP_CONTENT_EMOJI_KEYBOARD = 0;
     private final static int POPUP_CONTENT_BOT_KEYBOARD = 1;
+    /** Luckgram specs#94: the 「+」 grid panel. */
+    private final static int POPUP_CONTENT_LUCKGRAM_PLUS = 2;
 
     private int currentAccount = UserConfig.selectedAccount;
     private AccountInstance accountInstance = AccountInstance.getInstance(UserConfig.selectedAccount);
@@ -2854,9 +2856,14 @@ public class ChatActivityEnterView extends FrameLayout implements
                 if (adjustPanLayoutHelper != null && adjustPanLayoutHelper.animationInProgress() || attachLayoutPaddingAlpha == 0f) {
                     return;
                 }
+                if (isLuckgramPlusMode()) {
+                    toggleLuckgramPlusPanel();
+                    return;
+                }
                 delegate.didPressAttachButton();
             });
             attachButton.setContentDescription(getString(R.string.AccDescrAttachButton));
+            updateLuckgramAttachIcon();
             updateFieldRight(1);
         }
 
@@ -4484,7 +4491,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             } catch (Exception ignore) {}
             if (hasBotWebView()) {
                 if (open) {
-                    if (emojiViewVisible || botKeyboardViewVisible) {
+                    if (emojiViewVisible || botKeyboardViewVisible || luckgramPlusVisible) {
                         AndroidUtilities.runOnUIThread(this::openWebViewMenu, 275);
                         hidePopup(false);
                         return;
@@ -6151,7 +6158,8 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (translateOutButton == null) {
             return;
         }
-        final boolean show = shouldShowTranslateOut();
+        // Luckgram specs#94: in the compact bar translate lives in the 「+」 panel and the send button's menu
+        final boolean show = shouldShowTranslateOut() && !isLuckgramPlusMode();
         if (show == translateOutShown) {
             return;
         }
@@ -6356,8 +6364,9 @@ public class ChatActivityEnterView extends FrameLayout implements
         boolean hasText = messageEditText != null && messageEditText.length() > 0;
         // Empty field: the attachLayout button ("Help me reply"). With text attachLayout is hidden,
         // so the ✦ moves next to the send button (spec 21 §1).
-        boolean show = c != null && !hasText && c.shouldShowButton();
-        updateAiWritingTextButton(c != null && hasText && c.shouldShowButton());
+        final boolean compact = isLuckgramPlusMode(); // Luckgram specs#94: ✦ moves into the 「+」 panel
+        boolean show = c != null && !hasText && c.shouldShowButton() && !compact;
+        updateAiWritingTextButton(c != null && hasText && c.shouldShowButton() && !compact);
         final int visibility = show ? VISIBLE : GONE;
         if (aiWritingButton.getVisibility() != visibility) {
             aiWritingButton.setVisibility(visibility);
@@ -6387,7 +6396,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         dictationButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector)));
         dictationButton.setContentDescription(org.telegram.luckgram.LuckgramStrings.get("语音输入", "Voice input"));
         dictationButton.setOnClickListener(v -> startDictation());
-        dictationButton.setVisibility(isDictationEnabled() ? VISIBLE : GONE);
+        dictationButton.setVisibility(isDictationEnabled() && !isLuckgramPlusMode() ? VISIBLE : GONE);
         attachLayout.addView(dictationButton, LayoutHelper.createLinear(DEFAULT_HEIGHT, DEFAULT_HEIGHT));
     }
 
@@ -6395,7 +6404,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (dictationButton == null) {
             return;
         }
-        final int visibility = isDictationEnabled() ? VISIBLE : GONE;
+        final int visibility = isDictationEnabled() && !isLuckgramPlusMode() ? VISIBLE : GONE;
         if (dictationButton.getVisibility() != visibility) {
             dictationButton.setVisibility(visibility);
             if (scheduledButton != null) {
@@ -6451,7 +6460,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         quickRepliesButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector)));
         quickRepliesButton.setContentDescription(QuickRepliesStrings.title());
         quickRepliesButton.setOnClickListener(v -> showQuickReplies());
-        quickRepliesButton.setVisibility(QuickRepliesStore.isEnabled() ? VISIBLE : GONE);
+        quickRepliesButton.setVisibility(QuickRepliesStore.isEnabled() && !isLuckgramPlusMode() ? VISIBLE : GONE);
         attachLayout.addView(quickRepliesButton, LayoutHelper.createLinear(DEFAULT_HEIGHT, DEFAULT_HEIGHT));
     }
 
@@ -6459,7 +6468,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (quickRepliesButton == null) {
             return;
         }
-        final int visibility = QuickRepliesStore.isEnabled() ? VISIBLE : GONE;
+        final int visibility = QuickRepliesStore.isEnabled() && !isLuckgramPlusMode() ? VISIBLE : GONE;
         if (quickRepliesButton.getVisibility() != visibility) {
             quickRepliesButton.setVisibility(visibility);
             if (scheduledButton != null) {
@@ -6531,6 +6540,174 @@ public class ChatActivityEnterView extends FrameLayout implements
             params.suggestionParams = getSendMessageSuggestionParams();
             SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
         });
+    }
+
+    // ------------------------------------------------------------ Luckgram: WeChat-style input bar (specs#94)
+
+    private static final int PLUS_GALLERY = 1;
+    private static final int PLUS_CAMERA = 2;
+    private static final int PLUS_FILE = 3;
+    private static final int PLUS_LOCATION = 4;
+    private static final int PLUS_CONTACT = 5;
+    private static final int PLUS_POLL = 6;
+    private static final int PLUS_QUICK_REPLIES = 7;
+    private static final int PLUS_DICTATION = 8;
+    private static final int PLUS_AI_WRITING = 9;
+    private static final int PLUS_TRANSLATE = 10;
+
+    private org.telegram.luckgram.compactinput.LuckgramPlusPanel luckgramPlusPanel;
+    private boolean luckgramPlusVisible;
+    private Boolean luckgramAttachIsPlus;
+
+    /** The paperclip is the 「+」 and the Luckgram buttons live in its panel. Only in a real chat, not while editing. */
+    private boolean isLuckgramPlusMode() {
+        return parentFragment != null && !isStories && editingMessageObject == null
+            && org.telegram.luckgram.compactinput.LuckgramCompactInput.isEnabled();
+    }
+
+    private void updateLuckgramAttachIcon() {
+        if (attachButton == null) {
+            return;
+        }
+        final boolean plus = isLuckgramPlusMode();
+        if (luckgramAttachIsPlus == null || luckgramAttachIsPlus != plus) {
+            luckgramAttachIsPlus = plus;
+            attachButton.setImageResource(plus ? R.drawable.luckgram_header_plus : R.drawable.msg_input_attach2);
+            attachButton.setContentDescription(plus ? org.telegram.luckgram.LuckgramStrings.get("更多功能", "More") : getString(R.string.AccDescrAttachButton));
+        }
+    }
+
+    private void createLuckgramPlusPanel() {
+        if (luckgramPlusPanel != null) {
+            return;
+        }
+        luckgramPlusPanel = new org.telegram.luckgram.compactinput.LuckgramPlusPanel(getContext(), resourcesProvider, item -> onLuckgramPlusItem(item.id, item.dimmed)) {
+            @Override
+            public void setTranslationY(float translationY) {
+                super.setTranslationY(translationY);
+                if (panelAnimation != null && animatingContentType == POPUP_CONTENT_LUCKGRAM_PLUS && delegate != null) {
+                    delegate.bottomPanelTranslationYChanged(translationY);
+                }
+            }
+        };
+        luckgramPlusPanel.setVisibility(GONE);
+        luckgramPlusVisible = false;
+        if (windowInsetsInAppController == null) {
+            viewParentForEmojiView.addView(luckgramPlusPanel);
+        } else {
+            viewParentForEmojiView.addView(luckgramPlusPanel, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        }
+    }
+
+    private void toggleLuckgramPlusPanel() {
+        if (isPopupShowing() && currentPopupContentType == POPUP_CONTENT_LUCKGRAM_PLUS) {
+            // second tap: back to the keyboard (specs#94 需求 2)
+            openKeyboardInternal();
+            return;
+        }
+        if (parentFragment != null && !TextUtils.isEmpty(getSlowModeTimer())) {
+            delegate.didPressAttachButton(); // shows Telegram's slow mode hint
+            return;
+        }
+        if (searchingType != 0) {
+            setSearchingTypeInternal(0, false);
+            if (emojiView != null) {
+                emojiView.closeSearch(false);
+            }
+        }
+        showPopup(1, POPUP_CONTENT_LUCKGRAM_PLUS);
+    }
+
+    private ArrayList<org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item> buildLuckgramPlusItems() {
+        final ArrayList<org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item> items = new ArrayList<>();
+        final TLRPC.Chat chat = parentFragment != null ? parentFragment.getCurrentChat() : null;
+        final TLRPC.User user = parentFragment != null ? parentFragment.getCurrentUser() : null;
+        final boolean media = chat == null || ChatObject.canSendPhoto(chat) || ChatObject.canSendVideo(chat);
+        final boolean documents = chat == null || ChatObject.canSendDocument(chat);
+        final boolean plain = chat == null || ChatObject.canSendPlain(chat);
+        items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_GALLERY, R.drawable.msg_photos, org.telegram.luckgram.LuckgramStrings.get("相册", "Gallery"), !media));
+        items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_CAMERA, R.drawable.msg_camera, org.telegram.luckgram.LuckgramStrings.get("拍摄", "Camera"), !media));
+        items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_FILE, R.drawable.msg_sendfile, org.telegram.luckgram.LuckgramStrings.get("文件", "File"), !documents));
+        items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_LOCATION, R.drawable.msg_location, org.telegram.luckgram.LuckgramStrings.get("位置", "Location"), !plain));
+        items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_CONTACT, R.drawable.msg_contact, org.telegram.luckgram.LuckgramStrings.get("联系人", "Contact"), !plain));
+        // polls exist where Telegram's attach menu offers them: groups, channels, bots and Saved Messages
+        if (chat != null || user != null && (user.bot || UserObject.isUserSelf(user))) {
+            items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_POLL, R.drawable.msg_list, org.telegram.luckgram.LuckgramStrings.get("投票", "Poll"), chat != null && !ChatObject.canSendPolls(chat)));
+        }
+        if (quickRepliesButton != null && QuickRepliesStore.isEnabled()) {
+            items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_QUICK_REPLIES, R.drawable.menu_quickreply, QuickRepliesStrings.title(), false));
+        }
+        if (dictationButton != null && isDictationEnabled()) {
+            items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_DICTATION, R.drawable.luckgram_dictation, org.telegram.luckgram.LuckgramStrings.get("语音输入", "Voice input"), false));
+        }
+        if (aiWritingButton != null && org.telegram.luckgram.writing.AiWritingController.isEnabled()) {
+            items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_AI_WRITING, R.drawable.luckgram_ai, org.telegram.luckgram.LuckgramStrings.get("AI 写作", "AI writing"), false));
+        }
+        if (translateOutButton != null && parentFragment != null && !parentFragment.isSecretChat() && TranslateOutController.isEnabled()) {
+            items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_TRANSLATE, R.drawable.msg_translate, TranslateOutStrings.button(), false));
+        }
+        return items;
+    }
+
+    private void onLuckgramPlusItem(int id, boolean dimmed) {
+        if (parentFragment == null) {
+            return;
+        }
+        switch (id) {
+            case PLUS_GALLERY:
+            case PLUS_CAMERA:
+            case PLUS_FILE:
+            case PLUS_LOCATION:
+            case PLUS_CONTACT:
+            case PLUS_POLL: {
+                final int type;
+                if (id == PLUS_GALLERY) {
+                    type = ChatAttachAlert.LAYOUT_TYPE_PHOTO;
+                } else if (id == PLUS_CAMERA) {
+                    // no media rights: open the gallery tab, which shows Telegram's own restriction notice
+                    type = dimmed ? ChatAttachAlert.LAYOUT_TYPE_PHOTO : ChatAttachAlert.LUCKGRAM_LAYOUT_TYPE_CAMERA;
+                } else if (id == PLUS_FILE) {
+                    type = ChatAttachAlert.LAYOUT_TYPE_DOCUMENTS;
+                } else if (id == PLUS_LOCATION) {
+                    type = ChatAttachAlert.LAYOUT_TYPE_LOCATION;
+                } else if (id == PLUS_CONTACT) {
+                    type = ChatAttachAlert.LAYOUT_TYPE_CONTACTS;
+                } else {
+                    type = ChatAttachAlert.LAYOUT_TYPE_POLL;
+                }
+                hidePopup(false);
+                parentFragment.luckgramOpenAttachMenu(type);
+                break;
+            }
+            case PLUS_QUICK_REPLIES:
+                showQuickReplies();
+                break;
+            case PLUS_DICTATION:
+                hidePopup(false);
+                startDictation();
+                break;
+            case PLUS_AI_WRITING: {
+                org.telegram.luckgram.writing.AiWritingController c = getAiWritingController();
+                if (c == null) {
+                    break;
+                }
+                if (c.shouldShowButton()) {
+                    c.showMenu(attachButton != null ? attachButton : this);
+                } else {
+                    BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.info, org.telegram.luckgram.LuckgramStrings.get("先输入文字，再用 AI 写作润色", "Type something first, then use AI writing")).show();
+                    openKeyboardInternal();
+                }
+                break;
+            }
+            case PLUS_TRANSLATE:
+                // spec 01 translate-before-sending: with text, translate now; empty field, pick the language
+                if (messageEditText != null && !TextUtils.isEmpty(AndroidUtilities.getTrimmedString(messageEditText.getText()))) {
+                    translateOut(null);
+                } else {
+                    showTranslateOutLanguages();
+                }
+                break;
+        }
     }
 
     private boolean shownAiButton;
@@ -10421,6 +10598,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         boolean hadEditingMessage = editingMessageObject != null;
         editingMessageObject = messageObject;
         editingCaption = caption;
+        updateLuckgramAttachIcon(); // Luckgram specs#94: back to the paperclip while editing
         CharSequence textToSetWithKeyboard;
         if (editingMessageObject != null) {
             captionAbove = groupedMessages != null ? groupedMessages.captionAbove : messageObject.messageOwner.invert_media;
@@ -12288,7 +12466,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public boolean isPopupView(View view) {
-        return view == botKeyboardView || view == emojiView;
+        return view == botKeyboardView || view == emojiView || view != null && view == luckgramPlusPanel;
     }
 
     public int getPopupViewHeight(View view) {
@@ -13172,6 +13350,13 @@ public class ChatActivityEnterView extends FrameLayout implements
             boolean anotherPanelWasVisible = false;
             boolean samePannelWasVisible = false;
             int previousHeight = 0;
+            if (contentType != POPUP_CONTENT_LUCKGRAM_PLUS && luckgramPlusPanel != null && luckgramPlusPanel.getVisibility() != GONE) {
+                // Luckgram specs#94: switching from the 「+」 panel to another panel
+                anotherPanelWasVisible = true;
+                previousHeight = luckgramPlusPanel.getMeasuredHeight();
+                luckgramPlusPanel.setVisibility(GONE);
+                luckgramPlusVisible = false;
+            }
             if (contentType == POPUP_CONTENT_EMOJI_KEYBOARD) {
                 attachEmojiView();
                 samePannelWasVisible = emojiViewVisible && emojiView.getVisibility() == View.VISIBLE;
@@ -13201,6 +13386,28 @@ public class ChatActivityEnterView extends FrameLayout implements
                 currentView = botKeyboardView;
                 animatingContentType = POPUP_CONTENT_BOT_KEYBOARD;
                 MessagesController.getMainSettings(currentAccount).edit().remove("closed_botkeyboard_" + getTopicKeyString()).apply();
+            } else if (contentType == POPUP_CONTENT_LUCKGRAM_PLUS) {
+                createLuckgramPlusPanel();
+                samePannelWasVisible = luckgramPlusVisible && luckgramPlusPanel.getVisibility() == View.VISIBLE;
+                if (emojiView != null && emojiView.getVisibility() != GONE) {
+                    viewParentForEmojiView.removeView(emojiView);
+                    emojiView.setVisibility(GONE);
+                    emojiView.setShowing(false);
+                    emojiViewVisible = false;
+                    anotherPanelWasVisible = true;
+                    previousHeight = emojiView.getMeasuredHeight();
+                }
+                if (botKeyboardView != null && botKeyboardView.getVisibility() != GONE) {
+                    botKeyboardView.setVisibility(GONE);
+                    botKeyboardViewVisible = false;
+                    anotherPanelWasVisible = true;
+                    previousHeight = botKeyboardView.getMeasuredHeight();
+                }
+                luckgramPlusVisible = true;
+                luckgramPlusPanel.setItems(buildLuckgramPlusItems());
+                luckgramPlusPanel.setVisibility(VISIBLE);
+                currentView = luckgramPlusPanel;
+                animatingContentType = POPUP_CONTENT_LUCKGRAM_PLUS;
             }
             currentPopupContentType = contentType;
 
@@ -13392,6 +13599,57 @@ public class ChatActivityEnterView extends FrameLayout implements
                     }
                 }
                 botKeyboardViewVisible = false;
+            }
+            if (luckgramPlusPanel != null && luckgramPlusPanel.getVisibility() == View.VISIBLE) {
+                // Luckgram specs#94: slide the 「+」 panel out the same way as the bot keyboard
+                if (show != 2 || AndroidUtilities.usingHardwareInput || AndroidUtilities.isInMultiwindow) {
+                    if (smoothKeyboard && !keyboardVisible) {
+                        if (luckgramPlusVisible) {
+                            animatingContentType = POPUP_CONTENT_LUCKGRAM_PLUS;
+                        }
+                        final View plusView = luckgramPlusPanel;
+                        panelAnimation = new AnimatorSet();
+                        if (windowInsetsInAppController != null) {
+                            panelAnimation.playTogether(ObjectAnimator.ofFloat(plusView.getMeasuredHeight()));
+                        } else {
+                            panelAnimation.playTogether(ObjectAnimator.ofFloat(plusView, View.TRANSLATION_Y, plusView.getMeasuredHeight()));
+                        }
+                        panelAnimation.setInterpolator(AdjustPanLayoutHelper.keyboardInterpolator);
+                        panelAnimation.setDuration(AdjustPanLayoutHelper.keyboardDuration);
+                        panelAnimation.addListener(new AnimatorListenerAdapter() {
+                            @Override
+                            public void onAnimationEnd(Animator animation) {
+                                if (show == 0) {
+                                    emojiPadding = 0;
+                                }
+                                panelAnimation = null;
+                                plusView.setTranslationY(0);
+                                if (!luckgramPlusVisible) {
+                                    plusView.setVisibility(GONE);
+                                }
+                                notificationsLocker.unlock();
+                                if (delegate != null) {
+                                    delegate.bottomPanelTranslationYChanged(0);
+                                }
+                                requestLayout();
+                            }
+                        });
+                        notificationsLocker.lock();
+                        AndroidUtilities.runOnUIThread(runEmojiPanelAnimation, 50);
+                        requestLayout();
+                    } else {
+                        luckgramPlusPanel.setVisibility(GONE);
+                        if (show == 0 && emojiView == null) {
+                            emojiPadding = 0;
+                            if (delegate != null) {
+                                delegate.bottomPanelTranslationYChanged(0);
+                            }
+                        }
+                    }
+                } else if (!waitingForKeyboardOpen) {
+                    luckgramPlusPanel.setVisibility(GONE);
+                }
+                luckgramPlusVisible = false;
             }
             if (contentType == POPUP_CONTENT_BOT_KEYBOARD && botButtonsMessageObject != null) {
                 MessagesController.getMainSettings(currentAccount).edit().putInt("closed_botkeyboard_" + getTopicKeyString(), botButtonsMessageObject.getId()).apply();
@@ -13632,7 +13890,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public boolean isPopupShowing() {
-        return emojiViewVisible || botKeyboardViewVisible;
+        return emojiViewVisible || botKeyboardViewVisible || luckgramPlusVisible;
     }
 
     public boolean canHidePopupByBackButton() {
@@ -13717,6 +13975,8 @@ public class ChatActivityEnterView extends FrameLayout implements
                 currentView = emojiView;
             } else if (currentPopupContentType == POPUP_CONTENT_BOT_KEYBOARD) {
                 currentView = botKeyboardView;
+            } else if (currentPopupContentType == POPUP_CONTENT_LUCKGRAM_PLUS) {
+                currentView = luckgramPlusPanel;
             }
             if (botKeyboardView != null) {
                 botKeyboardView.setPanelHeight(newHeight);
@@ -13835,6 +14095,16 @@ public class ChatActivityEnterView extends FrameLayout implements
             // Luckgram: a switch changed locally or remotely (feature 00 / S4)
             updateTranslateOutButton();
             updateQuickRepliesButton();
+            updateDictationButton();
+            updateAiWritingButton();
+            updateLuckgramAttachIcon();
+            if (luckgramPlusVisible && luckgramPlusPanel != null) {
+                if (isLuckgramPlusMode()) {
+                    luckgramPlusPanel.setItems(buildLuckgramPlusItems());
+                } else {
+                    hidePopup(false);
+                }
+            }
             return;
         }
         if (id == NotificationCenter.emojiLoaded) {
