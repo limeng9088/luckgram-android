@@ -38,7 +38,7 @@ public final class ProUi {
         }
     }
 
-    private static final String[] ICONS = {"✦", "👥", "⚡", "☰", "文", "★", "⊘"};
+    private static final String[] ICONS = {"✦", "👥", "⚡", "☰", "⇄", "★", "⊘"};
     private static final int[] ICON_COLORS = {0xFF5E5CE6, 0xFF0A84FF, 0xFFFF9F0A, 0xFF30B0C7, 0xFF34C759, 0xFFFF375F, 0xFF8E8E93};
 
     public static ProPerks.Numbers numbers() {
