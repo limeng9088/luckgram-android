@@ -1535,6 +1535,25 @@ public class ChatAttachAlertPhotoLayout extends ChatAttachAlert.AttachAlertLayou
         openCameraByClick();
     }
 
+    /** Luckgram specs#94: 「+」 panel → 拍摄. The camera preview starts with the alert, so wait for it briefly. */
+    public void luckgramOpenCamera() {
+        luckgramOpenCamera(15);
+    }
+
+    private void luckgramOpenCamera(int attempts) {
+        if (parentAlert.isDismissed() || parentAlert.baseFragment == null || parentAlert.baseFragment.getParentActivity() == null) {
+            return;
+        }
+        final boolean permitted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M
+            || ContextCompat.checkSelfPermission(parentAlert.baseFragment.getParentActivity(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        final boolean ready = !SharedConfig.inappCamera || cameraView != null && cameraInitAnimation == null;
+        if (permitted && !ready && attempts > 0) {
+            AndroidUtilities.runOnUIThread(() -> luckgramOpenCamera(attempts - 1), 150);
+            return;
+        }
+        openCameraWithPermissionCheck();
+    }
+
     private void openCameraByClick() {
         if (SharedConfig.inappCamera) {
             openCamera(true);

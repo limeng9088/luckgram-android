@@ -205,6 +205,8 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
     public static final int LAYOUT_TYPE_LINK = 15;
     public static final int LAYOUT_TYPE_RICH = 16;
     public static final int LAYOUT_TYPE_MONEY = 17;
+    /** Luckgram specs#94: not a real tab — the 「+」 panel's 拍摄 opens the in-app camera of the gallery tab. */
+    public static final int LUCKGRAM_LAYOUT_TYPE_CAMERA = -1001;
 
     private static final int ANIMATOR_ID_CAPTION_ABOVE = 0;
     private static final int ANIMATOR_ID_CAPTION_VISIBLE = 1;
@@ -2768,7 +2770,7 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
         buttonsRecyclerView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         buttonsRecyclerViewWrapper.addView(buttonsRecyclerView, LayoutHelper.createFrameMatchParent());
         containerView.addView(buttonsRecyclerViewWrapper, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 70, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
-        buttonsRecyclerView.setOnItemClickListener((view, position) -> {
+        buttonsRecyclerView.setOnItemClickListener(luckgramTypeButtonClick = (view, position) -> {
             BaseFragment lastFragment = baseFragment;
             if (lastFragment == null) {
                 lastFragment = LaunchActivity.getLastFragment();
@@ -4519,6 +4521,30 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
 
     public void setButtonPressed(boolean pressed) {
         buttonPressed = pressed;
+    }
+
+    private RecyclerListView.OnItemClickListener luckgramTypeButtonClick;
+
+    /**
+     * Luckgram specs#94: open the alert straight on one tab (called right after it is shown), going
+     * through the same code as tapping that tab so permissions and restrictions behave the same.
+     */
+    public void luckgramOpenTab(int layoutType) {
+        if (layoutType == LAYOUT_TYPE_PHOTO) {
+            return;
+        }
+        if (layoutType == LUCKGRAM_LAYOUT_TYPE_CAMERA) {
+            if (photoLayout != null) {
+                photoLayout.luckgramOpenCamera();
+            }
+            return;
+        }
+        if (luckgramTypeButtonClick == null) {
+            return;
+        }
+        AttachButton button = new AttachButton(getContext());
+        button.setTag(layoutType);
+        luckgramTypeButtonClick.onItemClick(button, -1);
     }
 
     public void openAttachLayoutForType(int layoutType) {

@@ -13893,6 +13893,17 @@ public class ChatActivity extends BaseFragment implements
         showDialog(chatAttachAlert);
     }
 
+    /** Luckgram specs#94: the 「+」 panel opens the attach menu straight on one tab. */
+    public void luckgramOpenAttachMenu(int layoutType) {
+        if (chatAttachAlert != null) {
+            chatAttachAlert.setEditingMessageObject(0, null);
+        }
+        openAttachMenu();
+        if (chatAttachAlert != null && chatAttachAlert.isShowing() && layoutType != ChatAttachAlert.LAYOUT_TYPE_PHOTO) {
+            chatAttachAlert.luckgramOpenTab(layoutType);
+        }
+    }
+
     public void openAttachMenuForCreatingSticker() {
         ContentPreviewViewer.getInstance().setStickerSetForCustomSticker(null);
         if (getParentActivity() == null) {
