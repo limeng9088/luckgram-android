@@ -29,6 +29,11 @@ public final class LuckgramAiConversation {
     public String task = LuckgramAI.TASK_CHAT;
     /** Extra system instruction sent first with every request, or null. */
     public String systemPrompt;
+    /**
+     * {@code model_tier} sent with every request, or null for the standard model (spec 29: "premium",
+     * set by the model choice). Not saved: a reopened conversation starts on the standard model.
+     */
+    public transient String modelTier;
     public long createdAt;
     public long updatedAt;
     public final ArrayList<Message> messages = new ArrayList<>();

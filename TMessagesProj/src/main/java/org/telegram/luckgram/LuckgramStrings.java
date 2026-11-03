@@ -121,6 +121,10 @@ public final class LuckgramStrings {
                 return get("你没有同意使用 AI 服务。", "You didn't allow the AI service.");
             case LuckgramAIError.CANCELLED:
                 return get("已取消。", "Cancelled.");
+            case LuckgramAIError.NOT_PRO:
+                return get("这是 Pro 专享功能。", "This feature is for Pro members.");
+            case LuckgramAIError.CREDITS_EXHAUSTED:
+                return get("本月 AI 点数已用完。", "You've used all AI credits for this month.");
             case LuckgramAIError.UPSTREAM_UNAVAILABLE:
             default:
                 return get("AI 服务暂时不可用，请稍后再试。", "The AI service is temporarily unavailable. Please try again later.");

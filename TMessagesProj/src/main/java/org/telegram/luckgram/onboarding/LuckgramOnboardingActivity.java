@@ -109,9 +109,17 @@ public class LuckgramOnboardingActivity extends BaseFragment {
         questionView = text(context, 16, 0xFFFFFFFF);
         questionView.setTypeface(AndroidUtilities.bold());
         content.addView(questionView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 14, 20, 0));
-        content.addView(new View(context), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
+        // The card sits at the bottom; the Pro step's perk list (29) can be taller than the screen, so it scrolls.
+        android.widget.ScrollView cardScroll = new android.widget.ScrollView(context);
+        cardScroll.setFillViewport(true);
+        cardScroll.setVerticalScrollBarEnabled(false);
+        LinearLayout cardColumn = new LinearLayout(context);
+        cardColumn.setOrientation(LinearLayout.VERTICAL);
+        cardColumn.setGravity(Gravity.BOTTOM);
+        cardScroll.addView(cardColumn, new FrameLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         cardContainer = new FrameLayout(context);
-        content.addView(cardContainer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 12, 20, 0));
+        cardColumn.addView(cardContainer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 12, 20, 0));
+        content.addView(cardScroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
 
         primaryButton = text(context, 16, 0xFF000000);
         primaryButton.setTypeface(AndroidUtilities.bold());
@@ -159,7 +167,10 @@ public class LuckgramOnboardingActivity extends BaseFragment {
             bind(true);
         } else {
             LuckgramSettings.setBool(WelcomeLogic.ONBOARDED_KEY, true);
-            presentFragment(new LoginActivity(), true);
+            // 29 需求 7: "Continue without Pro" asks why once per device, then login
+            boolean survey = step == WelcomeLogic.Step.PRO && !primary
+                && org.telegram.luckgram.pro.ProPerks.shouldShowSurvey(true, LuckgramSettings.getBool(org.telegram.luckgram.pro.ProPerks.SURVEY_SHOWN_KEY, false));
+            presentFragment(survey ? new org.telegram.luckgram.pro.ProSkipSurveyActivity() : new LoginActivity(), true);
         }
     }
 
@@ -424,6 +435,14 @@ public class LuckgramOnboardingActivity extends BaseFragment {
             price.setText(texts.price(cheapestPlan.stars, cheapestPlan.days));
             p.addView(price, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 12));
         }
+        java.util.List<org.telegram.luckgram.pro.ProPerks.Row> live = org.telegram.luckgram.pro.ProUi.liveRows();
+        if (!live.isEmpty()) {
+            // 29 需求 2: the live perks; the generic rows below only while none are known
+            p.addView(org.telegram.luckgram.pro.ProUi.perksView(c, live,
+                new org.telegram.luckgram.pro.ProUi.Colors(CARD, 0xFFFFFFFF, SECONDARY_TEXT, 0xFF000000, 0xFFFFD60A)));
+            addProFootnote(c, p);
+            return p;
+        }
         String[][] features = texts.proFeatures();
         String[] icons = {"✦", "⇄", "⭐"};
         int[] colors = {0xFF5E5CE6, 0xFF0A84FF, 0xFFFF9F0A};
@@ -449,6 +468,11 @@ public class LuckgramOnboardingActivity extends BaseFragment {
             row.addView(col, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f));
             p.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, i == 0 ? 0 : 8, 0, 0));
         }
+        addProFootnote(c, p);
+        return p;
+    }
+
+    private void addProFootnote(Context c, LinearLayout p) {
         if (WelcomeLogic.canSubscribe(WelcomeLogic.Step.PRO, billingEnabled)) {
             // "Pay after logging in" only when buying is possible, not under "Coming soon".
             TextView note = text(c, 12, SECONDARY_TEXT);
@@ -456,7 +480,6 @@ public class LuckgramOnboardingActivity extends BaseFragment {
             note.setGravity(Gravity.CENTER);
             p.addView(note, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
         }
-        return p;
     }
 
     @Override

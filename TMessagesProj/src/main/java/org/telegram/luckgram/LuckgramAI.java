@@ -661,6 +661,11 @@ public final class LuckgramAI {
      *               grammar, dictation} (server prompts/writing-*.md), or null for the default.
      */
     public Request chat(Context context, String task, String effect, List<Message> messages, boolean stream, ChatListener listener) {
+        return chat(context, task, effect, null, messages, stream, listener);
+    }
+
+    /** @param modelTier {@code model_tier} (spec 29 / S12: "premium" costs 1 AI credit), or null for the standard model. */
+    public Request chat(Context context, String task, String effect, String modelTier, List<Message> messages, boolean stream, ChatListener listener) {
         Request req = new Request();
         req.feature = task;
         int chars = 0;
@@ -674,6 +679,9 @@ public final class LuckgramAI {
             body.put("task", task).put("messages", arr).put("stream", stream);
             if (effect != null && TASK_WRITING.equals(task)) {
                 body.put("effect", effect);
+            }
+            if (modelTier != null) {
+                body.put("model_tier", modelTier);
             }
         } catch (Exception e) {
             deliverError(listener::onError, new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));

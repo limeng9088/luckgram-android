@@ -18,7 +18,7 @@ import java.util.List;
  */
 public final class ProState {
 
-    // pro.perks values (S12); a perk missing from the list hides its row and feature.
+    // pro.perks values (S12); a perk missing from the list hides its row on the subscription page.
     public static final String PERK_AGENT_MARKET = "agent_market";
     public static final String PERK_ACCOUNTS = "accounts";
     public static final String PERK_AI = "ai";

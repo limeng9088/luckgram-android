@@ -78,6 +78,7 @@ jobs:
             diag/LuckgramEndpoints.java \
             account/AccountLogic.java \
             pro/ProState.java \
+            pro/ProPerks.java \
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
             update/VersionLine.java \

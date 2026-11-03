@@ -404,7 +404,8 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         notifyInserted();
         streaming = reply;
         updateSendButton();
-        request = LuckgramAI.getInstance().chat(getParentActivity(), conv.task, messages, true, new LuckgramAI.ChatListener() {
+        final String tier = conv.modelTier;
+        request = LuckgramAI.getInstance().chat(getParentActivity(), conv.task, null, tier, messages, true, new LuckgramAI.ChatListener() {
             @Override
             public void onDelta(String delta, String text) {
                 if (streaming != reply) return;
@@ -419,12 +420,14 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
                 if (streaming != reply) return;
                 reply.text = text;
                 finishReply(conv, reply, null);
+                if (tier != null) org.telegram.luckgram.pro.ProModelChoice.onPremiumReply();
             }
 
             @Override
             public void onError(LuckgramAIError error) {
                 if (streaming != reply) return;
                 finishReply(conv, reply, error);
+                org.telegram.luckgram.pro.ProModelChoice.onError(LuckgramAiChatActivity.this, conv, error); // spec 29
             }
         });
     }

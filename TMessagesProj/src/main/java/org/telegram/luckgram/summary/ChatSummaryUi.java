@@ -47,8 +47,18 @@ public final class ChatSummaryUi {
 
     /** spec 19 需求 1: the bar shows from this many unread messages. */
     public static final int BAR_MIN_UNREAD = 30;
-    /** Largest range offered (spec 19 需求 1); also caps "unread". */
-    static final int MAX_RANGE = 500;
+    private static boolean pro() {
+        return org.telegram.luckgram.pro.LuckgramPro.isPro();
+    }
+
+    /** spec 29 需求 5: "unread" covers up to the Pro limit for Pro users, else the free 100. */
+    private int unreadCap() {
+        long now = System.currentTimeMillis();
+        return org.telegram.luckgram.pro.ProPerks.summaryUnreadCap(unread, pro(),
+            org.telegram.luckgram.pro.LuckgramPro.getInstance().state().summaryMaxMessages(now));
+    }
+
+    private final org.telegram.luckgram.pro.ProPerks.Texts proTexts = new org.telegram.luckgram.pro.ProPerks.Texts(LuckgramStrings.isChinese());
 
     public static boolean isEnabled() {
         return LuckgramSettings.isEnabled(LuckgramFeatures.AI_SUMMARY);
@@ -112,7 +122,7 @@ public final class ChatSummaryUi {
             bar.setTypeface(AndroidUtilities.bold());
             bar.setTextColor(color(Theme.key_chat_topPanelTitle));
             bar.setBackground(Theme.getSelectorDrawable(false));
-            bar.setOnClickListener(v -> start(Math.min(unread, MAX_RANGE), rangeLabelUnread()));
+            bar.setOnClickListener(v -> start(unreadCap(), rangeLabelUnread()));
             panel.addView(bar, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 36));
         }
         bar.setText(LuckgramStrings.get(unread + " 条未读消息 · 总结", unread + " unread messages · Summarize"));
@@ -130,19 +140,40 @@ public final class ChatSummaryUi {
         ArrayList<CharSequence> items = new ArrayList<>();
         ArrayList<Integer> counts = new ArrayList<>();
         ArrayList<String> labels = new ArrayList<>();
+        boolean pro = pro();
+        String badge = " · " + proTexts.proOnlyBadge();
         if (unread > 0) {
-            items.add(LuckgramStrings.get("未读（" + Math.min(unread, MAX_RANGE) + " 条）", "Unread (" + Math.min(unread, MAX_RANGE) + ")"));
-            counts.add(Math.min(unread, MAX_RANGE));
+            // spec 29 需求 5: free users get unread up to 100; "all unread" beyond that is Pro-only
+            int n = unreadCap();
+            boolean all = unread > org.telegram.luckgram.pro.ProPerks.SUMMARY_FREE_MAX;
+            if (!all) {
+                items.add(LuckgramStrings.get("未读（" + n + " 条）", "Unread (" + n + ")"));
+                counts.add(n);
+            } else if (pro) {
+                items.add(proTexts.allUnread(n));
+                counts.add(n);
+            } else {
+                items.add(proTexts.allUnread(unread) + badge);
+                counts.add(unread); // > 100: opens the upgrade sheet
+            }
             labels.add(rangeLabelUnread());
         }
         for (int n : new int[]{100, 300, 500}) {
-            items.add(LuckgramStrings.get("最近 " + n + " 条", "Last " + n));
+            String label = LuckgramStrings.get("最近 " + n + " 条", "Last " + n);
+            items.add(org.telegram.luckgram.pro.ProPerks.summaryNeedsPro(n, pro) ? label + badge : label);
             counts.add(n);
-            labels.add(LuckgramStrings.get("最近 " + n + " 条", "Last " + n));
+            labels.add(label);
         }
         AlertDialog.Builder b = new AlertDialog.Builder(context(), fragment.getResourceProvider());
         b.setTitle(LuckgramStrings.get("总结聊天", "Summarize chat"));
-        b.setItems(items.toArray(new CharSequence[0]), (d, which) -> start(counts.get(which), labels.get(which)));
+        b.setItems(items.toArray(new CharSequence[0]), (d, which) -> {
+            int count = counts.get(which);
+            if (org.telegram.luckgram.pro.ProPerks.summaryNeedsPro(count, pro())) {
+                org.telegram.luckgram.pro.LuckgramUpgradeSheet.show(fragment, org.telegram.luckgram.pro.ProPerks.Reason.SUMMARY_RANGE);
+                return;
+            }
+            start(count, labels.get(which));
+        });
         fragment.showDialog(b.create());
     }
 
@@ -209,7 +240,7 @@ public final class ChatSummaryUi {
         questionField.setTextColor(color(Theme.key_chat_topPanelTitle));
         questionField.setHintTextColor(color(Theme.key_chat_messagePanelHint));
         questionField.setCursorColor(color(Theme.key_chat_topPanelTitle));
-        questionField.setHint(LuckgramStrings.get("问这些消息…", "Ask about these messages…"));
+        questionField.setHint(pro() ? LuckgramStrings.get("问这些消息…", "Ask about these messages…") : proTexts.followUpHintFree());
         questionField.setSingleLine(true);
         questionField.setImeOptions(EditorInfo.IME_ACTION_SEND | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         questionField.setOnEditorActionListener((v, actionId, event) -> {
@@ -334,6 +365,7 @@ public final class ChatSummaryUi {
             close();
             return;
         }
+        org.telegram.luckgram.pro.LuckgramUpgradeSheet.handle(fragment, error); // spec 29 需求 6
         setStatus(error.getLocalizedMessage() + LuckgramStrings.get(" 点此重试", " Tap to retry"), retryAction);
     }
 
@@ -341,6 +373,11 @@ public final class ChatSummaryUi {
         String q = questionField.getText().toString().trim();
         final ChatSummaryController c = controller;
         if (q.isEmpty() || c == null || busy) return;
+        if (!pro()) {
+            // spec 29 需求 5: follow-up questions are Pro-only
+            org.telegram.luckgram.pro.LuckgramUpgradeSheet.show(fragment, org.telegram.luckgram.pro.ProPerks.Reason.FOLLOW_UP);
+            return;
+        }
         questionField.setText("");
         busy = true;
         if (qaText.length() > 0) qaText.append("\n\n");
@@ -366,6 +403,7 @@ public final class ChatSummaryUi {
             public void onError(LuckgramAIError error) {
                 if (c != controller) return;
                 busy = false;
+                org.telegram.luckgram.pro.LuckgramUpgradeSheet.handle(fragment, error);
                 qaText.replace(answerStart, qaText.length(), error.getLocalizedMessage());
                 qaView.setText(qaText);
             }
