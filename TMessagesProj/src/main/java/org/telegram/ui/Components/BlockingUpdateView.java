@@ -63,13 +63,12 @@ public class BlockingUpdateView extends FrameLayout implements NotificationCente
         FrameLayout view = new FrameLayout(context);
         addView(view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, AndroidUtilities.dp(176) + (Build.VERSION.SDK_INT >= 21 ? AndroidUtilities.statusBarHeight : 0)));
 
-        RLottieImageView imageView = new RLottieImageView(context);
-        imageView.setAnimation(R.raw.qr_code_logo, 108, 108);
-        imageView.playAnimation();
-        imageView.getAnimatedDrawable().setAutoRepeat(1);
-        imageView.setScaleType(ImageView.ScaleType.CENTER);
+        // Luckgram: static own logo instead of Telegram's animated plane (#95)
+        ImageView imageView = new ImageView(context);
+        imageView.setImageResource(R.drawable.luckgram_qr_logo);
+        imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         imageView.setPadding(0, 0, 0, AndroidUtilities.dp(14));
-        view.addView(imageView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, top, 0, 0));
+        view.addView(imageView, LayoutHelper.createFrame(108, 108 + 14, Gravity.CENTER, 0, top, 0, 0));
         imageView.setOnClickListener(v -> {
             pressCount++;
             if (pressCount >= 10) {

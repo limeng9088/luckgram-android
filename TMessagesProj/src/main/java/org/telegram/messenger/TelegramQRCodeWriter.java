@@ -19,6 +19,7 @@ package org.telegram.messenger;
 import static org.telegram.messenger.AndroidUtilities.readRes;
 
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -194,9 +195,12 @@ public final class TelegramQRCodeWriter {
       centerDrawable.setBounds(imageX, imageX, imageX + imageSize, imageX + imageSize);
       centerDrawable.draw(canvas);
     } else {
-      Bitmap icon = SvgHelper.getBitmap(readRes(R.raw.qr_logo), imageSize, imageSize, false);
-      canvas.drawBitmap(icon, imageX, imageX, null);
-      icon.recycle();
+      // Luckgram: own logo instead of Telegram's plane (#95)
+      Bitmap icon = BitmapFactory.decodeResource(ApplicationLoader.applicationContext.getResources(), R.drawable.luckgram_qr_logo);
+      if (icon != null) {
+        canvas.drawBitmap(icon, null, new RectF(imageX, imageX, imageX + imageSize, imageX + imageSize), new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG));
+        icon.recycle();
+      }
     }
 
     canvas.setBitmap(null);

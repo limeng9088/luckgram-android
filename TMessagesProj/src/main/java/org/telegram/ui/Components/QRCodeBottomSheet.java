@@ -165,6 +165,11 @@ public class QRCodeBottomSheet extends BottomSheet {
     }
 
     public void setCenterAnimation(int resId) {
+        if (resId == R.raw.qr_code_logo) {
+            // Luckgram: static own logo instead of Telegram's animated plane (#95)
+            iconImage.setImageResource(R.drawable.luckgram_qr_logo);
+            return;
+        }
         iconImage.setAutoRepeat(true);
         iconImage.setAnimation(resId, 60, 60);
         iconImage.playAnimation();

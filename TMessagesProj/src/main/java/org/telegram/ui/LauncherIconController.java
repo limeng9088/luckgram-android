@@ -9,13 +9,17 @@ import org.telegram.messenger.R;
 
 public class LauncherIconController {
     public static void tryFixLauncherIconIfNeeded() {
+        // Luckgram: only the default icon exists (the picker is hidden, #95); switch back
+        // anyone who still has one of Telegram's alternate launcher aliases enabled.
+        boolean fine = isEnabled(LauncherIcon.DEFAULT);
         for (LauncherIcon icon : LauncherIcon.values()) {
-            if (isEnabled(icon)) {
-                return;
+            if (icon != LauncherIcon.DEFAULT && isEnabled(icon)) {
+                fine = false;
             }
         }
-
-        setIcon(LauncherIcon.DEFAULT);
+        if (!fine) {
+            setIcon(LauncherIcon.DEFAULT);
+        }
     }
 
     public static boolean isEnabled(LauncherIcon icon) {

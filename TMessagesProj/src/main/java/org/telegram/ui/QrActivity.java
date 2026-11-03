@@ -369,10 +369,12 @@ public class QrActivity extends BaseFragment {
         });
         rootLayout.addView(qrView);
 
+        // Luckgram: static own logo instead of Telegram's animated plane (#95); the shared
+        // image draws the same bitmap (logoOptimal) into the logo rect.
         logoImageView = new RLottieImageView(context);
-        logoImageView.setAutoRepeat(true);
-        logoImageView.setAnimation(R.raw.plane_logo_plain, 60, 60);
-        logoImageView.playAnimation();
+        logoImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        logoImageView.setImageResource(R.drawable.luckgram_qr_logo);
+        logoOptimal = BitmapFactory.decodeResource(context.getResources(), R.drawable.luckgram_qr_logo);
         rootLayout.addView(logoImageView);
 
         avatarImageView = new BackupImageView(context);

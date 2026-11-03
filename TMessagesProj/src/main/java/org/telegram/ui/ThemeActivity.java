@@ -671,9 +671,7 @@ public class ThemeActivity extends BaseFragment implements NotificationCenter.No
             chatListRow = rowCount++;
             chatListInfoRow = rowCount++;
 
-            appIconHeaderRow = rowCount++;
-            appIconSelectorRow = rowCount++;
-            appIconShadowRow = rowCount++;
+            // Luckgram: one app icon only; Telegram's alternate icons are not offered (#95).
 
             swipeGestureHeaderRow = rowCount++;
             swipeGestureRow = rowCount++;
