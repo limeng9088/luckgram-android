@@ -59,6 +59,8 @@ public final class LuckgramAI {
     public static final String TASK_WRITING = "writing";
     public static final String TASK_AGENT = "agent";
     public static final String TASK_POST = "post";
+    /** spec 01: translation when Telegram's fails; the request carries {@code to_lang}. */
+    public static final String TASK_TRANSLATE = "translate";
 
     private static final String KEY_CONSENT = "ai_consent";
     private static final String KEY_TOKEN = "_device_token";
@@ -111,6 +113,13 @@ public final class LuckgramAI {
         public String mimeType;
         /** When the temporary link expires (ISO 8601, from the server), or null. */
         public String expiresAt;
+    }
+
+    /** spec 01: result of {@link #translate}. */
+    public static final class Translation {
+        public String text;
+        /** Source language detected by the server (ISO 639-1), or null. */
+        public String fromLang;
     }
 
     public static final class Transcription {
@@ -690,6 +699,49 @@ public final class LuckgramAI {
                     String text = j.optString("text", j.optString("content", ""));
                     AndroidUtilities.runOnUIThread(() -> listener.onComplete(text));
                 }
+            }
+        });
+        return req;
+    }
+
+    /**
+     * spec 01: translates {@code text} into {@code toLang} (ISO 639-1, e.g. {@code en}, {@code zh},
+     * {@code zh-Hant}) via {@code /v1/ai/chat} task=translate. Counts against the translation quota.
+     */
+    public Request translate(Context context, String text, String toLang, String fromLang, Callback<Translation> callback) {
+        Request req = new Request();
+        req.feature = TASK_TRANSLATE;
+        JSONObject body = new JSONObject();
+        try {
+            body.put("task", TASK_TRANSLATE).put("to_lang", toLang).put("stream", false)
+                .put("messages", new JSONArray().put(new JSONObject().put("role", "user").put("content", text == null ? "" : text)));
+            if (fromLang != null) {
+                body.put("from_lang", fromLang);
+            }
+        } catch (Exception e) {
+            deliverError(callback::onError, new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));
+            return req;
+        }
+        if (text != null && text.length() > LuckgramSettings.remoteLong("ai.max_input_chars", 60000)) {
+            deliverError(callback::onError, new LuckgramAIError(LuckgramAIError.INPUT_TOO_LARGE, 0));
+            return req;
+        }
+        final byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
+        withConsent(context, req, callback::onError, () -> {
+            try (HttpResponse res = authorized(req, "POST", "/v1/ai/chat", "application/json", payload, "application/json")) {
+                if (res.status >= 300) {
+                    throw new ApiException(errorFrom(res));
+                }
+                JSONObject j = new JSONObject(readString(res.body));
+                Translation t = new Translation();
+                t.text = j.optString("text", "");
+                t.fromLang = j.optString("from_lang", null);
+                if (t.text.trim().isEmpty()) {
+                    throw new ApiException(new LuckgramAIError(LuckgramAIError.UPSTREAM_UNAVAILABLE, res.status));
+                }
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (!req.cancelled) callback.onResult(t);
+                });
             }
         });
         return req;

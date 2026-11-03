@@ -6189,14 +6189,14 @@ public class ChatActivityEnterView extends FrameLayout implements
             return;
         }
         setTranslateOutBusy(true);
-        TranslateOutController.translate(currentAccount, source, lang, messageEditText.getPaint().getFontMetricsInt(), result -> {
+        TranslateOutController.translate(currentAccount, source, lang, messageEditText.getPaint().getFontMetricsInt(), (result, errorMessage) -> {
             setTranslateOutBusy(false);
             if (messageEditText == null || parentFragment == null) {
                 return;
             }
             if (result == null) {
                 hideTranslateOutBulletin();
-                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.error, TranslateOutStrings.failed()).show();
+                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.error, errorMessage != null ? errorMessage : TranslateOutStrings.failed()).show();
                 return;
             }
             if (messageEditText.getText() == null || !TextUtils.equals(source.toString(), messageEditText.getText().toString())) {
