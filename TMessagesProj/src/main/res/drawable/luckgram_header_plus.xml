@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Luckgram specs#92: chat list 「+」 menu button (same weight as outline_header_search). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="72"
+    android:viewportHeight="72">
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,12.1 C37.6016,12.1 38.9,13.3984 38.9,15 L38.9,33.1 L57,33.1 C58.6016,33.1 59.9,34.3984 59.9,36 C59.9,37.6016 58.6016,38.9 57,38.9 L38.9,38.9 L38.9,57 C38.9,58.6016 37.6016,59.9 36,59.9 C34.3984,59.9 33.1,58.6016 33.1,57 L33.1,38.9 L15,38.9 C13.3984,38.9 12.1,37.6016 12.1,36 C12.1,34.3984 13.3984,33.1 15,33.1 L33.1,33.1 L33.1,15 C33.1,13.3984 34.3984,12.1 36,12.1 Z" />
+</vector>
