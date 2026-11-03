@@ -91,7 +91,7 @@ public class LuckgramAgentMarketView extends LinearLayout {
         FrameLayout searchFrame = new FrameLayout(context);
         searchFrame.addView(search, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 36, Gravity.CENTER_VERTICAL, 12, 0, 12, 0));
         ImageView searchIcon = new ImageView(context);
-        searchIcon.setImageResource(R.drawable.ic_ab_search);
+        searchIcon.setImageResource(R.drawable.msg_search);
         searchIcon.setScaleType(ImageView.ScaleType.CENTER);
         searchIcon.setColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteGrayIcon));
         searchFrame.addView(searchIcon, LayoutHelper.createFrame(36, 36, Gravity.LEFT | Gravity.CENTER_VERTICAL, 16, 0, 0, 0));
