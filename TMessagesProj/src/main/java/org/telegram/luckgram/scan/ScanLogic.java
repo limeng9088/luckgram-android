@@ -3,7 +3,7 @@ package org.telegram.luckgram.scan;
 import java.util.Locale;
 
 /**
- * specs#92: chat list 「+」 menu → 扫一扫. What a scanned QR code is, so it goes to Telegram's own flow:
+ * specs#92 / #99: chat list 「⋮」 menu → 扫一扫. What a scanned QR code is, so it goes to Telegram's own flow:
  * login token, proxy, a Telegram link (profile / group / channel), another web link, or plain text.
  * Also the proxy state shown next to 「代理配置」 and the texts.
  *
@@ -11,7 +11,7 @@ import java.util.Locale;
  */
 public final class ScanLogic {
 
-    /** Feature switch (default on); off = the chat list title bar is Telegram's again. */
+    /** Feature switch (default on): 扫一扫 and 代理配置 in the chat list 「⋮」 menu (specs#99). */
     public static final String FEATURE_KEY = "chat_plus_menu";
 
     public static final int KIND_TEXT = 0;

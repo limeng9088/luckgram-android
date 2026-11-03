@@ -3301,10 +3301,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             downloadsItem.setContentDescription(getString(R.string.DownloadsTabs));
             downloadsItem.setVisibility(View.GONE);
 
-            // Luckgram: AI assistant button (feature 18)
-            luckgramAiItem = menu.addItem(LUCKGRAM_AI_ITEM, R.drawable.luckgram_ai);
-            luckgramAiItem.setContentDescription("Luckgram AI");
-            luckgramAiItem.setVisibility(org.telegram.luckgram.ai.LuckgramAiChatActivity.isEnabled() ? View.VISIBLE : View.GONE);
+            // Luckgram: no ✦ AI button in the title bar (specs#99); the pinned 「Luckgram AI」 row stays (18)
 
             updateProxyButton(false, false);
         }
@@ -3481,12 +3478,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 showItemOptions();
                 return true;
             });
-
-            // Luckgram (specs#92): 「+」 menu, rightmost: 扫一扫 / 代理配置
-            luckgramPlusItem = menu.addItem(LUCKGRAM_PLUS_ITEM, R.drawable.luckgram_header_plus);
-            luckgramPlusItem.setContentDescription(org.telegram.luckgram.scan.LuckgramScan.TEXTS.plus());
-            luckgramPlusItem.setOnClickListener(v -> luckgramShowPlusMenu());
-            luckgramPlusItem.setVisibility(org.telegram.luckgram.scan.LuckgramScan.isEnabled() ? View.VISIBLE : View.GONE);
         }
 
         searchItem.setSearchFieldHint(getString(R.string.Search));
@@ -5943,16 +5934,13 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private org.telegram.ui.community.cells.CommunityRequestsCell luckgramAiRow;
     private org.telegram.luckgram.agents.LuckgramAgentsStrip luckgramAgentsStrip;
 
-    // Luckgram (specs#92): chat list 「+」 menu
-    private static final int LUCKGRAM_PLUS_ITEM = 0x4C4792;
-    private ActionBarMenuItem luckgramPlusItem;
-
-    private void luckgramShowPlusMenu() {
-        if (luckgramPlusItem == null || getParentActivity() == null) return;
+    /**
+     * Luckgram (specs#92 → #99): 扫一扫 and 代理配置 at the top of the 「⋮」 menu (chat_plus_menu).
+     * Returns whether they were added.
+     */
+    private boolean luckgramAddScanAndProxy(ItemOptions io) {
+        if (communityId != 0 || !org.telegram.luckgram.scan.LuckgramScan.isEnabled()) return false;
         final org.telegram.luckgram.scan.ScanLogic.Texts tx = org.telegram.luckgram.scan.LuckgramScan.TEXTS;
-        ItemOptions io = ItemOptions.makeOptions(this, luckgramPlusItem);
-        io.setColors(getThemedColor(Theme.key_actionBarDefaultTitle), getThemedColor(Theme.key_actionBarDefaultTitle));
-        io.setDimAlpha(0x08);
         io.add(R.drawable.scan_qr, tx.scan(), () -> org.telegram.luckgram.scan.LuckgramScan.open(this));
 
         final SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
@@ -5960,14 +5948,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         final boolean connected = currentConnectionState == ConnectionsManager.ConnectionStateConnected || currentConnectionState == ConnectionsManager.ConnectionStateUpdating;
         io.add(R.drawable.outline_shield_plain_24, tx.proxy(), tx.proxyState(org.telegram.luckgram.scan.ScanLogic.proxyState(proxyEnabled, connected)),
             () -> presentFragment(new ProxyListActivity()));
-        io.show();
-        io.setTranslationY(-dp(64));
+        io.addGap();
+        return true;
     }
 
     private void updateLuckgramAi() {
-        if (luckgramPlusItem != null) {
-            checkUi_itemOptionsVisibility();
-        }
         if (luckgramAiItem != null) {
             luckgramAiItem.setVisibility(org.telegram.luckgram.ai.LuckgramAiChatActivity.isEnabled() ? View.VISIBLE : View.GONE);
         }
@@ -14014,6 +13999,8 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             launchActivity = null;
         }
 
+        final boolean luckgramScanProxy = luckgramAddScanAndProxy(io); // specs#99: top of the menu
+
         if (communityId != 0) {
             if (ChatObject.hasAdminRights(community)) {
                 io.add(R.drawable.msg_customize, getString(R.string.CommunityMenuSettings), () -> {
@@ -14143,7 +14130,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             });
         }
 
-        if (proxyMenuSubItem != null) {
+        if (proxyMenuSubItem != null && !luckgramScanProxy) { // Luckgram: already at the top (specs#99)
             proxyMenuSubItem.subtextView.setTextColor(getThemedColor(Theme.key_groupcreate_sectionText));
             proxyMenuSubItem.setOnClickListener(v -> {
                 io.dismiss();
@@ -14470,9 +14457,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         final float factor3 = 1f - animatorDoneButtonVisible.getFloatValue();
         final float factor = factor1 * factor2 * factor3;
         FragmentFloatingButton.setAnimatedVisibility(optionsItem, factor);
-        if (luckgramPlusItem != null) {
-            FragmentFloatingButton.setAnimatedVisibility(luckgramPlusItem, org.telegram.luckgram.scan.LuckgramScan.isEnabled() ? factor : 0);
-        }
     }
 
     private void checkUi_itemPasscodeVisibility() {
