@@ -53,6 +53,8 @@ public final class LuckgramFeatures {
     public static final String AI_SUMMARY = "ai_summary";
     /** spec 22 */
     public static final String AI_AGENTS = "ai_agents";
+    /** spec 30 */
+    public static final String AI_AGENT_MARKET = "ai_agent_market";
     /** spec 23 */
     public static final String AI_IMAGE = "ai_image";
 
@@ -154,6 +156,9 @@ public final class LuckgramFeatures {
         add(toggle(AI_AGENTS, AI, true,
             "AI 智能体", "AI agents",
             "AI 助手里的旅行规划师、文案写手等，也能自己创建", "Travel planner, copywriter and more in the AI assistant, or make your own"));
+        add(toggle(AI_AGENT_MARKET, AI, true,
+            "智能体市场", "Agent market",
+            "「智能体」里的「市场」：按分类浏览、搜索更多智能体，部分 Pro 专享", "\"Market\" in Agents: browse and search more agents by category, some for Pro"));
         add(toggle(AI_ASSISTANT_ROW, AI, true,
             "聊天列表置顶「Luckgram AI」", "Pin \"Luckgram AI\" in the chat list",
             "在聊天列表顶部显示一行 AI 助手入口", "Show an AI assistant row at the top of the chat list"));

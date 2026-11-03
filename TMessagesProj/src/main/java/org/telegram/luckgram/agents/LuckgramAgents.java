@@ -47,6 +47,8 @@ public final class LuckgramAgents {
         String nameZh, nameEn, descZh, descEn;
         public int color;
         public String prompt;
+        /** spec 30: set for an agent from the market (its instruction stays on the server). */
+        public AgentMarketLogic.Agent market;
 
         Agent(String id, boolean preset) {
             this.id = id;
@@ -62,6 +64,7 @@ public final class LuckgramAgents {
         }
 
         public String initial() {
+            if (market != null) return market.avatarText(LuckgramStrings.isChinese());
             String n = name().trim();
             return n.isEmpty() ? "?" : n.substring(0, n.offsetByCodePoints(0, 1)).toUpperCase();
         }
@@ -100,6 +103,34 @@ public final class LuckgramAgents {
         list.add(preset("coder", "编程助手", "Coding assistant", "写代码、找 bug、解释原理", "Write code, find bugs, explain concepts", 0xFF607D8B,
             "You are a senior software engineer. Give working, idiomatic code in fenced code blocks with the language name, explain briefly why it works, point out bugs and edge cases, and ask for the language or framework when it matters."));
         return list;
+    }
+
+    // ---------------------------------------------------------------- market agents (spec 30)
+
+    private static final String MARKET_PREFIX = "market:";
+
+    /** Id of a market agent in this list (pins, {@link #find}); never clashes with presets or custom agents. */
+    public static String marketAgentId(String marketId) {
+        return MARKET_PREFIX + marketId;
+    }
+
+    static Agent fromMarket(AgentMarketLogic.Agent m) {
+        Agent a = new Agent(marketAgentId(m.id), true);
+        a.nameZh = m.name.pick(true);
+        a.nameEn = m.name.pick(false);
+        a.descZh = m.description.pick(true);
+        a.descEn = m.description.pick(false);
+        a.color = m.color;
+        a.market = m;
+        return a;
+    }
+
+    /** Market agents the user has chatted with ("我的"), most recent first; empty when the market is off. */
+    public static List<Agent> marketAgents(int account) {
+        ArrayList<Agent> out = new ArrayList<>();
+        if (!LuckgramAgentMarket.isEnabled()) return out;
+        for (AgentMarketLogic.Agent m : LuckgramAgentMarket.used(account)) out.add(fromMarket(m));
+        return out;
     }
 
     // ---------------------------------------------------------------- custom agents
@@ -167,6 +198,10 @@ public final class LuckgramAgents {
     }
 
     public static Agent find(int account, String id) {
+        if (id != null && id.startsWith(MARKET_PREFIX)) {
+            AgentMarketLogic.Agent m = LuckgramAgentMarket.isEnabled() ? LuckgramAgentMarket.findUsed(account, id.substring(MARKET_PREFIX.length())) : null;
+            return m == null ? null : fromMarket(m);
+        }
         for (Agent a : presets()) if (a.id.equals(id)) return a;
         for (Agent a : custom(account)) if (a.id.equals(id)) return a;
         return null;
@@ -213,6 +248,10 @@ public final class LuckgramAgents {
 
     /** spec 22 需求 3: one conversation per agent, task=agent with the agent's instruction. */
     public static void open(BaseFragment from, Agent agent) {
+        if (agent.market != null) {
+            LuckgramAgentMarket.open(from, agent.market);
+            return;
+        }
         LuckgramAiConversation c = LuckgramAiStore.getInstance(from.getCurrentAccount())
             .findOrCreate(conversationKey(agent), LuckgramAI.TASK_AGENT, agent.prompt, agent.name());
         if (!agent.name().equals(c.title)) {

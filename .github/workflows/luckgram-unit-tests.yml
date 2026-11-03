@@ -87,7 +87,8 @@ jobs:
             nearby/NearbyLogic.java \
             discover/DiscoverMock.java \
             square/SquareLogic.java \
-            discover/BlockLogic.java; do
+            discover/BlockLogic.java \
+            agents/AgentMarketLogic.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"

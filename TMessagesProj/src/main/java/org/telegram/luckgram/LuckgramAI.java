@@ -661,6 +661,14 @@ public final class LuckgramAI {
      *               grammar, dictation} (server prompts/writing-*.md), or null for the default.
      */
     public Request chat(Context context, String task, String effect, List<Message> messages, boolean stream, ChatListener listener) {
+        return chat(context, task, effect, null, messages, stream, listener);
+    }
+
+    /**
+     * @param params extra top-level request fields (e.g. {@code agent_id} for task=agent, S13), or
+     *               null; they never replace {@code task}, {@code messages} or {@code stream}.
+     */
+    public Request chat(Context context, String task, String effect, JSONObject params, List<Message> messages, boolean stream, ChatListener listener) {
         Request req = new Request();
         req.feature = task;
         int chars = 0;
@@ -674,6 +682,12 @@ public final class LuckgramAI {
             body.put("task", task).put("messages", arr).put("stream", stream);
             if (effect != null && TASK_WRITING.equals(task)) {
                 body.put("effect", effect);
+            }
+            if (params != null) {
+                for (java.util.Iterator<String> it = params.keys(); it.hasNext(); ) {
+                    String k = it.next();
+                    if (!body.has(k)) body.put(k, params.get(k));
+                }
             }
         } catch (Exception e) {
             deliverError(listener::onError, new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));
