@@ -124,8 +124,8 @@ public final class LuckgramFeatures {
             .subpage(org.telegram.luckgram.hiddenchats.LuckgramHiddenChatsActivity::new)
             .onToggled(org.telegram.luckgram.hiddenchats.LuckgramHiddenChats::onToggled));
         add(toggle(org.telegram.luckgram.scan.ScanLogic.FEATURE_KEY, PROFILE_ORGANIZE, true,
-            "聊天列表「+」菜单", "Chat list \"+\" menu",
-            "聊天列表右上角「+」：扫一扫加好友、代理配置", "The \"+\" at the top right of the chat list: scan to add friends, proxy settings"));
+            "扫一扫和代理配置", "Scan and proxy settings",
+            "聊天列表「⋮」菜单最上面：扫一扫加好友、代理配置", "At the top of the chat list's \"⋮\" menu: scan to add friends, proxy settings"));
         add(toggle(org.telegram.luckgram.notes.UserNotesStore.FEATURE_KEY, PROFILE_ORGANIZE, true,
             "私人备注", "Private notes",
             "给联系人、群组和频道写只有自己能看到的备注", "Notes about contacts, groups and channels that only you can see")
