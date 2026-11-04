@@ -43,11 +43,56 @@ import java.io.File;
  */
 public final class LuckgramOcrSheet extends BottomSheet {
 
-    /** Recognizes {@code image} and opens the sheet; shows a short message if nothing is found. */
+    /**
+     * Recognizes {@code image} on the device and opens the sheet. When nothing is found (or it
+     * fails), offers "Recognize with Luckgram AI" if available, else shows a short message.
+     */
     public static void open(BaseFragment host, File image) {
         if (host == null || host.getParentActivity() == null) return;
         Context context = host.getParentActivity();
         LuckgramOcr.recognize(context, image, new LuckgramOcr.Callback<OcrResult>() {
+            @Override
+            public void onResult(OcrResult result) {
+                if (!result.hasText()) {
+                    offerAi(host, image, null, LuckgramStrings.get("本机没有识别出文字", "No text found on the device"));
+                    return;
+                }
+                new LuckgramOcrSheet(host, image, result).show();
+            }
+
+            @Override
+            public void onError(String code) {
+                if (LuckgramOcr.ERROR_NO_IMAGE.equals(code)) {
+                    toast(host, LuckgramStrings.get("图片还没有下载完", "The image hasn't finished downloading"));
+                } else {
+                    offerAi(host, image, null, LuckgramStrings.get("本机识别失败", "On-device recognition failed"));
+                }
+            }
+        });
+    }
+
+    /** "Recognize with Luckgram AI" (需求 2) when the switch is on, else just {@code why}. */
+    static void offerAi(BaseFragment host, File image, String langHint, String why) {
+        if (!OcrAi.offer(LuckgramOcr.aiAvailable(), false)) {
+            toast(host, why);
+            return;
+        }
+        org.telegram.ui.ActionBar.AlertDialog.Builder b = new org.telegram.ui.ActionBar.AlertDialog.Builder(host.getParentActivity(), host.getResourceProvider());
+        b.setTitle(why);
+        b.setMessage(LuckgramStrings.get("可以把这张图片发给 Luckgram AI 识别（会使用 AI 额度）。", "You can send this image to Luckgram AI to recognize it (uses your AI quota)."));
+        b.setPositiveButton(LuckgramStrings.get("用 Luckgram AI 识别", "Recognize with Luckgram AI"), (d, w) -> recognizeWithAi(host, image, langHint));
+        b.setNegativeButton(LuckgramStrings.get("取消", "Cancel"), null);
+        org.telegram.ui.ActionBar.AlertDialog dialog = b.create();
+        if (PhotoViewer.hasInstance() && PhotoViewer.getInstance().isVisible()) {
+            dialog.show();
+        } else {
+            host.showDialog(dialog);
+        }
+    }
+
+    static void recognizeWithAi(BaseFragment host, File image, String langHint) {
+        toast(host, LuckgramStrings.get("正在用 Luckgram AI 识别…", "Recognizing with Luckgram AI…"));
+        LuckgramOcr.recognizeWithAi(host.getParentActivity(), image, langHint, new LuckgramOcr.Callback<OcrResult>() {
             @Override
             public void onResult(OcrResult result) {
                 if (!result.hasText()) {
@@ -59,9 +104,11 @@ public final class LuckgramOcrSheet extends BottomSheet {
 
             @Override
             public void onError(String code) {
-                toast(host, LuckgramOcr.ERROR_NO_IMAGE.equals(code)
-                    ? LuckgramStrings.get("图片还没有下载完", "The image hasn't finished downloading")
-                    : LuckgramStrings.get("识别失败，请重试", "Couldn't recognize the text. Please try again."));
+                if (org.telegram.luckgram.LuckgramAIError.CONSENT_DENIED.equals(code)) return;
+                org.telegram.luckgram.LuckgramAIError error = new org.telegram.luckgram.LuckgramAIError(code, 0);
+                if (!org.telegram.luckgram.pro.LuckgramUpgradeSheet.handle(host, error)) {
+                    toast(host, error.getLocalizedMessage());
+                }
             }
         });
     }
@@ -75,6 +122,7 @@ public final class LuckgramOcrSheet extends BottomSheet {
     }
 
     private final BaseFragment host;
+    private final File image;
     private final OcrResult result;
     private final TextView textView;
     private final TextView translationView;
@@ -84,6 +132,7 @@ public final class LuckgramOcrSheet extends BottomSheet {
     private LuckgramOcrSheet(BaseFragment host, File image, OcrResult result) {
         super(host.getParentActivity(), false, host.getResourceProvider());
         this.host = host;
+        this.image = image;
         this.result = result;
         fixNavigationBar();
         Context c = getContext();
@@ -149,6 +198,26 @@ public final class LuckgramOcrSheet extends BottomSheet {
         translationView.setVisibility(View.GONE);
         column.addView(translationView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 22, 4, 22, 8));
 
+        if (OcrResult.SOURCE_DEVICE.equals(result.source) && LuckgramOcr.aiAvailable()) {
+            // 需求 2: the device result may be wrong (unsupported language): try Luckgram AI instead
+            TextView retry = new TextView(c);
+            retry.setText(LuckgramStrings.get("识别得不对？用 Luckgram AI 识别", "Not right? Recognize with Luckgram AI"));
+            retry.setTextColor(accent);
+            retry.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            retry.setPadding(0, dp(4), 0, dp(4));
+            retry.setOnClickListener(v -> {
+                dismiss();
+                recognizeWithAi(host, this.image, result.language);
+            });
+            column.addView(retry, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 22, 0, 22, 8));
+        }
+        if (OcrResult.SOURCE_AI.equals(result.source)) {
+            TextView by = new TextView(c);
+            by.setText(LuckgramStrings.get("由 Luckgram AI 识别", "Recognized by Luckgram AI"));
+            by.setTextColor(grayColor);
+            by.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+            column.addView(by, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, 22, 0, 22, 8));
+        }
         layout.addView(scroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
 
         LinearLayout buttons = new LinearLayout(c);

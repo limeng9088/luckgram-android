@@ -81,6 +81,7 @@ jobs:
             pro/ProState.java \
             ocr/OcrResult.java \
             ocr/OcrLogic.java \
+            ocr/OcrAi.java \
             pro/ProPerks.java \
             account/AccountLimit.java \
             procommunity/ProCommunityLogic.java \
