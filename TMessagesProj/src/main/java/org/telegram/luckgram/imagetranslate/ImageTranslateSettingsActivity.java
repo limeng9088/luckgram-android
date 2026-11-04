@@ -42,7 +42,7 @@ public class ImageTranslateSettingsActivity extends UniversalFragment {
                 ImageTranslateSettings.followReadingLanguage();
                 update();
             } else {
-                new TranslateOutLanguageSheet(getParentActivity(), getCurrentAccount(), ImageTranslateLogic.base(ImageTranslateSettings.targetLanguage(0)), getResourceProvider(), code -> {
+                new TranslateOutLanguageSheet(getParentActivity(), getCurrentAccount(), ImageTranslateLogic.base(ImageTranslateSettings.targetLanguage(getCurrentAccount(), 0)), getResourceProvider(), code -> {
                     ImageTranslateSettings.setLanguage(0, code, false);
                     update();
                 }).show();
