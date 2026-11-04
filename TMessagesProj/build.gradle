@@ -177,7 +177,20 @@ android {
             cmake {
                 version '3.22.1'
                 arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-21' //, '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
+                // CI: LUCKGRAM_CCACHE=1 compiles the native code through ccache (cache kept between builds).
+                if (System.getenv("LUCKGRAM_CCACHE") == "1") {
+                    arguments '-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
+                }
                 targets 'tmessages.49'
+            }
+        }
+
+        // CI: -PLUCKGRAM_ABIS=arm64-v8a (comma separated) builds the native code only for these ABIs.
+        // Without it all four ABIs are compiled (about 7 minutes each), even when the APK keeps one.
+        def luckgramAbis = project.findProperty("LUCKGRAM_ABIS")
+        if (luckgramAbis) {
+            ndk {
+                abiFilters(*luckgramAbis.toString().split(",").collect { it.trim() }.findAll { it })
             }
         }
     }

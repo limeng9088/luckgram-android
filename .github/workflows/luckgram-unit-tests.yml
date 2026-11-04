@@ -5,12 +5,11 @@ name: Luckgram unit tests
 # javac + JUnit, a few seconds. JUnit 5 (Jupiter) and JUnit 4 (Vintage) tests both run.
 on:
   workflow_dispatch:
+  # Every PR (no paths filter): master's branch protection requires the "test" check, and a
+  # filtered workflow never reports on PRs outside its paths, which would block auto-merge.
+  # The run takes under a minute.
   pull_request:
     branches: [master]
-    paths:
-      - 'TMessagesProj/src/main/java/org/telegram/luckgram/**'
-      - 'TMessagesProj/src/test/java/org/telegram/luckgram/**'
-      - '.github/workflows/luckgram-unit-tests.yml'
 
 permissions:
   contents: read
