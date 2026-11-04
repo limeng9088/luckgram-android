@@ -1336,6 +1336,9 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_LUCKGRAM_SELECT_ALL_FROM_SENDER = 200;
     // Luckgram: save to Saved Messages in one tap (spec 15)
     public final static int OPTION_LUCKGRAM_SAVE_TO_SAVED = 201;
+    // Luckgram: image actions (specs#106 OCR, #108 image translation), one id per registered action
+    public final static int OPTION_LUCKGRAM_IMAGE_ACTION = 0x4C4800;
+    private java.util.List<org.telegram.luckgram.ocr.LuckgramImageActions.Action> luckgramImageMenu = new ArrayList<>();
     public final static int OPTION_OPEN_PROFILE = 104;
     public final static int OPTION_FACT_CHECK = 106;
     public final static int OPTION_EDIT_PRICE = 107;
@@ -33699,6 +33702,17 @@ public class ChatActivity extends BaseFragment implements
             return;
         }
         boolean preserveDim = false;
+        if (option >= OPTION_LUCKGRAM_IMAGE_ACTION && option < OPTION_LUCKGRAM_IMAGE_ACTION + luckgramImageMenu.size()) {
+            org.telegram.luckgram.ocr.LuckgramImageActions.Action action = luckgramImageMenu.get(option - OPTION_LUCKGRAM_IMAGE_ACTION);
+            java.io.File image = org.telegram.luckgram.ocr.LuckgramImageActions.imageFile(currentAccount, selectedObject);
+            if (image == null) {
+                BulletinFactory.of(this).createSimpleBulletin(R.raw.info, org.telegram.luckgram.LuckgramStrings.get("图片还没有下载完", "The image hasn't finished downloading")).show();
+            } else {
+                action.runner.run(this, image, selectedObject);
+            }
+            closeMenu(true);
+            return;
+        }
         switch (option) {
             case OPTION_LUCKGRAM_ASK_AI: {
                 ArrayList<MessageObject> asked = new ArrayList<>();
@@ -47162,6 +47176,21 @@ public class ChatActivity extends BaseFragment implements
             items.add(index, org.telegram.luckgram.selectall.SelectAllFromSender.menuTitle(currentAccount, dialog_id, message.getFromChatId()));
             options.add(index, OPTION_LUCKGRAM_SELECT_ALL_FROM_SENDER);
             icons.add(index, R.drawable.msg_select);
+        }
+
+        luckgramImageMenu = new ArrayList<>();
+        if (selectedObjectGroup == null && message != null && message.isPhoto() && !message.isSending() && !message.isEditing()) {
+            // Luckgram (specs#106 / #108): image actions from LuckgramImageActions, after Copy / Forward
+            luckgramImageMenu = org.telegram.luckgram.ocr.LuckgramImageActions.visibleActions(org.telegram.luckgram.ocr.LuckgramImageActions.PLACE_MENU, message);
+            int index = options.indexOf(OPTION_LUCKGRAM_SAVE_TO_SAVED);
+            if (index < 0) index = options.indexOf(OPTION_FORWARD);
+            if (index < 0) index = options.indexOf(OPTION_COPY);
+            index = index < 0 ? options.size() : index + 1;
+            for (int i = 0; i < luckgramImageMenu.size(); i++) {
+                items.add(index + i, luckgramImageMenu.get(i).title());
+                options.add(index + i, OPTION_LUCKGRAM_IMAGE_ACTION + i);
+                icons.add(index + i, luckgramImageMenu.get(i).icon);
+            }
         }
 
         if (showWelcomeMessageRevertOption(primaryMessage)) {

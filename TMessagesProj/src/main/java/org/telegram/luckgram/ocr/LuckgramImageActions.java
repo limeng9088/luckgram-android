@@ -97,7 +97,9 @@ public final class LuckgramImageActions {
 
     static {
         // ---- image features register here, one line each ----
-        // specs#106 OCR (「识别文字」 / 「文字」): added with the implementation (feat/106-image-ocr)
+        register(new Action("ocr", "识别文字", "Recognize Text", org.telegram.messenger.R.drawable.msg_photo_text_regular, "文字", "Text",
+            PLACE_MENU | PLACE_VIEWER_BUTTON | PLACE_ATTACH_PREVIEW, message -> LuckgramOcr.isEnabled(),
+            (host, image, message) -> LuckgramOcrSheet.open(host, image))); // specs#106
         // specs#108 image translation (「翻译图片」 / 「译」): w-1148
     }
 
@@ -121,6 +123,16 @@ public final class LuckgramImageActions {
         ArrayList<Action> out = new ArrayList<>();
         for (Action a : list) if ((a.places & place) != 0) out.add(a);
         return out;
+    }
+
+    /**
+     * The image file of a photo message on the device, or null when it isn't a photo or hasn't
+     * been downloaded yet.
+     */
+    public static File imageFile(int account, MessageObject message) {
+        if (message == null || !message.isPhoto()) return null;
+        File f = org.telegram.messenger.FileLoader.getInstance(account).getPathToMessage(message.messageOwner);
+        return f != null && f.exists() ? f : null;
     }
 
     /** Actions at {@code place} that are visible for {@code message}. */

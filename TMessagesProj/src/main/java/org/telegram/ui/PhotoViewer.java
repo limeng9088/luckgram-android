@@ -2189,6 +2189,11 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
     private final static int gallery_menu_speed = 17;
     private final static int gallery_menu_paint = 18;
     private final static int gallery_menu_translate = 19;
+    // Luckgram specs#106 / #108: image actions (LuckgramImageActions), one menu id per action
+    private final static int gallery_menu_luckgram_image = 0x4C4800;
+    private java.util.List<org.telegram.luckgram.ocr.LuckgramImageActions.Action> luckgramMenuActions = new ArrayList<>();
+    private LinearLayout luckgramImageButtons;
+    private int luckgramImageIndex = -1;
     private final static int gallery_menu_hide_translation = 20;
     private final static int gallery_menu_reply = 21;
     private final static int gallery_menu_loop = 22;
@@ -4910,6 +4915,10 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
+                if (id >= gallery_menu_luckgram_image && id < gallery_menu_luckgram_image + luckgramMenuActions.size()) {
+                    luckgramRunImageAction(luckgramMenuActions.get(id - gallery_menu_luckgram_image));
+                    return;
+                }
                 if (id == -1) {
                     if (photoPaintView != null && photoPaintView.onBackPressed()) {
                         return;
@@ -5926,6 +5935,12 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         menuItem.redrawPopup(0xf9222222);
         menuItem.hideSubItem(gallery_menu_translate);
         menuItem.hideSubItem(gallery_menu_hide_translation);
+        luckgramMenuActions = org.telegram.luckgram.ocr.LuckgramImageActions.actions(org.telegram.luckgram.ocr.LuckgramImageActions.PLACE_MENU);
+        for (int i = 0; i < luckgramMenuActions.size(); i++) {
+            org.telegram.luckgram.ocr.LuckgramImageActions.Action a = luckgramMenuActions.get(i);
+            menuItem.addSubItem(gallery_menu_luckgram_image + i, a.icon, a.title()).setColors(0xfffafafa, 0xfffafafa);
+            menuItem.hideSubItem(gallery_menu_luckgram_image + i);
+        }
         setMenuItemIcon(false, true);
         menuItem.setPopupItemsSelectorColor(0x0fffffff);
 
@@ -5953,6 +5968,12 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         };
         bottomLayout.setBackgroundColor(0x7f000000);
         containerView.addView(bottomLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.BOTTOM | Gravity.LEFT));
+
+        // Luckgram specs#106 / #108: small buttons at the bottom right (「文字」, 「译」), shown when the image has text
+        luckgramImageButtons = new LinearLayout(activityContext);
+        luckgramImageButtons.setOrientation(LinearLayout.HORIZONTAL);
+        luckgramImageButtons.setVisibility(View.GONE);
+        containerView.addView(luckgramImageButtons, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 32, Gravity.BOTTOM | Gravity.RIGHT, 0, 0, 12, 48 + 64));
 
         navigationBar = new View(activityContext);
         navigationBar.setBackgroundColor((sendPhotoType == SELECT_TYPE_STICKER ? 0xFF000000 : 0x7f000000));
@@ -14531,6 +14552,7 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         final boolean forward = index >= switchingToIndex;
         int wasIndex = switchingToIndex;
         switchingToIndex = index;
+        luckgramUpdateImageActions(index);
 
         boolean isVideo = false;
         boolean isLivePhoto = false;
@@ -18686,7 +18708,113 @@ public class PhotoViewer implements NotificationCenter.NotificationCenterDelegat
         onHideView();
     }
 
+    // ---------------------------------------------------------------- Luckgram image actions (specs#106 / #108)
+
+    private java.io.File luckgramImageAt(int index) {
+        if (!imagesArr.isEmpty()) {
+            return index >= 0 && index < imagesArr.size() ? org.telegram.luckgram.ocr.LuckgramImageActions.imageFile(currentAccount, imagesArr.get(index)) : null;
+        }
+        if (index >= 0 && index < imagesArrLocals.size() && imagesArrLocals.get(index) instanceof MediaController.PhotoEntry) {
+            MediaController.PhotoEntry e = (MediaController.PhotoEntry) imagesArrLocals.get(index);
+            if (e.isVideo) return null;
+            String path = e.imagePath != null ? e.imagePath : e.path;
+            java.io.File f = path != null ? new java.io.File(path) : null;
+            return f != null && f.exists() ? f : null;
+        }
+        return null;
+    }
+
+    private MessageObject luckgramMessageAt(int index) {
+        return index >= 0 && index < imagesArr.size() ? imagesArr.get(index) : null;
+    }
+
+    private void luckgramUpdateImageActions(int index) {
+        luckgramImageIndex = index;
+        java.io.File file = luckgramImageAt(index);
+        MessageObject message = luckgramMessageAt(index);
+        boolean attach = message == null && file != null;
+        for (int i = 0; i < luckgramMenuActions.size(); i++) {
+            if (!attach && file != null && luckgramMenuActions.get(i).isVisible(message)) {
+                menuItem.showSubItem(gallery_menu_luckgram_image + i);
+            } else {
+                menuItem.hideSubItem(gallery_menu_luckgram_image + i);
+            }
+        }
+        if (luckgramImageButtons == null) return;
+        luckgramImageButtons.removeAllViews();
+        luckgramImageButtons.setVisibility(View.GONE);
+        if (file == null) return;
+        java.util.List<org.telegram.luckgram.ocr.LuckgramImageActions.Action> actions = org.telegram.luckgram.ocr.LuckgramImageActions.visibleActions(
+            attach ? org.telegram.luckgram.ocr.LuckgramImageActions.PLACE_ATTACH_PREVIEW : org.telegram.luckgram.ocr.LuckgramImageActions.PLACE_VIEWER_BUTTON, message);
+        if (actions.isEmpty()) return;
+        Runnable show = () -> {
+            if (luckgramImageIndex != index || luckgramImageButtons == null) return;
+            luckgramImageButtons.removeAllViews();
+            for (org.telegram.luckgram.ocr.LuckgramImageActions.Action a : actions) {
+                TextView b = new TextView(activityContext);
+                b.setText(attach ? a.title() : a.buttonTitle());
+                b.setTextColor(0xffffffff);
+                b.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+                b.setTypeface(AndroidUtilities.bold());
+                b.setGravity(Gravity.CENTER);
+                b.setPadding(dp(12), 0, dp(12), 0);
+                b.setBackground(Theme.createSimpleSelectorRoundRectDrawable(dp(16), 0x99000000, 0xcc000000));
+                b.setOnClickListener(v -> luckgramRunImageAction(a));
+                luckgramImageButtons.addView(b, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 32, 8, 0, 0, 0));
+            }
+            luckgramImageButtons.setVisibility(View.VISIBLE);
+        };
+        if (attach) {
+            show.run(); // before sending: always offered
+        } else {
+            // only when the image has text; the result is cached for the actions themselves
+            org.telegram.luckgram.ocr.LuckgramOcr.hasText(activityContext, file, new org.telegram.luckgram.ocr.LuckgramOcr.Callback<Boolean>() {
+                @Override
+                public void onResult(Boolean has) {
+                    if (has != null && has) show.run();
+                }
+
+                @Override
+                public void onError(String code) {
+                }
+            });
+        }
+    }
+
+    private void luckgramRunImageAction(org.telegram.luckgram.ocr.LuckgramImageActions.Action action) {
+        final int index = luckgramImageIndex;
+        java.io.File file = luckgramImageAt(index);
+        if (file == null) {
+            android.widget.Toast.makeText(activityContext, org.telegram.luckgram.LuckgramStrings.get("图片还没有下载完", "The image hasn't finished downloading"), android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        BaseFragment host = parentFragment != null ? parentFragment : parentChatActivity != null ? parentChatActivity : LaunchActivity.getLastFragment();
+        if (host == null) return;
+        MessageObject message = luckgramMessageAt(index);
+        if (message == null) {
+            org.telegram.luckgram.ocr.LuckgramImageActions.setAttachReplacer(newImage -> luckgramReplaceAttach(index, newImage));
+        }
+        action.runner.run(host, file, message);
+    }
+
+    /** #108: puts a new image (e.g. the translated one) in place of item {@code index} before sending. */
+    private void luckgramReplaceAttach(int index, java.io.File newImage) {
+        if (newImage == null || index < 0 || index >= imagesArrLocals.size() || !(imagesArrLocals.get(index) instanceof MediaController.PhotoEntry)) {
+            return;
+        }
+        MediaController.PhotoEntry e = (MediaController.PhotoEntry) imagesArrLocals.get(index);
+        e.imagePath = newImage.getAbsolutePath();
+        e.thumbPath = newImage.getAbsolutePath();
+        if (placeProvider != null) {
+            placeProvider.updatePhotoAtIndex(index);
+        }
+        if (index == currentIndex) {
+            setImageIndex(index, false, false, true);
+        }
+    }
+
     private void onPhotoClosed(PlaceProviderObject object) {
+        org.telegram.luckgram.ocr.LuckgramImageActions.setAttachReplacer(null);
         if (doneButtonPressed) {
             releasePlayer(true);
         }
