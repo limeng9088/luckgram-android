@@ -132,6 +132,7 @@ import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LiteMode;
+import org.telegram.messenger.LanguageDetector;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
@@ -6171,8 +6172,8 @@ public class ChatActivityEnterView extends FrameLayout implements
         }
         final boolean show = shouldShowTranslateOut();
         if (show) {
-            translateOutButton.setText(TranslateOutLogic.capsule(LocaleController.getInstance().getCurrentLocale().getLanguage(),
-                TranslateOutController.getSavedLanguage(currentAccount, dialog_id)));
+            updateTranslateOutCapsuleText();
+            scheduleTranslateOutSourceDetection();
         }
         if (show == translateOutShown) {
             return;
@@ -6194,6 +6195,70 @@ public class ChatActivityEnterView extends FrameLayout implements
             })
             .start();
         updateFieldRight(lastAttachVisible);
+    }
+
+    /** specs#110: the language detected in what the user typed; null = unknown (capsule shows 「→ 日」). */
+    private String translateOutSourceLang;
+    private String translateOutDetectedText;
+    private final Runnable translateOutDetect = this::detectTranslateOutSource;
+
+    /** 「EN → 日」, sized to its text (never clipped). */
+    private void updateTranslateOutCapsuleText() {
+        if (translateOutButton == null) {
+            return;
+        }
+        final String text = TranslateOutLogic.capsule(translateOutSourceLang, TranslateOutController.getSavedLanguage(currentAccount, dialog_id));
+        if (!TextUtils.equals(text, translateOutButton.getText())) {
+            translateOutButton.setText(text);
+        }
+        final int width = Math.max(dp(DEFAULT_HEIGHT - 4), (int) Math.ceil(translateOutButton.getPaint().measureText(text)) + dp(14));
+        final ViewGroup.LayoutParams lp = translateOutButton.getLayoutParams();
+        if (lp != null && lp.width != width) {
+            lp.width = width;
+            translateOutButton.setLayoutParams(lp);
+            updateFieldRight(lastAttachVisible);
+        }
+    }
+
+    /** Extra room the capsule needs beyond the old 48dp button slot. */
+    private int translateOutExtraWidth() {
+        if (translateOutButton == null || translateOutButton.getLayoutParams() == null) {
+            return 0;
+        }
+        return Math.max(0, translateOutButton.getLayoutParams().width - dp(DEFAULT_HEIGHT));
+    }
+
+    private void scheduleTranslateOutSourceDetection() {
+        AndroidUtilities.cancelRunOnUIThread(translateOutDetect);
+        AndroidUtilities.runOnUIThread(translateOutDetect, 500);
+    }
+
+    private void detectTranslateOutSource() {
+        if (!translateOutShown && !shouldShowTranslateOut()) {
+            return;
+        }
+        final String text = messageEditText == null || messageEditText.getText() == null ? "" : AndroidUtilities.getTrimmedString(messageEditText.getText()).toString();
+        if (text.equals(translateOutDetectedText)) {
+            return;
+        }
+        translateOutDetectedText = text;
+        if (text.length() < 2 || !LanguageDetector.hasSupport()) {
+            translateOutSourceLang = null;
+            updateTranslateOutCapsuleText();
+            return;
+        }
+        LanguageDetector.detectLanguage(text, lng -> AndroidUtilities.runOnUIThread(() -> {
+            if (!text.equals(translateOutDetectedText)) {
+                return;
+            }
+            translateOutSourceLang = "und".equals(lng) ? null : lng;
+            updateTranslateOutCapsuleText();
+        }), err -> AndroidUtilities.runOnUIThread(() -> {
+            if (text.equals(translateOutDetectedText)) {
+                translateOutSourceLang = null;
+                updateTranslateOutCapsuleText();
+            }
+        }));
     }
 
     private void setTranslateOutBusy(boolean busy) {
@@ -9507,14 +9572,15 @@ public class ChatActivityEnterView extends FrameLayout implements
             // Luckgram: the translate button sits left of the send button (and left of the scheduled button, if any)
             final boolean scheduledVisible = scheduledButton != null && scheduledButton.getTag() != null && scheduledButton.getVisibility() == VISIBLE;
             translateOutButton.setTranslationX(scheduledVisible ? -dp(DEFAULT_HEIGHT) : 0);
-            layoutParams.rightMargin = Math.max(layoutParams.rightMargin, dp(scheduledVisible ? 98 : 50));
+            layoutParams.rightMargin = Math.max(layoutParams.rightMargin, dp(scheduledVisible ? 98 : 50) + translateOutExtraWidth()); // specs#110: capsule width
         }
         if (aiWritingTextShown && aiWritingTextButton != null && !(isStories && isLiveComment)) {
             // Luckgram 21: ✦ left of the send button, and left of the scheduled / translate buttons if shown
             final boolean scheduledVisible = scheduledButton != null && scheduledButton.getTag() != null && scheduledButton.getVisibility() == VISIBLE;
             final int slots = (scheduledVisible ? 1 : 0) + (translateOutShown ? 1 : 0);
-            aiWritingTextButton.setTranslationX(-dp(DEFAULT_HEIGHT) * slots);
-            layoutParams.rightMargin = Math.max(layoutParams.rightMargin, dp(50 + 48 * slots));
+            final int capsuleExtra = translateOutShown ? translateOutExtraWidth() : 0;
+            aiWritingTextButton.setTranslationX(-dp(DEFAULT_HEIGHT) * slots - capsuleExtra);
+            layoutParams.rightMargin = Math.max(layoutParams.rightMargin, dp(50 + 48 * slots) + capsuleExtra);
         }
         layoutParams.rightMargin = Math.max(layoutParams.rightMargin, Math.max(0, sendButton.width() - dp(DEFAULT_HEIGHT)));
         if (doneButton != null && doneButton.getVisibility() == VISIBLE) {

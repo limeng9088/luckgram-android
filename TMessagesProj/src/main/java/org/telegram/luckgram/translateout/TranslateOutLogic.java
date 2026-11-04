@@ -31,8 +31,16 @@ public final class TranslateOutLogic {
         return n.toUpperCase(java.util.Locale.ROOT);
     }
 
-    /** specs#104: the capsule text 「中 → EN」 (from = the user's language). */
+    /**
+     * specs#104 / #110: the capsule text 「EN → 日」; {@code fromCode} is the language detected in what
+     * the user typed. Unknown (or the same as the target) → just 「→ 日」, never a guessed 「中」.
+     */
     public static String capsule(String fromCode, String toCode) {
+        final String from = normalizeLanguage(fromCode);
+        final String to = normalizeLanguage(toCode);
+        if (from == null || from.equals(to)) {
+            return "→ " + shortLabel(toCode);
+        }
         return shortLabel(fromCode) + " → " + shortLabel(toCode);
     }
 

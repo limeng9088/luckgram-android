@@ -118,6 +118,10 @@ public class TranslateOutLogicTest {
         org.junit.Assert.assertEquals("中 → EN", TranslateOutLogic.capsule("zh-hans", "en"));
         org.junit.Assert.assertEquals("EN → 日", TranslateOutLogic.capsule("en", "ja"));
         org.junit.Assert.assertEquals("中 → PT", TranslateOutLogic.capsule("zh", "pt_BR"));
+        // specs#110: unknown source → no guessed 「中」
+        org.junit.Assert.assertEquals("→ 日", TranslateOutLogic.capsule(null, "ja"));
+        org.junit.Assert.assertEquals("→ 日", TranslateOutLogic.capsule("und", "ja"));
+        org.junit.Assert.assertEquals("→ 日", TranslateOutLogic.capsule("ja", "ja"));
         org.junit.Assert.assertEquals("한", TranslateOutLogic.shortLabel("ko"));
         org.junit.Assert.assertEquals("?", TranslateOutLogic.shortLabel(null));
     }
