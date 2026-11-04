@@ -92,7 +92,8 @@ jobs:
             discover/DiscoverMock.java \
             square/SquareLogic.java \
             discover/BlockLogic.java \
-            agents/AgentMarketLogic.java; do
+            agents/AgentMarketLogic.java \
+            square/SquareEvents.java; do
             if [ -f "$SRC/$f" ]; then PURE="$PURE $SRC/$f"; fi
           done
           echo "pure classes:"; echo "$PURE"

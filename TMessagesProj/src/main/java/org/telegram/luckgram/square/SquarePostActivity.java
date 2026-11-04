@@ -70,6 +70,27 @@ public class SquarePostActivity extends UniversalFragment {
         return tx.title();
     }
 
+    /** specs#115: time on this page, reported as a view with tab=detail when it goes away. */
+    private long shownAt;
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        shownAt = System.currentTimeMillis();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (shownAt > 0) {
+            long now = System.currentTimeMillis();
+            long dwell = Math.min(SquareEvents.MAX_DWELL_MS, now - shownAt);
+            shownAt = 0;
+            if (dwell > 0) SquareEventReporter.add(new SquareEvents.Event(SquareEvents.VIEW, postId, SquareEvents.TAB_DETAIL, -1, dwell, now));
+            SquareEventReporter.flush(true);
+        }
+    }
+
     @Override
     public View createView(Context context) {
         View v = super.createView(context);
