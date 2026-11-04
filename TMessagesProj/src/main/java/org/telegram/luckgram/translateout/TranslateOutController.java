@@ -50,6 +50,10 @@ public final class TranslateOutController {
     private static final String ACCOUNT_PREFS_PREFIX = "luckgram_translate_out_";
     private static final String KEY_CHAT_LANG_PREFIX = "lang_";
     private static final String KEY_RECENT = "recent";
+    /** specs#104: 「发送翻译」 switched on for this chat. */
+    private static final String KEY_CHAT_ON_PREFIX = "on_";
+    /** specs#104: LuckgramSettings key; "1" = send the translation without the preview card. */
+    public static final String KEY_NO_PREVIEW = "translate_out_no_preview";
 
 
     private TranslateOutController() {
@@ -86,6 +90,42 @@ public final class TranslateOutController {
             .putString(KEY_CHAT_LANG_PREFIX + dialogId, lang)
             .putString(KEY_RECENT, TranslateOutLogic.joinRecent(recent))
             .apply();
+    }
+
+    /** specs#104: whether 「发送翻译」 is on for this chat (needs a saved language too). */
+    public static boolean isChatOn(int account, long dialogId) {
+        return prefs(account).getBoolean(KEY_CHAT_ON_PREFIX + dialogId, false) && !TextUtils.isEmpty(getSavedLanguage(account, dialogId));
+    }
+
+    public static void setChatOn(int account, long dialogId, boolean on) {
+        if (on) {
+            prefs(account).edit().putBoolean(KEY_CHAT_ON_PREFIX + dialogId, true).apply();
+        } else {
+            prefs(account).edit().remove(KEY_CHAT_ON_PREFIX + dialogId).apply();
+        }
+        org.telegram.messenger.NotificationCenter.getGlobalInstance().postNotificationName(org.telegram.messenger.NotificationCenter.luckgramSettingsChanged);
+    }
+
+    /** specs#104 §6: the chats with 「发送翻译」 on. */
+    public static ArrayList<Long> chatsOn(int account) {
+        final ArrayList<Long> result = new ArrayList<>();
+        for (java.util.Map.Entry<String, ?> e : prefs(account).getAll().entrySet()) {
+            if (e.getKey().startsWith(KEY_CHAT_ON_PREFIX) && Boolean.TRUE.equals(e.getValue())) {
+                try {
+                    result.add(Long.parseLong(e.getKey().substring(KEY_CHAT_ON_PREFIX.length())));
+                } catch (NumberFormatException ignore) {
+                }
+            }
+        }
+        return result;
+    }
+
+    public static boolean previewEnabled() {
+        return !"1".equals(LuckgramSettings.getString(KEY_NO_PREVIEW, ""));
+    }
+
+    public static void setPreviewEnabled(boolean enabled) {
+        LuckgramSettings.setString(KEY_NO_PREVIEW, enabled ? "" : "1");
     }
 
     public static ArrayList<String> getRecentLanguages(int account) {

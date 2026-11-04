@@ -96,7 +96,8 @@ public final class LuckgramFeatures {
             "消息菜单里一点就存到收藏夹", "Save a message to Saved Messages straight from its menu"));
         add(toggle("translate_out", MESSAGES_LANGUAGE, true,
             "发送前翻译", "Translate before sending",
-            "在输入框里先翻译成对方的语言再发送", "Translate your message into the other person's language before sending"));
+            "按聊天开启：写自己的语言，发出去的是对方的语言（输入框「中 → EN」）", "Per chat: write in your language, send in theirs (\"中 → EN\" in the input field)")
+            .subpage(org.telegram.luckgram.translateout.TranslateOutSettingsActivity::new));
         add(toggle(org.telegram.luckgram.translatein.TranslateInLogic.FEATURE_KEY, MESSAGES_LANGUAGE, true,
             "收到消息翻译", "Translate received messages",
             "长按或点消息旁的图标，译文显示在原文下方", "Long-press or tap the icon next to a message; the translation appears below the original")

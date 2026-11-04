@@ -76,6 +76,15 @@ public class TranslateOutLanguageSheet extends BottomSheet {
     private final TextView emptyView;
 
     public TranslateOutLanguageSheet(Context context, int account, String selected, Theme.ResourcesProvider resourcesProvider, Callback callback) {
+        this(context, account, selected, resourcesProvider, callback, null, null);
+    }
+
+    /**
+     * specs#104: {@code topActionText} / {@code topAction} add one row above the search box (e.g.
+     * 「关闭发送翻译」); null = none, as before.
+     */
+    public TranslateOutLanguageSheet(Context context, int account, String selected, Theme.ResourcesProvider resourcesProvider, Callback callback,
+                                     String topActionText, Runnable topAction) {
         super(context, true, resourcesProvider);
         this.resourcesProvider = resourcesProvider;
         this.selected = selected;
@@ -94,6 +103,21 @@ public class TranslateOutLanguageSheet extends BottomSheet {
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         layout.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 22, 4, 22, 10));
+
+        if (topActionText != null && topAction != null) {
+            final TextView action = new TextView(context);
+            action.setText(topActionText);
+            action.setTextColor(color(Theme.key_text_RedRegular));
+            action.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+            action.setGravity(Gravity.CENTER_VERTICAL);
+            action.setPadding(dp(22), 0, dp(22), 0);
+            action.setBackground(Theme.getSelectorDrawable(false));
+            action.setOnClickListener(v -> {
+                dismiss();
+                topAction.run();
+            });
+            layout.addView(action, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0, 0, 0, 6));
+        }
 
         final FrameLayout searchBox = new FrameLayout(context);
         searchBox.setBackground(Theme.createRoundRectDrawable(dp(18), color(Theme.key_dialogSearchBackground)));

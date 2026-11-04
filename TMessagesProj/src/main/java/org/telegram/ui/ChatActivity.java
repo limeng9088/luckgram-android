@@ -1775,6 +1775,8 @@ public class ChatActivity extends BaseFragment implements
     private final static int search = 40;
     /** Luckgram: "总结聊天" (feature 19). */
     private final static int luckgram_summary = 0x4C4719;
+    /** Luckgram specs#104: 「发送前翻译…」 */
+    private final static int luckgram_send_translate = 0x4C4768;
 
     private final static int topic_close = 60;
     private final static int open_forum = 61;
@@ -4112,6 +4114,10 @@ public class ChatActivity extends BaseFragment implements
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/help", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
                 } else if (id == bot_settings) {
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/settings", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
+                } else if (id == luckgram_send_translate) {
+                    if (chatActivityEnterView != null) {
+                        chatActivityEnterView.luckgramOpenSendTranslate();
+                    }
                 } else if (id == luckgram_summary) {
                     org.telegram.luckgram.summary.ChatSummaryUi ui = luckgramSummary();
                     if (ui != null) {
@@ -4581,6 +4587,10 @@ public class ChatActivity extends BaseFragment implements
             }
             if (org.telegram.luckgram.summary.ChatSummaryUi.isEnabled() && chatMode == 0 && !DialogObject.isEncryptedDialog(dialog_id)) {
                 headerItem.lazilyAddSubItem(luckgram_summary, R.drawable.luckgram_ai, org.telegram.luckgram.LuckgramStrings.get("总结聊天", "Summarize chat"));
+            }
+            if (org.telegram.luckgram.translateout.TranslateOutController.isEnabled() && chatMode == 0 && !DialogObject.isEncryptedDialog(dialog_id)) {
+                // Luckgram specs#104 §1: switch translate-before-sending on for this chat
+                headerItem.lazilyAddSubItem(luckgram_send_translate, R.drawable.msg_translate, org.telegram.luckgram.translateout.TranslateOutStrings.chatMenu());
             }
             if (ChatObject.isBoostSupported(currentChat) && (getUserConfig().isPremium() || ChatObject.isBoosted(chatInfo) || ChatObject.hasAdminRights(currentChat))) {
                 RLottieDrawable drawable = new RLottieDrawable(R.raw.boosts, dp(24), dp(24));

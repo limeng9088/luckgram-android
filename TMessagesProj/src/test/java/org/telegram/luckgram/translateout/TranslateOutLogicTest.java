@@ -111,4 +111,14 @@ public class TranslateOutLogicTest {
         assertTrue(covered("", null).isEmpty());
         assertTrue(TranslateOutLogic.protectedRanges(null, null).isEmpty());
     }
+
+    @Test
+    public void capsuleLabels() {
+        // specs#104: 「中 → EN」
+        org.junit.Assert.assertEquals("中 → EN", TranslateOutLogic.capsule("zh-hans", "en"));
+        org.junit.Assert.assertEquals("EN → 日", TranslateOutLogic.capsule("en", "ja"));
+        org.junit.Assert.assertEquals("中 → PT", TranslateOutLogic.capsule("zh", "pt_BR"));
+        org.junit.Assert.assertEquals("한", TranslateOutLogic.shortLabel("ko"));
+        org.junit.Assert.assertEquals("?", TranslateOutLogic.shortLabel(null));
+    }
 }

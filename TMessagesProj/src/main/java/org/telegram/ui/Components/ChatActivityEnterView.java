@@ -149,6 +149,8 @@ import org.telegram.luckgram.quickreplies.QuickRepliesStore;
 import org.telegram.luckgram.quickreplies.QuickRepliesStrings;
 import org.telegram.luckgram.translateout.TranslateOutController;
 import org.telegram.luckgram.translateout.TranslateOutLanguageSheet;
+import org.telegram.luckgram.translateout.TranslateOutLogic;
+import org.telegram.luckgram.translateout.TranslateOutPreviewSheet;
 import org.telegram.luckgram.translateout.TranslateOutStrings;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
@@ -5147,21 +5149,14 @@ public class ChatActivityEnterView extends FrameLayout implements
             ;*/
         }
 
-        if (shouldShowTranslateOut() && !translateOutBusy) {
-            // Luckgram spec 01 C.2: translate from the send button's long-press menu
-            options.add(R.drawable.msg_translate, TranslateOutStrings.translateTo(), () -> {
+        if (canTranslateOut() && hasTextToTranslate() && !translateOutBusy) {
+            // Luckgram specs#104 §4: one item, 「翻译后发送…」 (pick the language, then preview)
+            options.add(R.drawable.msg_translate, TranslateOutStrings.translateAndSend(), () -> {
                 if (messageSendPreview != null) {
                     messageSendPreview.dismiss(false);
                     messageSendPreview = null;
                 }
-                showTranslateOutLanguages();
-            });
-            options.add(R.drawable.msg_translate, TranslateOutStrings.button(), () -> {
-                if (messageSendPreview != null) {
-                    messageSendPreview.dismiss(false);
-                    messageSendPreview = null;
-                }
-                translateOut(null);
+                translateAndSendOnce();
             });
         }
         if (sendWithoutSoundButtonValue) {
@@ -6116,50 +6111,69 @@ public class ChatActivityEnterView extends FrameLayout implements
         updateFieldRight(lastAttachVisible);
     }
 
-    // ------------------------------------------------------------ Luckgram: translate before sending (feature 01)
+    // ------------------------------------------------------------ Luckgram: translate before sending (feature 01, specs#104)
 
-    private ImageView translateOutButton;
+    /** specs#104: the 「中 → EN」 capsule, shown while 「发送翻译」 is on for this chat. */
+    private TextView translateOutButton;
     private boolean translateOutShown;
     private boolean translateOutBusy;
-    private CharSequence translateOutOriginal;
-    private String translateOutResult;
-    private Bulletin translateOutBulletin;
+    /** Set while sending the text chosen in the preview, so that send is not intercepted again. */
+    private boolean translateOutBypass;
 
     private void createTranslateOutButton(Context context) {
         if (parentFragment == null || messageEditTextContainer == null) {
             return;
         }
-        translateOutButton = new ImageView(context);
-        translateOutButton.setImageResource(R.drawable.msg_translate);
-        translateOutButton.setScaleType(ImageView.ScaleType.CENTER);
-        translateOutButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
-        translateOutButton.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_CIRCLE_20DP, dp(16)));
-        translateOutButton.setContentDescription(TranslateOutStrings.button());
+        translateOutButton = new TextView(context);
+        translateOutButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 11);
+        translateOutButton.setTypeface(AndroidUtilities.bold());
+        translateOutButton.setGravity(Gravity.CENTER);
+        translateOutButton.setSingleLine(true);
+        translateOutButton.setPadding(dp(3), 0, dp(3), 0);
+        translateOutButton.setContentDescription(TranslateOutStrings.capsuleHint());
+        applyTranslateOutColors();
         translateOutButton.setVisibility(View.GONE);
         translateOutButton.setAlpha(0.0f);
         translateOutButton.setScaleX(0.6f);
         translateOutButton.setScaleY(0.6f);
-        messageEditTextContainer.addView(translateOutButton, LayoutHelper.createFrame(DEFAULT_HEIGHT, DEFAULT_HEIGHT, Gravity.BOTTOM | Gravity.RIGHT, 0, 0, DEFAULT_HEIGHT, 0));
-        translateOutButton.setOnClickListener(v -> translateOut(null));
-        translateOutButton.setOnLongClickListener(v -> {
-            showTranslateOutLanguages();
-            return true;
-        });
+        messageEditTextContainer.addView(translateOutButton, LayoutHelper.createFrame(DEFAULT_HEIGHT - 4, 26, Gravity.BOTTOM | Gravity.RIGHT, 0, 0, DEFAULT_HEIGHT + 2, 11));
+        translateOutButton.setOnClickListener(v -> showSendTranslateMenu());
     }
 
-    private boolean shouldShowTranslateOut() {
+    private void applyTranslateOutColors() {
+        if (translateOutButton == null) {
+            return;
+        }
+        final int accent = getThemedColor(Theme.key_chat_messagePanelSend);
+        translateOutButton.setTextColor(accent);
+        translateOutButton.setBackground(Theme.createRoundRectDrawable(dp(13), Theme.multAlpha(accent, 0.15f)));
+    }
+
+    /** Translate-before-sending can be used in this chat at all (feature on, not secret, not editing, not stories). */
+    private boolean canTranslateOut() {
         return translateOutButton != null && parentFragment != null && !isStories && !parentFragment.isSecretChat()
-            && editingMessageObject == null && TranslateOutController.isEnabled()
-            && messageEditText != null && messageEditText.getText() != null
+            && editingMessageObject == null && TranslateOutController.isEnabled();
+    }
+
+    private boolean hasTextToTranslate() {
+        return messageEditText != null && messageEditText.getText() != null
             && !TextUtils.isEmpty(AndroidUtilities.getTrimmedString(messageEditText.getText()));
+    }
+
+    /** specs#104 §2: the capsule shows while 「发送翻译」 is on for this chat, with or without text. */
+    private boolean shouldShowTranslateOut() {
+        return canTranslateOut() && TranslateOutController.isChatOn(currentAccount, dialog_id);
     }
 
     private void updateTranslateOutButton() {
         if (translateOutButton == null) {
             return;
         }
-        // Luckgram specs#94: in the compact bar translate lives in the 「+」 panel and the send button's menu
-        final boolean show = shouldShowTranslateOut() && !isLuckgramPlusMode();
+        final boolean show = shouldShowTranslateOut();
+        if (show) {
+            translateOutButton.setText(TranslateOutLogic.capsule(LocaleController.getInstance().getCurrentLocale().getLanguage(),
+                TranslateOutController.getSavedLanguage(currentAccount, dialog_id)));
+        }
         if (show == translateOutShown) {
             return;
         }
@@ -6190,92 +6204,136 @@ public class ChatActivityEnterView extends FrameLayout implements
         }
     }
 
-    private void translateOut(String lang) {
-        if (translateOutBusy || messageEditText == null || parentFragment == null || messageEditText.getText() == null) {
+    /**
+     * specs#104 §1: chat 「⋮」 →「发送前翻译…」 and the 「+」 panel's 「翻译」. Off: pick the language
+     * (suggested: the peer's latest message) and switch it on for this chat. On: the capsule menu.
+     */
+    public void luckgramOpenSendTranslate() {
+        if (!canTranslateOut() || parentFragment.getParentActivity() == null) {
+            return;
+        }
+        if (TranslateOutController.isChatOn(currentAccount, dialog_id)) {
+            showSendTranslateMenu();
+            return;
+        }
+        final long dialogId = dialog_id;
+        TranslateOutController.resolveLanguage(currentAccount, dialogId, parentFragment.messages, suggested -> {
+            if (parentFragment == null || parentFragment.getParentActivity() == null) {
+                return;
+            }
+            new TranslateOutLanguageSheet(parentFragment.getParentActivity(), currentAccount, suggested, resourcesProvider, code -> {
+                TranslateOutController.saveLanguage(currentAccount, dialogId, code);
+                TranslateOutController.setChatOn(currentAccount, dialogId, true);
+                updateTranslateOutButton();
+                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.msg_translate, TranslateOutStrings.turnedOn(TranslateOutController.languageName(code))).show();
+            }).show();
+        });
+    }
+
+    /** specs#104 §2: tap on the capsule: change the language (saved for this chat) or turn it off. */
+    private void showSendTranslateMenu() {
+        if (parentFragment == null || parentFragment.getParentActivity() == null) {
+            return;
+        }
+        final long dialogId = dialog_id;
+        new TranslateOutLanguageSheet(parentFragment.getParentActivity(), currentAccount, TranslateOutController.getSavedLanguage(currentAccount, dialogId), resourcesProvider, code -> {
+            TranslateOutController.saveLanguage(currentAccount, dialogId, code);
+            updateTranslateOutButton();
+        }, TranslateOutStrings.turnOff(), () -> {
+            TranslateOutController.setChatOn(currentAccount, dialogId, false);
+            updateTranslateOutButton();
+            if (parentFragment != null) {
+                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.msg_translate, TranslateOutStrings.turnedOff()).show();
+            }
+        }).show();
+    }
+
+    /** specs#104 §4: send button long-press 「翻译后发送…」: one time, pick the language, then preview. */
+    private void translateAndSendOnce() {
+        if (!canTranslateOut() || !hasTextToTranslate() || parentFragment.getParentActivity() == null) {
+            return;
+        }
+        final String current = TranslateOutController.getSavedLanguage(currentAccount, dialog_id);
+        new TranslateOutLanguageSheet(parentFragment.getParentActivity(), currentAccount, current, resourcesProvider,
+            code -> translateThenSend(code, true, 0, 0, 0, true)).show();
+    }
+
+    /**
+     * specs#104 §3: with 「发送翻译」 on, sending first translates; returns true when it took over the
+     * send. Only user-initiated sends ({@code allowConfirm}) are intercepted, never ours or re-sends
+     * after a confirmation.
+     */
+    private boolean interceptSendForTranslation(boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars, boolean allowConfirm) {
+        if (translateOutBypass || !allowConfirm || translateOutBusy || !shouldShowTranslateOut() || !hasTextToTranslate()
+            || audioToSend != null || videoToSendMessageObject != null) {
+            return false;
+        }
+        translateThenSend(TranslateOutController.getSavedLanguage(currentAccount, dialog_id), notify, scheduleDate, scheduleRepeatPeriod, payStars, TranslateOutController.previewEnabled());
+        return true;
+    }
+
+    private void translateThenSend(String lang, boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars, boolean preview) {
+        if (translateOutBusy || messageEditText == null || messageEditText.getText() == null || TextUtils.isEmpty(lang)) {
             return;
         }
         final CharSequence source = new SpannableStringBuilder(messageEditText.getText());
         if (TextUtils.isEmpty(AndroidUtilities.getTrimmedString(source))) {
             return;
         }
-        if (lang != null) {
-            doTranslateOut(source, lang);
-            return;
-        }
-        if (TextUtils.isEmpty(TranslateOutController.getSavedLanguage(currentAccount, dialog_id))) {
-            // specs#93: first use in this chat asks for the language (saved for the chat), no English default
-            showTranslateOutLanguages();
-            return;
-        }
-        setTranslateOutBusy(true);
-        TranslateOutController.resolveLanguage(currentAccount, dialog_id, parentFragment.messages, resolved -> {
-            setTranslateOutBusy(false);
-            doTranslateOut(source, resolved);
-        });
-    }
-
-    private void doTranslateOut(CharSequence source, String lang) {
-        if (messageEditText == null) {
-            return;
-        }
         setTranslateOutBusy(true);
         TranslateOutController.translate(currentAccount, source, lang, messageEditText.getPaint().getFontMetricsInt(), (result, errorMessage) -> {
             setTranslateOutBusy(false);
-            if (messageEditText == null || parentFragment == null) {
-                return;
-            }
-            if (result == null) {
-                hideTranslateOutBulletin();
-                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.error, errorMessage != null ? errorMessage : TranslateOutStrings.failed()).show();
+            if (messageEditText == null || parentFragment == null || parentFragment.getParentActivity() == null) {
                 return;
             }
             if (messageEditText.getText() == null || !TextUtils.equals(source.toString(), messageEditText.getText().toString())) {
-                return; // the user kept typing meanwhile: don't overwrite
+                return; // the user kept typing meanwhile: don't send
             }
-            translateOutOriginal = source;
-            setFieldText(result);
-            translateOutResult = messageEditText.getText() == null ? null : messageEditText.getText().toString();
-            hideTranslateOutBulletin();
-            translateOutBulletin = BulletinFactory.of(parentFragment).createSimpleBulletin(
-                R.raw.msg_translate,
-                TranslateOutStrings.translatedTo(TranslateOutController.languageName(lang)),
-                TranslateOutStrings.undo(),
-                Bulletin.DURATION_PROLONG,
-                this::undoTranslateOut
-            ).show();
+            if (result == null) {
+                // §验收: offline / failed → say so, offer the original
+                new AlertDialog.Builder(parentFragment.getParentActivity(), resourcesProvider)
+                    .setTitle(TranslateOutStrings.button())
+                    .setMessage(TranslateOutStrings.failedSendOriginal(errorMessage))
+                    .setPositiveButton(TranslateOutStrings.sendOriginal(), (d, i) -> sendTranslateOutChoice(null, notify, scheduleDate, scheduleRepeatPeriod, payStars))
+                    .setNegativeButton(TranslateOutStrings.cancel(), null)
+                    .show();
+                return;
+            }
+            if (!preview) {
+                sendTranslateOutChoice(result, notify, scheduleDate, scheduleRepeatPeriod, payStars);
+                return;
+            }
+            new TranslateOutPreviewSheet(parentFragment.getParentActivity(), source, result, TranslateOutController.languageName(lang), resourcesProvider,
+                new TranslateOutPreviewSheet.Actions() {
+                    @Override
+                    public void sendTranslation() {
+                        sendTranslateOutChoice(result, notify, scheduleDate, scheduleRepeatPeriod, payStars);
+                    }
+
+                    @Override
+                    public void sendOriginal() {
+                        sendTranslateOutChoice(null, notify, scheduleDate, scheduleRepeatPeriod, payStars);
+                    }
+
+                    @Override
+                    public void edit() {
+                        setFieldText(result);
+                    }
+                }).show();
         });
     }
 
-    private void undoTranslateOut() {
-        if (messageEditText == null || translateOutOriginal == null) {
-            return;
+    /** Sends the translation (or, with null, the original as typed) without intercepting again. */
+    private void sendTranslateOutChoice(CharSequence translation, boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars) {
+        if (translation != null) {
+            setFieldText(translation);
         }
-        final CharSequence original = translateOutOriginal;
-        final boolean unchanged = messageEditText.getText() != null && TextUtils.equals(translateOutResult, messageEditText.getText().toString());
-        translateOutOriginal = null;
-        translateOutResult = null;
-        if (unchanged) {
-            setFieldText(original);
+        translateOutBypass = true;
+        try {
+            sendMessageInternal(notify, scheduleDate, scheduleRepeatPeriod, payStars, true);
+        } finally {
+            translateOutBypass = false;
         }
-    }
-
-    private void hideTranslateOutBulletin() {
-        if (translateOutBulletin != null) {
-            translateOutBulletin.hide();
-            translateOutBulletin = null;
-        }
-    }
-
-    private void showTranslateOutLanguages() {
-        if (parentFragment == null || parentFragment.getParentActivity() == null) {
-            return;
-        }
-        final String current = TranslateOutController.getSavedLanguage(currentAccount, dialog_id);
-        final long dialogId = dialog_id;
-        new TranslateOutLanguageSheet(parentFragment.getParentActivity(), currentAccount, current, resourcesProvider, code -> {
-            TranslateOutController.saveLanguage(currentAccount, dialogId, code);
-            translateOut(code);
-        }).show();
     }
 
     // ------------------------------------------------------------ Luckgram: AI writing (feature 21)
@@ -6705,12 +6763,8 @@ public class ChatActivityEnterView extends FrameLayout implements
                 break;
             }
             case PLUS_TRANSLATE:
-                // spec 01 translate-before-sending: with text, translate now; empty field, pick the language
-                if (messageEditText != null && !TextUtils.isEmpty(AndroidUtilities.getTrimmedString(messageEditText.getText()))) {
-                    translateOut(null);
-                } else {
-                    showTranslateOutLanguages();
-                }
+                // specs#104 §1: switch 「发送翻译」 on for this chat (or change / turn it off)
+                luckgramOpenSendTranslate();
                 break;
         }
     }
@@ -7317,6 +7371,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     public void setDialogId(long id, int account) {
         dialog_id = id;
+        AndroidUtilities.runOnUIThread(this::updateTranslateOutButton); // Luckgram specs#104: this chat's capsule
         if (currentAccount != account) {
             notificationsLocker.unlock();
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.recordStarted);
@@ -7921,6 +7976,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     protected boolean sendMessageInternal(boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars, boolean allowConfirm) {
+        if (interceptSendForTranslation(notify, scheduleDate, scheduleRepeatPeriod, payStars, allowConfirm)) {
+            return true; // Luckgram specs#104: translated (and previewed) first
+        }
         final boolean allowConfirmFinal = allowConfirm && !animatorEphemeralMessageVisibility.getValue();
 
         final Runnable send = () -> {
@@ -11042,9 +11100,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     @Override
     public void updateColors() {
-        if (translateOutButton != null) {
-            translateOutButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
-        }
+        applyTranslateOutColors();
         if (aiWritingTextButton != null) {
             aiWritingTextButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
         }
