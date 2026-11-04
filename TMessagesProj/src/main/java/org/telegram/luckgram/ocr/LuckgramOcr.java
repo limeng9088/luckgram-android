@@ -119,6 +119,74 @@ public final class LuckgramOcr {
         Utilities.globalQueue.postRunnable(() -> run(bitmap, key, callback));
     }
 
+    /** Whether "Recognize with Luckgram AI" can be offered (remote config, new server endpoint). */
+    public static boolean aiAvailable() {
+        return org.telegram.luckgram.LuckgramSettings.remoteConfig().getBool(OcrAi.CONFIG_KEY, false);
+    }
+
+    /**
+     * specs#106 需求 2: recognizes with Luckgram AI (the server's vision model). Asks the AI consent
+     * first (spec 00) and counts against the AI quota; the image is sent as a JPEG of at most
+     * {@value OcrAi#MAX_SIDE} px. The result replaces the cached on-device one. Errors are
+     * {@link org.telegram.luckgram.LuckgramAIError} codes (e.g. quota_exceeded, consent_denied).
+     */
+    public static void recognizeWithAi(Context context, File file, String langHint, Callback<OcrResult> callback) {
+        if (file == null || !file.exists()) {
+            fail(callback, ERROR_NO_IMAGE);
+            return;
+        }
+        org.telegram.luckgram.LuckgramAI ai = org.telegram.luckgram.LuckgramAI.getInstance();
+        if (!ai.hasConsent()) {
+            ai.requestConsent(context, granted -> {
+                if (granted != null && granted) {
+                    recognizeWithAi(context, file, langHint, callback);
+                } else {
+                    fail(callback, org.telegram.luckgram.LuckgramAIError.CONSENT_DENIED);
+                }
+            });
+            return;
+        }
+        Utilities.globalQueue.postRunnable(() -> {
+            Bitmap bitmap = decode(file);
+            String base64 = bitmap != null ? jpegBase64(bitmap) : null;
+            if (base64 == null) {
+                fail(callback, ERROR_NO_IMAGE);
+                return;
+            }
+            int w = bitmap.getWidth(), h = bitmap.getHeight();
+            AndroidUtilities.runOnUIThread(() -> ai.requestJson("POST", OcrAi.PATH, OcrAi.body(base64, langHint), new org.telegram.luckgram.LuckgramAI.Callback<org.json.JSONObject>() {
+                @Override
+                public void onResult(org.json.JSONObject json) {
+                    OcrResult result = OcrAi.parse(json, w, h);
+                    store(file.getAbsolutePath(), result);
+                    callback.onResult(result);
+                }
+
+                @Override
+                public void onError(org.telegram.luckgram.LuckgramAIError error) {
+                    callback.onError(error != null ? error.code : ERROR_FAILED);
+                }
+            }));
+        });
+    }
+
+    /** JPEG of at most {@link OcrAi#MAX_SIDE} px and {@link OcrAi#MAX_BYTES}, base64; null if it can't fit. */
+    private static String jpegBase64(Bitmap bitmap) {
+        Bitmap b = bitmap;
+        float scale = Math.min(1f, OcrAi.MAX_SIDE / (float) Math.max(bitmap.getWidth(), bitmap.getHeight()));
+        if (scale < 1f) {
+            b = Bitmap.createScaledBitmap(bitmap, Math.max(1, (int) (bitmap.getWidth() * scale)), Math.max(1, (int) (bitmap.getHeight() * scale)), true);
+        }
+        for (int quality = 85; quality >= 45; quality -= 20) {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            b.compress(Bitmap.CompressFormat.JPEG, quality, out);
+            if (out.size() <= OcrAi.MAX_BYTES) {
+                return android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP);
+            }
+        }
+        return null;
+    }
+
     /** Whether the image has text; shares the recognition (and cache) with {@link #recognize}. */
     public static void hasText(Context context, File file, Callback<Boolean> callback) {
         recognize(context, file, new Callback<OcrResult>() {
