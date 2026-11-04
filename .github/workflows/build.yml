@@ -11,20 +11,53 @@ on:
     branches: [master]
     paths-ignore: ['**.md']
 
+# master: never cancel a running build. GitHub keeps one running and only the newest one
+# waiting, so merging several PRs in a row builds the running one and the last one.
+# Branch builds (workflow_dispatch) still cancel each other.
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 permissions:
   contents: write
+  actions: write  # delete older ccaches
 
 jobs:
-  build:
+  # Which APKs to build. master: the phone APK (arm64-v8a) and an x86_64 APK for x86 emulators
+  # (Windows), built in parallel. workflow_dispatch: one APK with the ABIs given in the input.
+  plan:
     runs-on: ubuntu-24.04
-    timeout-minutes: 300
+    outputs:
+      abis: ${{ steps.p.outputs.abis }}
+    steps:
+      - id: p
+        env:
+          INPUT: ${{ github.event.inputs.abis }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            A=$(printf '%s' "${INPUT:-arm64-v8a}" | xargs)
+            echo "abis=$(python3 -c 'import json,sys;print(json.dumps([sys.argv[1]]))' "$A")" >> "$GITHUB_OUTPUT"
+          else
+            echo 'abis=["arm64-v8a","x86_64"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        abis: ${{ fromJSON(needs.plan.outputs.abis) }}
     env:
       NDK_VERSION: 27.2.12479018
-      ABIS: ${{ github.event.inputs.abis || 'arm64-v8a' }}
+      ABIS: ${{ matrix.abis }}
+      LUCKGRAM_CCACHE: '1'
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_NOHASHDIR: 'true'
+      CCACHE_COMPILERCHECK: content
+      CCACHE_MAXSIZE: 3G
     steps:
       # 原生依赖（ffmpeg/td/boringssl 等）体积大，先腾出磁盘空间
       - name: Free disk space
@@ -46,6 +79,21 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/master' }}
+
+      # Native code (tgnet, voip, ffmpeg glue...) is about 7 minutes per ABI from scratch.
+      # ccache keeps the objects between builds; only master saves, branches read master's.
+      - name: Install ccache
+        run: sudo apt-get install -y -qq ccache > /dev/null && ccache --version | head -1
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ env.NDK_VERSION }}-${{ matrix.abis }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ env.NDK_VERSION }}-${{ matrix.abis }}-
 
       - name: Install Android SDK components
         run: |
@@ -106,8 +154,34 @@ jobs:
           sed -i "s/abiFilters \"armeabi-v7a\", \"arm64-v8a\", \"x86\", \"x86_64\"/abiFilters $list/" TMessagesProj_App/build.gradle
           grep -n abiFilters TMessagesProj_App/build.gradle
 
+      # LUCKGRAM_ABIS limits the library's native build to the same ABIs (it compiled all four before).
       - name: Build afat release APK
-        run: ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace -Porg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+        run: |
+          ccache -z > /dev/null
+          ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace \
+            -PLUCKGRAM_ABIS="$(printf '%s' "$ABIS" | tr ' ' ',')" \
+            -Porg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+          ccache -s | head -20
+
+      - name: Save ccache (master only)
+        if: (success() || failure()) && github.ref == 'refs/heads/master'
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ env.NDK_VERSION }}-${{ matrix.abis }}-${{ github.run_id }}
+
+      # Keep one ccache per ABI (repo cache limit is 10 GB). Only after this run's cache is saved.
+      - name: Delete older ccaches (master only)
+        if: (success() || failure()) && github.ref == 'refs/heads/master'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFIX: ccache-${{ env.NDK_VERSION }}-${{ matrix.abis }}-
+        run: |
+          KEEP="${PREFIX}${GITHUB_RUN_ID}"
+          KEYS=$(gh cache list -R "$GITHUB_REPOSITORY" --key "$PREFIX" --limit 100 --json key -q '.[].key')
+          grep -qx "$KEEP" <<<"$KEYS" || { echo "::warning::$KEEP not saved; keeping older caches"; exit 0; }
+          grep -vx "$KEEP" <<<"$KEYS" | while read -r k; do [ -n "$k" ] && gh cache delete "$k" -R "$GITHUB_REPOSITORY" || true; done
 
       - name: Verify signing certificate
         env:
@@ -130,12 +204,36 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: luckgram-android-${{ github.run_number }}
+          name: luckgram-android-${{ github.run_number }}-${{ strategy.job-index }}
           path: out/*.apk
           if-no-files-found: error
 
+  # One release with every APK built above. The phone APK (arm64-v8a) is required; if only the
+  # x86_64 build failed, the release still goes out without it.
+  release:
+    needs: build
+    if: always() && github.ref == 'refs/heads/master' && needs.build.result != 'cancelled'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download APKs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: luckgram-android-${{ github.run_number }}-*
+          path: out
+          merge-multiple: true
+
+      - name: Check APKs
+        run: |
+          ls -l out
+          ls out/*-arm64-v8a.apk > /dev/null 2>&1 || { echo "::error::arm64-v8a APK missing"; exit 1; }
+          ls out/*-x86_64.apk > /dev/null 2>&1 || echo "::warning::x86_64 APK missing, releasing without it"
+
       - name: GitHub release
-        if: github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -143,11 +241,10 @@ jobs:
           gh release create "android-${VER}-${GITHUB_RUN_NUMBER}" out/*.apk \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "Luckgram Android ${VER} (${GITHUB_RUN_NUMBER})" \
-            --notes "Signed release APK (${ABIS}) built from ${GITHUB_SHA}."
+            --notes "Signed release APKs built from ${GITHUB_SHA}. Phones: *-arm64-v8a.apk. x86 emulators (Windows): *-x86_64.apk."
 
       # S5: tell the Luckgram API about the new release (GET /v1/version).
       - name: Publish version to Luckgram API
-        if: github.ref == 'refs/heads/master'
         env:
           TOKEN_DEV: ${{ secrets.LUCKGRAM_RELEASE_TOKEN_DEV }}
           TOKEN_PROD: ${{ secrets.LUCKGRAM_RELEASE_TOKEN_PROD }}
@@ -159,7 +256,7 @@ jobs:
           # same run number (BuildConfig.LUCKGRAM_BUILD, S5 app part).
           CODE=$GITHUB_RUN_NUMBER
           TAG="android-${VER}-${GITHUB_RUN_NUMBER}"
-          APK=$(basename out/*.apk)
+          APK=$(basename out/*-arm64-v8a.apk)
           BODY=$(printf '{"platform":"%s","version":"%s","build":%s,"url":"%s","source":"%s"}' \
             android "$VER" "$CODE" "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}" "${GITHUB_REPOSITORY}@${GITHUB_SHA} run ${GITHUB_RUN_NUMBER}")
           # Tokens only via env -> stdin (never argv); a missing secret skips that stage.
