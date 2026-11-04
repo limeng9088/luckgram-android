@@ -74,8 +74,8 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
     private RecyclerListView listView;
     private LinearLayoutManager layoutManager;
     private Adapter adapter;
-    private TextView emptyView;
-    private LinearLayout headerStrip;
+    /** specs#101: welcome card with example questions while the conversation is empty. */
+    private View emptyView;
     private EditTextBoldCursor input;
     private ImageView sendButton;
     private ChatAvatarContainer avatarContainer;
@@ -188,19 +188,10 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         column.setOrientation(LinearLayout.VERTICAL);
         content.addView(column, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
-        // extension point 3: entries at the top of the page
-        HorizontalScrollView headerScroll = new HorizontalScrollView(context);
-        headerScroll.setHorizontalScrollBarEnabled(false);
-        // specs#96: no panel of its own — the chips float on the wallpaper like the quick buttons
-        headerStrip = new LinearLayout(context);
-        headerStrip.setOrientation(LinearLayout.HORIZONTAL);
-        headerStrip.setPadding(dp(8), dp(6), dp(8), dp(6));
-        headerScroll.addView(headerStrip);
-        column.addView(headerScroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        // extension point 3: entries at the top of the page, as Telegram pinned bars (specs#101)
         for (LuckgramAiRegistry.HeaderEntry entry : LuckgramAiRegistry.headerEntries()) {
-            headerStrip.addView(chip(context, entry.title(), entry.icon, v -> entry.callback.run(this)));
+            column.addView(pinnedBar(context, entry), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48));
         }
-        headerScroll.setVisibility(headerStrip.getChildCount() > 0 ? View.VISIBLE : View.GONE);
 
         FrameLayout listFrame = new FrameLayout(context);
         column.addView(listFrame, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
@@ -216,29 +207,13 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         listView.setAdapter(adapter);
         listFrame.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
 
-        emptyView = new TextView(context);
-        emptyView.setText(LuckgramStrings.get("有什么可以帮你？\n可以提问、总结或改写长文、讲解、解题。", "How can I help?\nAsk anything, summarize or rewrite text, explain, solve problems."));
-        emptyView.setGravity(Gravity.CENTER);
-        emptyView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        emptyView.setTextColor(getThemedColor(Theme.key_chat_serviceText));
-        emptyView.setPadding(dp(16), dp(10), dp(16), dp(10));
-        GradientDrawable emptyBg = new GradientDrawable();
-        emptyBg.setCornerRadius(dp(14));
-        emptyBg.setColor(getThemedColor(Theme.key_chat_serviceBackground));
-        emptyView.setBackground(emptyBg);
-        listFrame.addView(emptyView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 32, 0, 32, 0));
-
-        // spec 18 需求 3 + extension point 1: quick buttons above the input field
-        HorizontalScrollView quickScroll = new HorizontalScrollView(context);
-        quickScroll.setHorizontalScrollBarEnabled(false);
-        LinearLayout quickRow = new LinearLayout(context);
-        quickRow.setOrientation(LinearLayout.HORIZONTAL);
-        quickRow.setPadding(dp(8), dp(4), dp(8), dp(4));
-        quickScroll.addView(quickRow);
-        for (LuckgramAiRegistry.QuickAction action : LuckgramAiRegistry.quickActions()) {
-            quickRow.addView(chip(context, action.title(), action.icon, v -> action.callback.run(this)));
-        }
-        column.addView(quickScroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        android.widget.ScrollView emptyScroll = new android.widget.ScrollView(context);
+        emptyScroll.setFillViewport(true);
+        FrameLayout emptyFrame = new FrameLayout(context);
+        emptyFrame.addView(welcomeCard(context), LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 24, 12, 24, 12));
+        emptyScroll.addView(emptyFrame);
+        emptyView = emptyScroll;
+        listFrame.addView(emptyView, LayoutHelper.createFrame(Math.min(388, (int) (AndroidUtilities.displaySize.x / AndroidUtilities.density)), LayoutHelper.MATCH_PARENT, Gravity.CENTER_HORIZONTAL));
 
         // specs#96: the same top shadow as Telegram's message panel (ChatActivityEnterView)
         View composeShadow = new View(context);
@@ -246,6 +221,21 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         shadow.setColorFilter(new android.graphics.PorterDuffColorFilter(getThemedColor(Theme.key_chat_messagePanelShadow), android.graphics.PorterDuff.Mode.SRC_IN));
         composeShadow.setBackground(shadow);
         column.addView(composeShadow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 3));
+
+        // spec 18 需求 3 + extension point 1: quick buttons, a scrollable row at the top of the
+        // message panel (specs#101), on the panel's own background
+        HorizontalScrollView quickScroll = new HorizontalScrollView(context);
+        quickScroll.setHorizontalScrollBarEnabled(false);
+        quickScroll.setBackgroundColor(getThemedColor(Theme.key_chat_messagePanelBackground));
+        LinearLayout quickRow = new LinearLayout(context);
+        quickRow.setOrientation(LinearLayout.HORIZONTAL);
+        quickRow.setPadding(dp(7), dp(8), dp(7), dp(2));
+        quickScroll.addView(quickRow);
+        for (LuckgramAiRegistry.QuickAction action : LuckgramAiRegistry.quickActions()) {
+            quickRow.addView(chip(context, action.title(), action.icon, v -> action.callback.run(this)));
+        }
+        quickScroll.setVisibility(quickRow.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+        column.addView(quickScroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         FrameLayout inputPanel = new FrameLayout(context);
         inputPanel.setBackgroundColor(getThemedColor(Theme.key_chat_messagePanelBackground));
@@ -312,6 +302,7 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         AndroidUtilities.requestAdjustResize(getParentActivity(), classGuid);
     }
 
+    /** specs#101: quick buttons — accent text on a light accent tint with an accent outline. */
     private View chip(Context context, String title, int icon, View.OnClickListener click) {
         TextView chip = new TextView(context);
         chip.setText(title);
@@ -319,25 +310,139 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         chip.setTypeface(AndroidUtilities.bold());
         chip.setGravity(Gravity.CENTER);
         chip.setSingleLine(true);
-        int color = getThemedColor(Theme.key_chat_serviceText);
-        chip.setTextColor(color);
+        int accent = getThemedColor(Theme.key_chat_messagePanelSend);
+        chip.setTextColor(accent);
         chip.setPadding(dp(12), 0, dp(12), 0);
         if (icon != 0) {
             android.graphics.drawable.Drawable d = context.getResources().getDrawable(icon).mutate();
-            d.setColorFilter(new android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN));
+            d.setColorFilter(new android.graphics.PorterDuffColorFilter(accent, android.graphics.PorterDuff.Mode.SRC_IN));
             d.setBounds(0, 0, dp(18), dp(18));
             chip.setCompoundDrawables(d, null, null, null);
             chip.setCompoundDrawablePadding(dp(4));
         }
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(dp(15));
-        bg.setColor(getThemedColor(Theme.key_chat_serviceBackground));
-        chip.setBackground(bg);
+        bg.setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x1A));
+        bg.setStroke(Math.max(1, dp(1)), androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x80));
+        chip.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x30)), bg, null));
         chip.setOnClickListener(click);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30));
         lp.setMargins(dp(3), 0, dp(3), 0);
         chip.setLayoutParams(lp);
         return chip;
+    }
+
+    /** specs#101: a header entry as Telegram's pinned message bar — accent line, icon, title, hint ›. */
+    private View pinnedBar(Context context, LuckgramAiRegistry.HeaderEntry entry) {
+        int accent = getThemedColor(Theme.key_chat_topPanelLine);
+        FrameLayout bar = new FrameLayout(context) {
+            @Override
+            protected void dispatchDraw(android.graphics.Canvas canvas) {
+                super.dispatchDraw(canvas);
+                canvas.drawLine(0, getMeasuredHeight() - 1, getMeasuredWidth(), getMeasuredHeight() - 1, Theme.dividerPaint);
+            }
+        };
+        bar.setWillNotDraw(false);
+        bar.setBackground(Theme.createSelectorWithBackgroundDrawable(getThemedColor(Theme.key_chat_topPanelBackground), getThemedColor(Theme.key_listSelector)));
+        bar.setContentDescription(entry.title());
+        bar.setOnClickListener(v -> entry.callback.run(this));
+        View line = new View(context);
+        GradientDrawable lineBg = new GradientDrawable();
+        lineBg.setCornerRadius(dp(1));
+        lineBg.setColor(accent);
+        line.setBackground(lineBg);
+        bar.addView(line, LayoutHelper.createFrame(2, 32, Gravity.LEFT | Gravity.CENTER_VERTICAL, 10, 0, 0, 0));
+        if (entry.icon != 0) {
+            ImageView icon = new ImageView(context);
+            icon.setScaleType(ImageView.ScaleType.CENTER);
+            icon.setImageResource(entry.icon);
+            icon.setColorFilter(new android.graphics.PorterDuffColorFilter(accent, android.graphics.PorterDuff.Mode.SRC_IN));
+            bar.addView(icon, LayoutHelper.createFrame(28, 28, Gravity.LEFT | Gravity.CENTER_VERTICAL, 20, 0, 0, 0));
+        }
+        TextView title = new TextView(context);
+        title.setText(entry.title());
+        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+        title.setTypeface(AndroidUtilities.bold());
+        title.setTextColor(getThemedColor(Theme.key_chat_topPanelTitle));
+        title.setSingleLine(true);
+        bar.addView(title, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.CENTER_VERTICAL, entry.icon != 0 ? 56 : 22, 0, 120, 0));
+        TextView hint = new TextView(context);
+        String sub = entry.subtitle();
+        hint.setText((sub == null ? "" : sub + " ") + "›");
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+        hint.setTextColor(accent);
+        hint.setSingleLine(true);
+        bar.addView(hint, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 14, 0));
+        return bar;
+    }
+
+    /** specs#101: example questions on the welcome card (same on iOS); a tap fills the input field. */
+    static final String[][] WELCOME_EXAMPLES = {
+        {"把这段话改得更正式一点", "Make this paragraph more formal"},
+        {"用三句话解释什么是区块链", "Explain blockchain in three sentences"},
+        {"周末两天怎么安排一次短途旅行？", "Plan a two-day weekend trip for me"},
+        {"帮我写一条给同事的生日祝福", "Write a birthday message for a coworker"},
+    };
+
+    /** specs#101: centered card — accent icon, title, one line, 4 tappable examples; readable in both themes. */
+    private View welcomeCard(Context context) {
+        int accent = getThemedColor(Theme.key_chat_messagePanelSend);
+        LinearLayout card = new LinearLayout(context);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER_HORIZONTAL);
+        card.setPadding(dp(16), dp(20), dp(16), dp(16));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(18));
+        bg.setColor(getThemedColor(Theme.key_chat_inBubble));
+        card.setBackground(bg);
+        card.setElevation(dp(2));
+
+        ImageView badge = new ImageView(context);
+        badge.setScaleType(ImageView.ScaleType.CENTER);
+        badge.setImageResource(R.drawable.msg_bots);
+        badge.setColorFilter(new android.graphics.PorterDuffColorFilter(0xFFFFFFFF, android.graphics.PorterDuff.Mode.SRC_IN));
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setShape(GradientDrawable.OVAL);
+        badgeBg.setColor(accent);
+        badge.setBackground(badgeBg);
+        card.addView(badge, LayoutHelper.createLinear(48, 48));
+
+        TextView title = new TextView(context);
+        title.setText(LuckgramStrings.get("有什么可以帮你？", "How can I help?"));
+        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
+        title.setTypeface(AndroidUtilities.bold());
+        title.setTextColor(getThemedColor(Theme.key_chat_messageTextIn));
+        title.setGravity(Gravity.CENTER);
+        card.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
+
+        TextView sub = new TextView(context);
+        sub.setText(LuckgramStrings.get("可以提问、总结或改写长文、讲解、解题。", "Ask anything, summarize or rewrite text, explain, solve problems."));
+        sub.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        sub.setTextColor(getThemedColor(Theme.key_chat_inTimeText));
+        sub.setGravity(Gravity.CENTER);
+        card.addView(sub, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 6, 0, 14));
+
+        for (String[] example : WELCOME_EXAMPLES) {
+            String text = LuckgramStrings.get(example[0], example[1]);
+            TextView row = new TextView(context);
+            row.setText(text);
+            row.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+            row.setTextColor(accent);
+            row.setPadding(dp(12), dp(9), dp(12), dp(9));
+            GradientDrawable rowBg = new GradientDrawable();
+            rowBg.setCornerRadius(dp(12));
+            rowBg.setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x1A));
+            row.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x30)), rowBg, null));
+            row.setOnClickListener(v -> {
+                setInput(text);
+                if (input != null) {
+                    input.requestFocus();
+                    AndroidUtilities.showKeyboard(input);
+                }
+            });
+            card.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 8));
+        }
+        return card;
     }
 
     private void updateSendButton() {
