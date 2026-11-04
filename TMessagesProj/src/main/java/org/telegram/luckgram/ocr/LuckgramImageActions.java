@@ -100,7 +100,7 @@ public final class LuckgramImageActions {
         register(new Action("ocr", "识别文字", "Recognize Text", org.telegram.messenger.R.drawable.msg_photo_text_regular, "文字", "Text",
             PLACE_MENU | PLACE_VIEWER_BUTTON | PLACE_ATTACH_PREVIEW, message -> LuckgramOcr.isEnabled(),
             (host, image, message) -> LuckgramOcrSheet.open(host, image))); // specs#106
-        // specs#108 image translation (「翻译图片」 / 「译」): w-1148
+        register(org.telegram.luckgram.imagetranslate.ImageTranslateEntry.action()); // specs#108 image translation (「翻译图片」 / 「译」)
     }
 
     private LuckgramImageActions() {
