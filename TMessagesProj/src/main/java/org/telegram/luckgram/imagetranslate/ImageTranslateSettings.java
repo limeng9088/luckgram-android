@@ -24,10 +24,10 @@ public final class ImageTranslateSettings {
     }
 
     /** {@code dialogId} 0 = not in a chat (gallery before sending a new chat, etc.). */
-    public static String targetLanguage(long dialogId) {
+    public static String targetLanguage(int account, long dialogId) {
         String perChat = dialogId != 0 ? LuckgramSettings.getString(chatKey(dialogId), "") : "";
         String app = LocaleController.getInstance().getCurrentLocale() != null ? LocaleController.getInstance().getCurrentLocale().getLanguage() : "en";
-        return ImageTranslateLogic.targetLanguage(perChat, imageDefault(), ImageTranslator.readingTarget(), app);
+        return ImageTranslateLogic.targetLanguage(perChat, imageDefault(), ImageTranslator.readingTarget(account, dialogId), app);
     }
 
     /** The image-only default, or "" when images follow the reading translation language. */

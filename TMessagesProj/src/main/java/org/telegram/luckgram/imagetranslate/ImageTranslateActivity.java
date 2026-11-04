@@ -128,7 +128,7 @@ public class ImageTranslateActivity extends BaseFragment {
         }
         root.addView(bar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 64, Gravity.BOTTOM));
 
-        toLang = ImageTranslateSettings.targetLanguage(dialogId);
+        toLang = ImageTranslateSettings.targetLanguage(getCurrentAccount(), dialogId);
         updateHeader();
         if (!ImageTranslateSettings.hasChosen(dialogId)) {
             // needs 2: first use asks; the default stays the reading translation language until then
@@ -231,10 +231,8 @@ public class ImageTranslateActivity extends BaseFragment {
                 apply(code, false);
                 return;
             }
-            AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), getResourceProvider());
-            builder.setTitle(ImageTranslateSettings.applyToText(ImageTranslateSettings.languageName(code)));
-            builder.setItems(new CharSequence[]{ImageTranslateSettings.onlyThisChatText(), ImageTranslateSettings.asDefaultText()}, (d, which) -> apply(code, which == 0));
-            showDialog(builder.create());
+            // #105's 「仅本聊天 / 设为默认」 prompt (it only asks; the image language is stored here)
+            org.telegram.luckgram.translatein.LuckgramTranslateIn.askScope(this, ImageTranslateSettings.languageName(code), chatOnly -> apply(code, chatOnly));
         }).show();
     }
 

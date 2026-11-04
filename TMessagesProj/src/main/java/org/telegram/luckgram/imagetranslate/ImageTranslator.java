@@ -172,8 +172,8 @@ public final class ImageTranslator {
         return LuckgramTranslate.failureMessage(error);
     }
 
-    /** Reading-translation language (#105) for {@link ImageTranslateLogic#targetLanguage}. */
-    static String readingTarget() {
-        return LuckgramTranslateIn.targetLanguage();
+    /** Reading-translation language (#105) of this chat, else its default, or null. */
+    static String readingTarget(int account, long dialogId) {
+        return dialogId != 0 ? LuckgramTranslateIn.targetLanguage(account, dialogId) : LuckgramTranslateIn.targetLanguage();
     }
 }
