@@ -44,11 +44,54 @@ public class SquareActivity extends UniversalFragment {
     public static boolean dirty;
     private SquareTabsView tabs;
 
+    private static final String[] TAB_ORDER = {SquareLogic.TAB_LATEST, SquareLogic.TAB_HOT, SquareLogic.TAB_RECOMMEND};
+
+    private static int tabIndex(String tab) {
+        for (int i = 0; i < TAB_ORDER.length; i++) if (TAB_ORDER[i].equals(tab)) return i;
+        return 0;
+    }
+
+    // ---------------------------------------------------------------- specs#115 behavior events
+
+    private SquareEvents.Tracker tracker = new SquareEvents.Tracker(SquareLogic.TAB_LATEST);
+    /** Post views currently bound to the list → index in {@link #posts}. */
+    private final java.util.WeakHashMap<View, SquareLogic.Post> postViews = new java.util.WeakHashMap<>();
+    private final Runnable checkVisible = this::trackVisible;
+
+    /** Posts at least half visible → their position; reported as impressions / views. */
+    private void trackVisible() {
+        if (listView == null || isPaused || posts.isEmpty()) return;
+        java.util.HashMap<String, Integer> visible = new java.util.HashMap<>();
+        int h = listView.getHeight();
+        for (int i = 0; i < listView.getChildCount(); i++) {
+            View child = listView.getChildAt(i);
+            SquareLogic.Post p = postViews.get(child);
+            if (p == null || child.getHeight() <= 0) continue;
+            int shown = Math.min(child.getBottom(), h) - Math.max(child.getTop(), 0);
+            if (shown * 2 >= child.getHeight()) {
+                int rank = posts.indexOf(p);
+                if (rank >= 0) visible.put(p.id, rank);
+            }
+        }
+        SquareEventReporter.add(tracker.update(visible, System.currentTimeMillis()));
+    }
+
+    private void scheduleTrack() {
+        AndroidUtilities.cancelRunOnUIThread(checkVisible);
+        AndroidUtilities.runOnUIThread(checkVisible, 300);
+    }
+
+    private void event(String type, SquareLogic.Post p) {
+        Integer rank = tracker.rankOf(p.id);
+        SquareEventReporter.add(new SquareEvents.Event(type, p.id, tab, rank == null ? posts.indexOf(p) : rank, 0, System.currentTimeMillis()));
+    }
+
     /** "Latest" / "Popular" as a plain tab bar with an underline (acceptance P2). One instance, reused across list updates. */
     private SquareTabsView tabsView() {
         if (tabs == null) {
-            tabs = new SquareTabsView(getContext(), new String[]{tx.latest(), tx.hot()}, SquareLogic.TAB_HOT.equals(tab) ? 1 : 0, which -> {
-                String next = which == 1 ? SquareLogic.TAB_HOT : SquareLogic.TAB_LATEST;
+            // specs#115: 最新 / 热门 / 推荐 (default stays 最新)
+            tabs = new SquareTabsView(getContext(), new String[]{tx.latest(), tx.hot(), tx.recommend()}, tabIndex(tab), which -> {
+                String next = TAB_ORDER[Math.max(0, Math.min(TAB_ORDER.length - 1, which))];
                 if (!next.equals(tab)) {
                     tab = next;
                     reload();
@@ -68,6 +111,12 @@ public class SquareActivity extends UniversalFragment {
         View v = super.createView(context);
         actionBar.setAllowOverlayTitle(false); // keep our title; the chat list shows the connection state
         installPullToRefresh();
+        listView.addOnScrollListener(new androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView rv, int dx, int dy) {
+                scheduleTrack();
+            }
+        });
         ActionBarMenu menu = actionBar.createMenu();
         menu.addItem(MENU_REFRESH, R.drawable.msg_retry).setContentDescription(tx.refresh());
         menu.addItem(MENU_COMPOSE, R.drawable.msg_edit).setContentDescription(tx.compose());
@@ -129,16 +178,30 @@ public class SquareActivity extends UniversalFragment {
     }
 
     @Override
+    public void onPause() {
+        super.onPause();
+        // a view ends when the page goes away; send what we have (contract: also on background)
+        AndroidUtilities.cancelRunOnUIThread(checkVisible);
+        SquareEventReporter.add(tracker.hideAll(System.currentTimeMillis()));
+        SquareEventReporter.flush(true);
+    }
+
+    @Override
     public void onFragmentDestroy() {
         if (inFlight != null) inFlight.cancel();
+        AndroidUtilities.cancelRunOnUIThread(checkVisible);
         super.onFragmentDestroy();
     }
 
     private void update() {
         if (listView != null) listView.adapter.update(true);
+        scheduleTrack();
     }
 
     private void reload() {
+        // a new load: impressions count again (contract: once per load)
+        SquareEventReporter.add(tracker.hideAll(System.currentTimeMillis()));
+        tracker = new SquareEvents.Tracker(tab);
         posts.clear();
         nextCursor = null;
         loadedOnce = false;
@@ -177,7 +240,9 @@ public class SquareActivity extends UniversalFragment {
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         items.add(UItem.asCustom(ID_TABS, tabsView()));
         for (int i = 0; i < posts.size(); i++) {
-            items.add(UItem.asCustom(ID_POST + i, SquareUi.postView(getContext(), posts.get(i), false, actions)));
+            View postView = SquareUi.postView(getContext(), posts.get(i), false, actions);
+            postViews.put(postView, posts.get(i));
+            items.add(UItem.asCustom(ID_POST + i, postView));
             items.add(UItem.asShadow(null));
         }
         if (loading) {
@@ -201,6 +266,7 @@ public class SquareActivity extends UniversalFragment {
 
         @Override
         public void onOpen(SquareLogic.Post p) {
+            event(SquareEvents.OPEN, p);
             presentFragment(new SquarePostActivity(p));
         }
 
@@ -216,13 +282,20 @@ public class SquareActivity extends UniversalFragment {
 
         @Override
         public void onMore(SquareLogic.Post p) {
+            // specs#115: 「不感兴趣」 only in the recommend tab; the post goes away at once
+            Runnable notInterested = SquareLogic.TAB_RECOMMEND.equals(tab) ? () -> {
+                event(SquareEvents.NOT_INTERESTED, p);
+                posts.remove(p);
+                update();
+                SquareUi.bulletin(SquareActivity.this).createSimpleBulletin(R.raw.done, tx.notInterestedDone()).show();
+            } : null;
             showPostMenu(SquareActivity.this, p, () -> {
                 posts.remove(p);
                 update();
             }, () -> {
                 removeAuthor(posts, p.author.id);
                 update();
-            });
+            }, notInterested);
         }
     };
 
@@ -234,6 +307,11 @@ public class SquareActivity extends UniversalFragment {
 
     /** Post "⋯" menu: delete (own) / report / block author. */
     static void showPostMenu(BaseFragment f, SquareLogic.Post p, Runnable onDeleted, Runnable onBlocked) {
+        showPostMenu(f, p, onDeleted, onBlocked, null);
+    }
+
+    /** @param onNotInterested non-null in the recommend tab: adds 「不感兴趣」 (specs#115) */
+    static void showPostMenu(BaseFragment f, SquareLogic.Post p, Runnable onDeleted, Runnable onBlocked, Runnable onNotInterested) {
         if (f.getParentActivity() == null) return;
         SquareLogic.Texts tx = SquareUi.tx();
         boolean mine = SquareLogic.canDeletePost(p, SquareUi.myAuthorId);
@@ -260,6 +338,10 @@ public class SquareActivity extends UniversalFragment {
                 .setNegativeButton(tx.cancel(), null)
                 .show());
         } else {
+            if (onNotInterested != null) {
+                labels.add(tx.notInterested());
+                actions.add(onNotInterested);
+            }
             labels.add(tx.reportPost());
             actions.add(() -> SquareUi.report(f, "post", p.id));
             labels.add(tx.reportAuthor());

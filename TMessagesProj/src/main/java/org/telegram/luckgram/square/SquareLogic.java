@@ -43,6 +43,8 @@ public final class SquareLogic {
 
     public static final String TAB_LATEST = "latest";
     public static final String TAB_HOT = "hot";
+    /** specs#115: personalized feed (server ranks by the user's behavior). */
+    public static final String TAB_RECOMMEND = "recommend";
 
     /** Posts are public as soon as they are created; reported ones are hidden (S11 governance). */
     public static final String STATUS_PUBLISHED = "published";
@@ -419,7 +421,7 @@ public final class SquareLogic {
     }
 
     public static String feedPath(String tab, String cursor) {
-        String t = TAB_HOT.equals(tab) ? TAB_HOT : TAB_LATEST;
+        String t = TAB_HOT.equals(tab) || TAB_RECOMMEND.equals(tab) ? tab : TAB_LATEST;
         return "/v1/square/feed?tab=" + t + (cursor != null ? "&cursor=" + urlEncode(cursor) : "");
     }
 
@@ -508,6 +510,9 @@ public final class SquareLogic {
         public String title() { return t("广场", "Square"); }
         public String latest() { return t("最新", "Latest"); }
         public String hot() { return t("热门", "Trending"); }
+        public String recommend() { return t("推荐", "For you"); }
+        public String notInterested() { return t("不感兴趣", "Not interested"); }
+        public String notInterestedDone() { return t("将减少推荐类似内容", "You'll see fewer posts like this"); }
         public String compose() { return t("发帖", "Post"); }
         public String loadMore() { return t("加载更多", "Load more"); }
         public String loading() { return t("正在加载…", "Loading…"); }
