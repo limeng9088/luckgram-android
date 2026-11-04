@@ -73,6 +73,26 @@ public final class LuckgramImageActions {
         }
     }
 
+    /** Gives a new image (e.g. the translated one, #108) back to the gallery preview before sending. */
+    public interface ImageReplacer {
+        void replace(File newImage);
+    }
+
+    private static ImageReplacer attachReplacer;
+
+    /**
+     * Set by the gallery preview while an {@link #PLACE_ATTACH_PREVIEW} action runs (the current
+     * item is replaced with the new file), cleared when the preview closes. Null elsewhere.
+     */
+    public static void setAttachReplacer(ImageReplacer replacer) {
+        attachReplacer = replacer;
+    }
+
+    /** The gallery preview's replacer, or null (then don't offer "send the new image"). */
+    public static ImageReplacer attachReplacer() {
+        return attachReplacer;
+    }
+
     private static final ArrayList<Action> list = new ArrayList<>();
 
     static {
