@@ -19,6 +19,23 @@ public final class TranslateOutLogic {
     public static final String UNKNOWN_LANGUAGE = "und";
     public static final int MAX_RECENT = 5;
 
+    /** specs#104: a short label for the input field capsule: 中, 日, 한 for CJK, else the base code (EN, ES, PT). */
+    public static String shortLabel(String code) {
+        final String n = normalizeLanguage(code);
+        if (n == null) {
+            return "?";
+        }
+        if (n.startsWith("zh")) return "中";
+        if (n.equals("ja")) return "日";
+        if (n.equals("ko")) return "한";
+        return n.toUpperCase(java.util.Locale.ROOT);
+    }
+
+    /** specs#104: the capsule text 「中 → EN」 (from = the user's language). */
+    public static String capsule(String fromCode, String toCode) {
+        return shortLabel(fromCode) + " → " + shortLabel(toCode);
+    }
+
     private static final Pattern MENTION_PATTERN = Pattern.compile("(?<![\\w@])@[A-Za-z0-9_]{3,32}");
     private static final Pattern URL_PATTERN = Pattern.compile("(?i)\\b(?:https?://|www\\.|t\\.me/)[^\\s]+");
     private static final String URL_TRAILING_PUNCTUATION = ".,;:!?)]}\"'";
