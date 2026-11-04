@@ -128,6 +128,14 @@ public final class TranslateOutController {
         LuckgramSettings.setString(KEY_NO_PREVIEW, enabled ? "" : "1");
     }
 
+    /** specs#105: puts a language picked elsewhere (reading translation) on top of the recent list. */
+    public static void addRecentLanguage(int account, String lang) {
+        if (TextUtils.isEmpty(lang)) {
+            return;
+        }
+        prefs(account).edit().putString(KEY_RECENT, TranslateOutLogic.joinRecent(TranslateOutLogic.updateRecent(getRecentLanguages(account), lang))).apply();
+    }
+
     public static ArrayList<String> getRecentLanguages(int account) {
         return TranslateOutLogic.parseRecent(prefs(account).getString(KEY_RECENT, null));
     }

@@ -81,4 +81,17 @@ public class TranslateInLogicTest {
         assertArrayEquals(new String[]{null, "zh"}, TranslateInLogic.decodeLanguages(TranslateInLogic.encodeLanguages(null, "zh")));
         assertArrayEquals(new String[]{null, null}, TranslateInLogic.decodeLanguages(null));
     }
+
+    @Test
+    public void chatLanguageOverridesDefault() {
+        assertEquals("ja", TranslateInLogic.effectiveLanguage("ja", "zh"));
+        assertEquals("zh", TranslateInLogic.effectiveLanguage(null, "zh"));
+        assertEquals("zh", TranslateInLogic.effectiveLanguage("  ", "zh"));
+        assertNull(TranslateInLogic.effectiveLanguage(null, ""));
+    }
+
+    @Test
+    public void languageButtonShowsTarget() {
+        assertEquals("\uD83C\uDF10 日本語 \u25BE", TranslateInLogic.languageButton("日本語"));
+    }
 }

@@ -84,6 +84,112 @@ public final class LuckgramTranslateIn {
         return targetLanguage() != null;
     }
 
+    // ---------------------------------------------------------------- specs#105: per chat
+
+    private static android.content.SharedPreferences chatPrefs(int account) {
+        return org.telegram.messenger.ApplicationLoader.applicationContext.getSharedPreferences("luckgram_translate_in_" + account, android.content.Context.MODE_PRIVATE);
+    }
+
+    /** This chat's own 「翻译成」, or null when it follows the default. */
+    public static String chatLanguage(int account, long dialogId) {
+        return TranslateInLogic.targetLanguage(chatPrefs(account).getString(TranslateInLogic.KEY_CHAT_LANG_PREFIX + dialogId, null));
+    }
+
+    /** {@code lang} null = follow the default again. */
+    public static void setChatLanguage(int account, long dialogId, String lang) {
+        if (lang == null || lang.trim().isEmpty()) {
+            chatPrefs(account).edit().remove(TranslateInLogic.KEY_CHAT_LANG_PREFIX + dialogId).apply();
+        } else {
+            chatPrefs(account).edit().putString(TranslateInLogic.KEY_CHAT_LANG_PREFIX + dialogId, lang.trim()).apply();
+        }
+    }
+
+    /** The language messages of this chat are translated into: its own choice ?? the default ?? null. */
+    public static String targetLanguage(int account, long dialogId) {
+        return TranslateInLogic.effectiveLanguage(chatLanguage(account, dialogId), LuckgramSettings.getString(TranslateInLogic.KEY_TO_LANG, ""));
+    }
+
+    public static boolean hasTargetLanguage(int account, long dialogId) {
+        return targetLanguage(account, dialogId) != null;
+    }
+
+    /** Same as {@link #setTargetLanguage}: the default for every chat without its own choice. */
+    public static void setDefaultLanguage(String lang) {
+        setTargetLanguage(lang);
+    }
+
+    /** Wipes the per-chat choices of the account (called on logout). */
+    public static void clearAccount(int account) {
+        try {
+            chatPrefs(account).edit().clear().apply();
+        } catch (Exception ignore) {
+        }
+    }
+
+    public interface ScopeCallback {
+        /** {@code chatOnly}: 「仅本聊天」; otherwise 「设为默认」. */
+        void run(boolean chatOnly);
+    }
+
+    /**
+     * specs#105 §2: asks whether {@code languageName} is for this chat only or the new default. Only
+     * asks; the caller saves (so other features, e.g. image translation, can reuse it).
+     */
+    public static void askScope(org.telegram.ui.ActionBar.BaseFragment fragment, String languageName, ScopeCallback callback) {
+        if (fragment == null || fragment.getParentActivity() == null) {
+            return;
+        }
+        final boolean zh = LuckgramStrings.isChinese();
+        org.telegram.ui.ActionBar.AlertDialog.Builder b = new org.telegram.ui.ActionBar.AlertDialog.Builder(fragment.getParentActivity(), fragment.getResourceProvider());
+        b.setTitle(zh ? "翻译成" + languageName : "Translate into " + languageName);
+        b.setMessage(zh ? "只在这个聊天里使用，还是设为所有聊天的默认语言？" : "Use it only in this chat, or make it the default for all chats?");
+        b.setPositiveButton(zh ? "仅本聊天" : "This chat only", (d, w) -> callback.run(true));
+        b.setNegativeButton(zh ? "设为默认" : "Set as default", (d, w) -> callback.run(false));
+        fragment.showDialog(b.create());
+    }
+
+    /**
+     * specs#105: the language list for a chat (current choice first, recently used next). The first
+     * choice ever becomes the default; later changes ask 「仅本聊天 / 设为默认」. {@code then} runs
+     * with the new language once it is saved.
+     */
+    public static void pickTargetLanguage(org.telegram.ui.ActionBar.BaseFragment fragment, long dialogId, Callback then) {
+        if (fragment == null || fragment.getParentActivity() == null) {
+            return;
+        }
+        final int account = fragment.getCurrentAccount();
+        final String current = targetLanguage(account, dialogId);
+        new org.telegram.luckgram.translateout.TranslateOutLanguageSheet(fragment.getParentActivity(), account,
+            TranslateInLogic.base(current), fragment.getResourceProvider(), code -> {
+                org.telegram.luckgram.translateout.TranslateOutController.addRecentLanguage(account, code);
+                if (targetLanguage() == null) {
+                    setDefaultLanguage(code);
+                    setChatLanguage(account, dialogId, null);
+                    if (then != null) {
+                        then.run(code);
+                    }
+                    return;
+                }
+                if (code.equals(current) && chatLanguage(account, dialogId) != null) {
+                    if (then != null) {
+                        then.run(code);
+                    }
+                    return;
+                }
+                askScope(fragment, TranslateOutController.languageName(TranslateInLogic.base(code)), chatOnly -> {
+                    if (chatOnly) {
+                        setChatLanguage(account, dialogId, code);
+                    } else {
+                        setDefaultLanguage(code);
+                        setChatLanguage(account, dialogId, null);
+                    }
+                    if (then != null) {
+                        then.run(code);
+                    }
+                });
+            }).show();
+    }
+
     /**
      * specs#93: the language list (common first, searchable). The choice is saved as the default for
      * every chat, then {@code then} runs with it.
@@ -189,7 +295,7 @@ public final class LuckgramTranslateIn {
             detect(msg, text, onDetected);
             return false;
         }
-        return TranslateInLogic.showButton(true, false, true, lang, doNotTranslate(), targetLanguage());
+        return TranslateInLogic.showButton(true, false, true, lang, doNotTranslate(), targetLanguage(msg.currentAccount, msg.getDialogId()));
     }
 
     private static void detect(MessageObject msg, String text, Runnable onDetected) {
@@ -234,7 +340,7 @@ public final class LuckgramTranslateIn {
             done.run(true, null);
             return;
         }
-        final String toLang = targetLanguage();
+        final String toLang = targetLanguage(msg.currentAccount, msg.getDialogId());
         if (toLang == null) {
             done.run(false, null); // specs#93: ChatActivity asks first
             return;
@@ -275,7 +381,7 @@ public final class LuckgramTranslateIn {
             return;
         }
         final String[] langs = TranslateInLogic.decodeLanguages(e.fromLang);
-        msg.luckgramSetTranslation(buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage(), false));
+        msg.luckgramSetTranslation(buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage(msg.currentAccount, msg.getDialogId()), false));
     }
 
     // ---------------------------------------------------------------- voice transcriptions (spec 01 B)
@@ -337,7 +443,7 @@ public final class LuckgramTranslateIn {
         }
         if (TranslateController.UNKNOWN_LANGUAGE.equals(lang)
             ? false
-            : !TranslateInLogic.showButton(true, false, true, lang, doNotTranslate(), targetLanguage())) {
+            : !TranslateInLogic.showButton(true, false, true, lang, doNotTranslate(), targetLanguage(msg.currentAccount, msg.getDialogId()))) {
             return text;
         }
         final SpannableStringBuilder sb = new SpannableStringBuilder(text);
@@ -389,7 +495,7 @@ public final class LuckgramTranslateIn {
             done.run(true, null);
             return;
         }
-        final String toLang = targetLanguage();
+        final String toLang = targetLanguage(msg.currentAccount, msg.getDialogId());
         if (toLang == null) {
             done.run(false, null); // specs#93: ChatActivity asks first
             return;
@@ -421,7 +527,7 @@ public final class LuckgramTranslateIn {
             return;
         }
         final String[] langs = TranslateInLogic.decodeLanguages(e.fromLang);
-        msg.luckgramVoiceTranslationBlock = buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage(), true);
+        msg.luckgramVoiceTranslationBlock = buildBlock(msg, e.text, langs[0], langs[1] != null ? langs[1] : targetLanguage(msg.currentAccount, msg.getDialogId()), true);
     }
 
     // ---------------------------------------------------------------- translation service
@@ -508,6 +614,14 @@ public final class LuckgramTranslateIn {
         sb.setSpan(new RelativeSizeSpan(0.8f), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         sb.setSpan(new ForegroundColorSpan(color), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         sb.setSpan(new LanguageSpan(voice), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE); // specs#93
+        // specs#105 §1: an obvious 「🌐 中文 ▾」 button on the header line; tapping it changes the language
+        sb.append("   ");
+        start = sb.length();
+        sb.append(TranslateInLogic.languageButton(TranslateOutController.languageName(TranslateInLogic.base(toLang))));
+        sb.setSpan(new RelativeSizeSpan(0.8f), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new ForegroundColorSpan(Theme.getColor(out ? Theme.key_chat_messageLinkOut : Theme.key_chat_messageLinkIn)), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new LanguageSpan(voice), start, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         sb.append('\n');
         start = sb.length();
         sb.append(' ');

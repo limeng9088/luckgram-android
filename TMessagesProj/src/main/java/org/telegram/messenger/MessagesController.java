@@ -16165,6 +16165,7 @@ public class MessagesController extends BaseController implements NotificationCe
         getUserConfig().clearConfig();
         SharedPrefsHelper.cleanupAccount(currentAccount);
         org.telegram.luckgram.translateout.TranslateOutController.clearAccount(currentAccount); // Luckgram: translate-out per-chat languages
+        org.telegram.luckgram.translatein.LuckgramTranslateIn.clearAccount(currentAccount); // Luckgram specs#105: reading-translation per-chat languages
         org.telegram.luckgram.quickreplies.QuickRepliesStore.clearAccount(currentAccount); // Luckgram: quick reply templates
         org.telegram.luckgram.keywordfolders.KeywordFolderController.getInstance(currentAccount).clearAccountData();
         org.telegram.luckgram.backup.CloudBackup.onLogout(); // Luckgram 32: last account gone -> forget the remembered backup password
