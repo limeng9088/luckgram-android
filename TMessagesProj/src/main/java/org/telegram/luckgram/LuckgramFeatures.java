@@ -105,6 +105,10 @@ public final class LuckgramFeatures {
             "收到消息翻译", "Translate received messages",
             "长按或点消息旁的图标，译文显示在原文下方", "Long-press or tap the icon next to a message; the translation appears below the original")
             .subpage(org.telegram.luckgram.translatein.TranslateInSettingsActivity::new));
+        add(toggle(org.telegram.luckgram.imagetranslate.ImageTranslateLogic.FEATURE_KEY, MESSAGES_LANGUAGE, true,
+            "图片翻译", "Translate images",
+            "把图片里的文字翻译后覆盖显示在原图上；只发送识别出的文字，不上传图片", "Shows the translation over the text in an image; only the recognized text is sent, never the image")
+            .subpage(org.telegram.luckgram.imagetranslate.ImageTranslateSettingsActivity::new));
         add(toggle("quick_replies", MESSAGES_LANGUAGE, true,
             "快捷回复", "Quick replies",
             "把常用回复存成模板，输入框里一点就填入", "Save frequent replies as templates and insert them with one tap")
