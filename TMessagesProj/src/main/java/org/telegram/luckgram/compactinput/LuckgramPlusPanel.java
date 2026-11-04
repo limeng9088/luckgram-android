@@ -156,9 +156,7 @@ public class LuckgramPlusPanel extends FrameLayout {
     }
 
     private View createCell(Item item) {
-        final int bg = getThemedColor(Theme.key_chat_emojiPanelBackground);
-        final int text = getThemedColor(Theme.key_windowBackgroundWhiteBlackText);
-        final int iconColor = getThemedColor(Theme.key_chat_emojiPanelIcon);
+        final boolean dark = isDark();
 
         LinearLayout cell = new LinearLayout(getContext());
         cell.setOrientation(LinearLayout.VERTICAL);
@@ -168,23 +166,23 @@ public class LuckgramPlusPanel extends FrameLayout {
         ImageView icon = new ImageView(getContext());
         icon.setScaleType(ImageView.ScaleType.CENTER);
         icon.setImageResource(item.icon);
-        icon.setColorFilter(new PorterDuffColorFilter(iconColor, PorterDuff.Mode.SRC_IN));
+        icon.setColorFilter(new PorterDuffColorFilter(LuckgramPlusPanelColors.icon(dark), PorterDuff.Mode.SRC_IN));
         GradientDrawable square = new GradientDrawable();
         square.setCornerRadius(dp(14));
-        square.setColor(ColorUtils.blendARGB(bg, text, Theme.isCurrentThemeDark() ? 0.12f : 0.06f));
+        square.setColor(LuckgramPlusPanelColors.square(dark));
         icon.setBackground(square);
         cell.addView(icon, LayoutHelper.createLinear(58, 58, Gravity.CENTER_HORIZONTAL));
 
         TextView title = new TextView(getContext());
         title.setText(item.title);
         title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
-        title.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteGrayText));
+        title.setTextColor(LuckgramPlusPanelColors.title(dark));
         title.setGravity(Gravity.CENTER_HORIZONTAL);
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         cell.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 2, 6, 2, 0));
 
-        cell.setAlpha(item.dimmed ? 0.4f : 1f);
+        cell.setAlpha(item.dimmed ? LuckgramPlusPanelColors.DIMMED_ALPHA : 1f);
         cell.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ROUNDRECT_6DP));
         cell.setOnClickListener(v -> {
             if (delegate != null) {
@@ -192,6 +190,11 @@ public class LuckgramPlusPanel extends FrameLayout {
             }
         });
         return cell;
+    }
+
+    /** Dark when the panel background is dark (follows per-chat themes too), like iOS's overallDarkAppearance. */
+    private boolean isDark() {
+        return ColorUtils.calculateLuminance(getThemedColor(Theme.key_chat_emojiPanelBackground) | 0xFF000000) < 0.5;
     }
 
     private int getThemedColor(int key) {
@@ -227,8 +230,9 @@ public class LuckgramPlusPanel extends FrameLayout {
             final float total = (count - 1) * gap;
             final float x0 = (getMeasuredWidth() - total) / 2f;
             final float cy = getMeasuredHeight() / 2f;
-            final int active = getThemedColor(Theme.key_windowBackgroundWhiteGrayText);
-            final int inactive = ColorUtils.setAlphaComponent(active, 0x55);
+            final boolean dark = isDark();
+            final int active = LuckgramPlusPanelColors.dotCurrent(dark);
+            final int inactive = LuckgramPlusPanelColors.dotOther(dark);
             for (int i = 0; i < count; i++) {
                 float d = Math.min(1f, Math.abs(progress - i));
                 paint.setColor(ColorUtils.blendARGB(active, inactive, d));
