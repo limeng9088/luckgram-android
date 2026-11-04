@@ -1280,9 +1280,9 @@ public class ChatActivity extends BaseFragment implements
         final boolean voice = org.telegram.luckgram.translatein.LuckgramTranslateIn.voiceTextOf(target) != null;
         final boolean translated = voice ? org.telegram.luckgram.translatein.LuckgramTranslateIn.isVoiceTranslated(target)
             : org.telegram.luckgram.translatein.LuckgramTranslateIn.isTranslated(target);
-        if (!translated && !org.telegram.luckgram.translatein.LuckgramTranslateIn.hasTargetLanguage()) {
+        if (!translated && !org.telegram.luckgram.translatein.LuckgramTranslateIn.hasTargetLanguage(currentAccount, dialog_id)) {
             // specs#93: the first translation asks for the language, then translates this message
-            org.telegram.luckgram.translatein.LuckgramTranslateIn.pickTargetLanguage(this, lang -> luckgramToggleTranslation(target));
+            org.telegram.luckgram.translatein.LuckgramTranslateIn.pickTargetLanguage(this, dialog_id, lang -> luckgramToggleTranslation(target));
             return;
         }
         final org.telegram.luckgram.translatein.LuckgramTranslateIn.Done done = (ok, error) -> {
@@ -1780,6 +1780,8 @@ public class ChatActivity extends BaseFragment implements
     private final static int luckgram_summary = 0x4C4719;
     /** Luckgram specs#104: 「发送前翻译…」 */
     private final static int luckgram_send_translate = 0x4C4768;
+    /** Luckgram specs#105: 「翻译设置…」 — this chat's reading-translation language. */
+    private final static int luckgram_read_translate = 0x4C4769;
 
     private final static int topic_close = 60;
     private final static int open_forum = 61;
@@ -4117,6 +4119,12 @@ public class ChatActivity extends BaseFragment implements
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/help", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
                 } else if (id == bot_settings) {
                     getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of("/settings", dialog_id, null, null, null, false, null, null, null, true, 0, 0, null, false));
+                } else if (id == luckgram_read_translate) {
+                    org.telegram.luckgram.translatein.LuckgramTranslateIn.pickTargetLanguage(ChatActivity.this, dialog_id, lang -> {
+                        BulletinFactory.of(ChatActivity.this).createSimpleBulletin(R.raw.contact_check, org.telegram.luckgram.LuckgramStrings.get(
+                            "本聊天的消息将翻译成" + org.telegram.luckgram.translateout.TranslateOutController.languageName(org.telegram.luckgram.translatein.TranslateInLogic.base(org.telegram.luckgram.translatein.LuckgramTranslateIn.targetLanguage(currentAccount, dialog_id))),
+                            "Messages here will be translated into " + org.telegram.luckgram.translateout.TranslateOutController.languageName(org.telegram.luckgram.translatein.TranslateInLogic.base(org.telegram.luckgram.translatein.LuckgramTranslateIn.targetLanguage(currentAccount, dialog_id))))).show();
+                    });
                 } else if (id == luckgram_send_translate) {
                     if (chatActivityEnterView != null) {
                         chatActivityEnterView.luckgramOpenSendTranslate();
@@ -4590,6 +4598,10 @@ public class ChatActivity extends BaseFragment implements
             }
             if (org.telegram.luckgram.summary.ChatSummaryUi.isEnabled() && chatMode == 0 && !DialogObject.isEncryptedDialog(dialog_id)) {
                 headerItem.lazilyAddSubItem(luckgram_summary, R.drawable.luckgram_ai, org.telegram.luckgram.LuckgramStrings.get("总结聊天", "Summarize chat"));
+            }
+            if (org.telegram.luckgram.translatein.LuckgramTranslateIn.isEnabled() && chatMode == 0 && !DialogObject.isEncryptedDialog(dialog_id)) {
+                // Luckgram specs#105 §1: this chat's reading-translation language
+                headerItem.lazilyAddSubItem(luckgram_read_translate, R.drawable.msg_translate, org.telegram.luckgram.LuckgramStrings.get("翻译设置…", "Translation settings…"));
             }
             if (org.telegram.luckgram.translateout.TranslateOutController.isEnabled() && chatMode == 0 && !DialogObject.isEncryptedDialog(dialog_id)) {
                 // Luckgram specs#104 §1: switch translate-before-sending on for this chat
@@ -37281,7 +37293,7 @@ public class ChatActivity extends BaseFragment implements
             if (!longPress && messageObject != null) {
                 final boolean voice = ((org.telegram.luckgram.translatein.LuckgramTranslateIn.LanguageSpan) url).voice;
                 final MessageObject target = messageObject;
-                org.telegram.luckgram.translatein.LuckgramTranslateIn.pickTargetLanguage(this, lang ->
+                org.telegram.luckgram.translatein.LuckgramTranslateIn.pickTargetLanguage(this, dialog_id, lang ->
                     org.telegram.luckgram.translatein.LuckgramTranslateIn.retranslate(target, voice, (ok, error) -> {
                         if (ok) {
                             luckgramRefreshMessage(target);
@@ -40350,6 +40362,23 @@ public class ChatActivity extends BaseFragment implements
         public void luckgramDidPressTranslate(ChatMessageCell cell) {
             final MessageObject m = cell.getMessageObject();
             luckgramToggleTranslation(luckgramTranslateTarget(m, cell.getCurrentMessagesGroup()));
+        }
+
+        @Override
+        public void luckgramDidLongPressTranslate(ChatMessageCell cell) {
+            // specs#105 §1: long-press the one-tap button to pick the language, then translate into it
+            final MessageObject target = luckgramTranslateTarget(cell.getMessageObject(), cell.getCurrentMessagesGroup());
+            if (target == null) {
+                return;
+            }
+            org.telegram.luckgram.translatein.LuckgramTranslateIn.pickTargetLanguage(ChatActivity.this, dialog_id, lang ->
+                org.telegram.luckgram.translatein.LuckgramTranslateIn.retranslate(target, org.telegram.luckgram.translatein.LuckgramTranslateIn.voiceTextOf(target) != null, (ok, error) -> {
+                    if (ok) {
+                        luckgramRefreshMessage(target);
+                    } else if (error != null) {
+                        BulletinFactory.of(ChatActivity.this).createSimpleBulletin(R.raw.error, error).show();
+                    }
+                }));
         }
 
         @Override

@@ -688,6 +688,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         default void luckgramDidPressTranslate(ChatMessageCell cell) {
         }
 
+        /** Luckgram specs#105: long-press on the one-tap translate button (pick the language). */
+        default void luckgramDidLongPressTranslate(ChatMessageCell cell) {
+        }
+
         default void didPressSummarize(ChatMessageCell cell, boolean byReply) {
         }
 
@@ -12144,6 +12148,14 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
     @Override
     protected boolean onLongPress() {
+        if (luckgramTranslatePressed) {
+            luckgramTranslatePressed = false;
+            invalidate();
+            if (delegate != null) {
+                delegate.luckgramDidLongPressTranslate(this);
+            }
+            return true;
+        }
         if (isRoundVideo && isPlayingRound && MediaController.getInstance().isPlayingMessage(currentMessageObject)) {
             float touchRadius = (lastTouchX - photoImage.getCenterX()) * (lastTouchX - photoImage.getCenterX()) + (lastTouchY - photoImage.getCenterY()) * (lastTouchY - photoImage.getCenterY());
             float r1 = (photoImage.getImageWidth() / 2f) * (photoImage.getImageWidth() / 2f);

@@ -14,6 +14,8 @@ public final class TranslateInLogic {
     public static final String FEATURE_KEY = "translate_in";
     /** LuckgramSettings key of the target language; empty = the app language. */
     public static final String KEY_TO_LANG = "translate_in_to_lang";
+    /** specs#105: per-account prefs key prefix of a chat's own target language (overrides the default). */
+    public static final String KEY_CHAT_LANG_PREFIX = "to_lang_";
 
     private TranslateInLogic() {
     }
@@ -79,6 +81,20 @@ public final class TranslateInLogic {
             return chosen.trim();
         }
         return null;
+    }
+
+    /**
+     * specs#105: the language a chat translates into — its own choice, else the default, else null
+     * (nothing chosen yet: the first translation asks).
+     */
+    public static String effectiveLanguage(String chatChosen, String defaultChosen) {
+        final String chat = targetLanguage(chatChosen);
+        return chat != null ? chat : targetLanguage(defaultChosen);
+    }
+
+    /** specs#105: the language button next to a translation's header, e.g. 「🌐 中文 ▾」. */
+    public static String languageButton(String toName) {
+        return "\uD83C\uDF10 " + toName + " \u25BE";
     }
 
     /** spec 01 A.1: 「已翻译 · 英语 → 中文」 above the separator; without a known source just the target. */
