@@ -45,7 +45,8 @@ public class LuckgramAgentsActivity extends BaseFragment {
     /** spec 22 平台入口提示: the one registration line, called from the AI assistant's registry. */
     public static void register() {
         LuckgramAiRegistry.registerHeaderEntry(new LuckgramAiRegistry.HeaderEntry("agents", "智能体", "Agents", R.drawable.msg_bots,
-            page -> page.presentFragment(new LuckgramAgentsActivity())).visibleWhen(LuckgramAgents::isEnabled));
+            page -> page.presentFragment(new LuckgramAgentsActivity())).visibleWhen(LuckgramAgents::isEnabled)
+            .withSubtitle(() -> LuckgramAgentMarket.isEnabled() ? LuckgramStrings.get("浏览市场", "Browse market") : null)); // spec 30 / specs#101
     }
 
     private static final int TYPE_HEADER = 0, TYPE_AGENT = 1, TYPE_CREATE = 2, TYPE_SHADOW = 3;

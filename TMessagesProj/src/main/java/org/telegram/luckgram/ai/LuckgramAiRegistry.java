@@ -138,6 +138,11 @@ public final class LuckgramAiRegistry {
 
     // ---------------------------------------------------------------- 3. header entries
 
+    /** Optional hint on the right of the pinned bar (specs#101), localized; null for none. */
+    public interface Subtitle {
+        String get();
+    }
+
     public interface HeaderCallback {
         void run(BaseFragment assistantPage);
     }
@@ -148,10 +153,20 @@ public final class LuckgramAiRegistry {
         public final int icon;
         public final HeaderCallback callback;
         Visibility visibility;
+        Subtitle subtitle;
 
         public HeaderEntry visibleWhen(Visibility visibility) {
             this.visibility = visibility;
             return this;
+        }
+
+        public HeaderEntry withSubtitle(Subtitle subtitle) {
+            this.subtitle = subtitle;
+            return this;
+        }
+
+        public String subtitle() {
+            return subtitle == null ? null : subtitle.get();
         }
 
         public boolean isVisible() {
