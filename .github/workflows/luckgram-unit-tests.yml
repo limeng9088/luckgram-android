@@ -90,6 +90,7 @@ jobs:
             update/VersionLine.java \
             proxyexit/ExitInfo.java \
             proxyexit/Socks5Https.java \
+            proxyimport/ProxyImportLogic.java \
             nearby/NearbyLogic.java \
             discover/DiscoverMock.java \
             square/SquareLogic.java \

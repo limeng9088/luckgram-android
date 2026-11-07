@@ -34,15 +34,21 @@ public final class Socks5Https {
 
     /** GET {@code url} bypassing every proxy; returns the body of a 2xx answer. */
     public static String getDirect(URL url, int timeoutMs) throws IOException {
+        return getDirect(url, timeoutMs, MAX_RESPONSE, "Luckgram");
+    }
+
+    /** As {@link #getDirect(URL, int)} with a size limit and User-Agent (specs#118 subscriptions). */
+    public static String getDirect(URL url, int timeoutMs, int maxBytes, String userAgent) throws IOException {
         HttpURLConnection c = (HttpURLConnection) url.openConnection(Proxy.NO_PROXY);
         try {
             c.setConnectTimeout(timeoutMs);
             c.setReadTimeout(timeoutMs);
             c.setUseCaches(false);
-            c.setRequestProperty("Accept", "application/json");
+            c.setRequestProperty("Accept", "*/*");
+            c.setRequestProperty("User-Agent", userAgent);
             int code = c.getResponseCode();
             if (code / 100 != 2) throw new IOException("HTTP " + code);
-            return new String(readAll(c.getInputStream()), StandardCharsets.UTF_8);
+            return new String(readAll(c.getInputStream(), maxBytes), StandardCharsets.UTF_8);
         } finally {
             c.disconnect();
         }
@@ -50,6 +56,11 @@ public final class Socks5Https {
 
     /** GET https {@code url} through a SOCKS5 proxy; returns the body of a 2xx answer. */
     public static String getViaSocks5(String proxyHost, int proxyPort, String user, String password, URL url, int timeoutMs) throws IOException {
+        return getViaSocks5(proxyHost, proxyPort, user, password, url, timeoutMs, MAX_RESPONSE, "Luckgram");
+    }
+
+    /** As above with a size limit and User-Agent (specs#118 subscriptions). */
+    public static String getViaSocks5(String proxyHost, int proxyPort, String user, String password, URL url, int timeoutMs, int maxBytes, String userAgent) throws IOException {
         if (!"https".equalsIgnoreCase(url.getProtocol())) throw new IOException("https only");
         String host = url.getHost();
         int port = url.getPort() == -1 ? 443 : url.getPort();
@@ -68,13 +79,13 @@ public final class Socks5Https {
             String file = url.getFile() == null || url.getFile().isEmpty() ? "/" : url.getFile();
             String req = "GET " + file + " HTTP/1.1\r\n"
                     + "Host: " + host + (port == 443 ? "" : ":" + port) + "\r\n"
-                    + "Accept: application/json\r\n"
-                    + "User-Agent: Luckgram\r\n"
+                    + "Accept: */*\r\n"
+                    + "User-Agent: " + userAgent + "\r\n"
                     + "Connection: close\r\n\r\n";
             OutputStream out = tls.getOutputStream();
             out.write(req.getBytes(StandardCharsets.US_ASCII));
             out.flush();
-            byte[] resp = readAll(tls.getInputStream());
+            byte[] resp = readAll(tls.getInputStream(), maxBytes + 16 * 1024);
             tls.close();
             return body(resp);
         } finally {
@@ -191,14 +202,14 @@ public final class Socks5Https {
         return -1;
     }
 
-    private static byte[] readAll(InputStream in) throws IOException {
+    private static byte[] readAll(InputStream in, int max) throws IOException {
         ByteArrayOutputStream b = new ByteArrayOutputStream();
         byte[] buf = new byte[4096];
         int n;
         try {
             while ((n = in.read(buf)) != -1) {
                 b.write(buf, 0, n);
-                if (b.size() > MAX_RESPONSE) throw new IOException("response too large");
+                if (b.size() > max) throw new IOException("response too large");
             }
         } catch (EOFException ignore) {
         } catch (IOException e) {
