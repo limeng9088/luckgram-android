@@ -76,16 +76,24 @@ public final class ProxyExitChecker {
         e.checking = true;
         if (onDone != null) addWaiter(key, onDone);
         final Entry entry = e;
-        final String base = LuckgramAI.apiBaseUrl();
+        // specs#81: try the API entries in order; a network-level failure moves on to the next one
+        // (the main entry can be blocked where a backup still works), any HTTP answer stops.
+        final List<String> bases = LuckgramAI.endpoints().attemptOrder();
         executor().execute(() -> {
             ExitInfo info = null;
-            try {
-                URL url = new URL(base + ExitInfo.PATH);
-                String body = proxy == null
-                        ? Socks5Https.getDirect(url, TIMEOUT_MS)
-                        : Socks5Https.getViaSocks5(proxy.getAddress(), proxy.getPort(), proxy.getUser(), proxy.getPassword(), url, TIMEOUT_MS);
-                info = ExitInfo.parse(body);
-            } catch (Throwable ignore) {
+            for (String base : bases) {
+                try {
+                    URL url = new URL(base + ExitInfo.PATH);
+                    String body = proxy == null
+                            ? Socks5Https.getDirect(url, TIMEOUT_MS)
+                            : Socks5Https.getViaSocks5(proxy.getAddress(), proxy.getPort(), proxy.getUser(), proxy.getPassword(), url, TIMEOUT_MS);
+                    info = ExitInfo.parse(body);
+                    break;
+                } catch (Throwable e) {
+                    if (e.getMessage() != null && e.getMessage().startsWith("HTTP ")) {
+                        break;
+                    }
+                }
             }
             final ExitInfo result = info;
             AndroidUtilities.runOnUIThread(() -> {
