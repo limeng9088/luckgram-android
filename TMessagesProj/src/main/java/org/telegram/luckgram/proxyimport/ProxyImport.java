@@ -250,8 +250,11 @@ public final class ProxyImport {
         ProxyImportLogic.Diff d = ProxyImportLogic.diff(sub.keys, r.proxies, existingKeys());
         removeKeys(d.remove);
         for (ProxyImportLogic.Entry e : d.add) SharedConfig.addProxy(new SharedConfig.ProxyInfo(toSettings(e)));
+        // the subscription owns what it added now or before; a proxy that was already in the list
+        // (added by hand) stays the user's and is never removed with the subscription
+        Set<String> owned = ProxyImportLogic.owned(sub.keys, r.proxies, d);
         sub.keys.clear();
-        for (ProxyImportLogic.Entry e : r.proxies) sub.keys.add(e.key());
+        sub.keys.addAll(owned);
         sub.updated = System.currentTimeMillis();
         save(list);
         changed();

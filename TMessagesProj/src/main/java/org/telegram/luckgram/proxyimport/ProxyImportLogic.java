@@ -464,6 +464,21 @@ public final class ProxyImportLogic {
     // ------------------------------------------------------------------ refresh
 
     /**
+     * Keys a subscription owns after a refresh: the entries it still lists that it owned before or
+     * adds now. A proxy that was already in the list (added by hand) is not owned, so deleting the
+     * subscription never removes it.
+     */
+    public static Set<String> owned(Set<String> previouslyOwned, List<Entry> now, Diff diff) {
+        Set<String> added = new java.util.HashSet<>();
+        for (Entry e : diff.add) added.add(e.key());
+        Set<String> out = new LinkedHashSet<>();
+        for (Entry e : now) {
+            if (previouslyOwned.contains(e.key()) || added.contains(e.key())) out.add(e.key());
+        }
+        return out;
+    }
+
+    /**
      * What a refresh changes: proxies now in the subscription that were not imported before are
      * added; keys imported before that are gone are removed. {@code existing} are the keys of every
      * proxy in the list (a proxy already added by hand is not added twice).

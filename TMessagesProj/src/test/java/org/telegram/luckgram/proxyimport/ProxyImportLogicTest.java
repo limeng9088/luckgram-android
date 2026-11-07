@@ -151,6 +151,22 @@ public class ProxyImportLogicTest {
     }
 
     @Test
+    public void ownership() {
+        ProxyImportLogic.Entry a = new ProxyImportLogic.Entry(S, "198.51.100.1", 1, "", "", "");
+        ProxyImportLogic.Entry b = new ProxyImportLogic.Entry(S, "198.51.100.2", 1, "", "", "");
+        ProxyImportLogic.Entry c = new ProxyImportLogic.Entry(S, "198.51.100.3", 1, "", "", "");
+        // a was added by hand before the first import: listed, but not owned
+        List<ProxyImportLogic.Entry> now = Arrays.asList(a, b);
+        ProxyImportLogic.Diff first = ProxyImportLogic.diff(new HashSet<>(), now, new HashSet<>(Collections.singletonList(a.key())));
+        assertEquals(new HashSet<>(Collections.singletonList(b.key())), ProxyImportLogic.owned(new HashSet<>(), now, first));
+        // refresh: b stays owned, c is new, a still not owned
+        List<ProxyImportLogic.Entry> now2 = Arrays.asList(a, b, c);
+        java.util.Set<String> owned1 = new HashSet<>(Collections.singletonList(b.key()));
+        ProxyImportLogic.Diff second = ProxyImportLogic.diff(owned1, now2, new HashSet<>(Arrays.asList(a.key(), b.key())));
+        assertEquals(new HashSet<>(Arrays.asList(b.key(), c.key())), ProxyImportLogic.owned(owned1, now2, second));
+    }
+
+    @Test
     public void hosts() {
         assertEquals("agg.example.com", ProxyImportLogic.hostOf("https://agg.example.com/clash/1?x=y"));
         assertEquals("a.b", ProxyImportLogic.hostOf("https://u:p@A.B:8443/"));
