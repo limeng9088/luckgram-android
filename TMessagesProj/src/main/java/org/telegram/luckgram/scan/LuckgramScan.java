@@ -49,8 +49,22 @@ public final class LuckgramScan {
         return LuckgramSettings.isEnabled(ScanLogic.FEATURE_KEY);
     }
 
+    /** specs#118: the next scan (after the camera permission, too) adds a proxy instead. */
+    private static boolean proxyMode;
+
+    /** specs#118: scanner from the proxy list; the code goes to {@code ProxyImport.handle}. */
+    public static void openForProxy(BaseFragment fragment) {
+        proxyMode = true;
+        openScanner(fragment);
+    }
+
     /** Opens the scanner, asking for the camera first. */
     public static void open(BaseFragment fragment) {
+        proxyMode = false;
+        openScanner(fragment);
+    }
+
+    private static void openScanner(BaseFragment fragment) {
         Activity activity = fragment.getParentActivity();
         if (activity == null) return;
         if (Build.VERSION.SDK_INT >= 23 && activity.checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -95,17 +109,21 @@ public final class LuckgramScan {
             @Override
             public void didFindQr(String text) {
                 // after the sheet closes
+                if (proxyMode) {
+                    AndroidUtilities.runOnUIThread(() -> org.telegram.luckgram.proxyimport.ProxyImport.handle(fragment, text), 250);
+                    return;
+                }
                 AndroidUtilities.runOnUIThread(() -> handle(fragment, text), 250);
             }
 
             @Override
             public String getSubtitleText() {
-                return TEXTS.scanHint();
+                return proxyMode ? LuckgramStrings.get("扫描代理二维码或订阅地址二维码", "Scan a proxy or subscription QR code") : TEXTS.scanHint();
             }
 
             @Override
             public String luckgramMyQrText() {
-                return TEXTS.myQr();
+                return proxyMode ? null : TEXTS.myQr();
             }
 
             @Override

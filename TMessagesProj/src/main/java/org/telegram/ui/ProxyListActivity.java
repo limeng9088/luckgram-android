@@ -58,6 +58,8 @@ import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.luckgram.proxyexit.ProxyExitChecker;
+import org.telegram.luckgram.proxyimport.ProxyImport;
+import org.telegram.luckgram.scan.LuckgramScan;
 import org.telegram.ui.Cells.HeaderCell;
 import org.telegram.ui.Cells.ShadowSectionCell;
 import org.telegram.ui.Cells.TextCheckCell;
@@ -100,6 +102,14 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
     @Keep
     private int proxyAddRow;
     private int proxyShadowRow;
+    // Luckgram 118: scan / link / subscriptions
+    private int scanRow;
+    private int linkRow;
+    private int subsHeaderRow;
+    private int subsStartRow;
+    private int subsEndRow;
+    private int subsShadowRow;
+    private List<ProxyImport.Sub> subs = new ArrayList<>();
     private int rotationRow;
     private int rotationTimeoutRow;
     private int rotationTimeoutInfoRow;
@@ -500,6 +510,12 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             } else if (position == directRow) {
                 checkExits(true); // Luckgram 117: tap the direct row to check all exits again
                 onExitChecked();
+            } else if (position == scanRow) {
+                LuckgramScan.openForProxy(this);
+            } else if (position == linkRow) {
+                ProxyImport.showInput(this);
+            } else if (position >= subsStartRow && position < subsEndRow) {
+                ProxyImport.showSubMenu(this, subs.get(position - subsStartRow));
             } else if (position == proxyAddRow) {
                 presentFragment(new ProxySettingsActivity());
             } else if (position == deleteAllRow) {
@@ -693,7 +709,19 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             proxyEndRow = -1;
         }
         proxyAddRow = rowCount++;
+        scanRow = rowCount++;
+        linkRow = rowCount++;
         proxyShadowRow = rowCount++;
+        subs = ProxyImport.subs();
+        if (!subs.isEmpty()) {
+            subsHeaderRow = rowCount++;
+            subsStartRow = rowCount;
+            rowCount += subs.size();
+            subsEndRow = rowCount;
+            subsShadowRow = rowCount++;
+        } else {
+            subsHeaderRow = subsStartRow = subsEndRow = subsShadowRow = -1;
+        }
         if (proxyList.size() >= 10) {
             deleteAllRow = rowCount++;
         } else {
@@ -751,6 +779,14 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxyCheckDone, proxyInfo);
             }));
         }
+    }
+
+    @Override
+    public void onRequestPermissionsResultFragment(int requestCode, String[] permissions, int[] grantResults) {
+        if (LuckgramScan.onPermissionResult(this, requestCode, grantResults)) {
+            return; // Luckgram 118: camera for 「扫码添加代理」
+        }
+        super.onRequestPermissionsResultFragment(requestCode, permissions, grantResults);
     }
 
     @Override
@@ -839,7 +875,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             VIEW_TYPE_INFO = 4,
             VIEW_TYPE_PROXY_DETAIL = 5,
             VIEW_TYPE_SLIDE_CHOOSER = 6,
-            VIEW_TYPE_DIRECT_EXIT = 7; // Luckgram 117
+            VIEW_TYPE_DIRECT_EXIT = 7, // Luckgram 117
+            VIEW_TYPE_SUBSCRIPTION = 8; // Luckgram 118
 
         public static final int PAYLOAD_CHECKED_CHANGED = 0;
         public static final int PAYLOAD_SELECTION_CHANGED = 1;
@@ -903,7 +940,11 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
                     textCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
                     if (position == proxyAddRow) {
-                        textCell.setText(getString(R.string.AddProxy), deleteAllRow != -1);
+                        textCell.setText(getString(R.string.AddProxy), true);
+                    } else if (position == scanRow) {
+                        textCell.setText(ProxyImport.T.scanRow(), true);
+                    } else if (position == linkRow) {
+                        textCell.setText(ProxyImport.T.linkRow(), false);
                     } else if (position == deleteAllRow) {
                         textCell.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
                         textCell.setText(getString(R.string.DeleteAllProxies), false);
@@ -914,6 +955,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     HeaderCell headerCell = (HeaderCell) holder.itemView;
                     if (position == connectionsHeaderRow) {
                         headerCell.setText(getString(R.string.ProxyConnections));
+                    } else if (position == subsHeaderRow) {
+                        headerCell.setText(ProxyImport.T.subsHeader());
                     }
                     break;
                 }
@@ -931,6 +974,12 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     if (position == rotationTimeoutInfoRow) {
                         cell.setText(getString(R.string.ProxyRotationTimeoutInfo));
                     }
+                    break;
+                }
+                case VIEW_TYPE_SUBSCRIPTION: {
+                    TextDetailSettingsCell cell = (TextDetailSettingsCell) holder.itemView;
+                    ProxyImport.Sub sub = subs.get(position - subsStartRow);
+                    cell.setTextAndValue(sub.title(), ProxyImport.subLine(sub), position + 1 < subsEndRow);
                     break;
                 }
                 case VIEW_TYPE_DIRECT_EXIT: {
@@ -1007,7 +1056,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
-            return position == useProxyRow || position == rotationRow || position == proxyAddRow || position == deleteAllRow || position == directRow || position >= proxyStartRow && position < proxyEndRow;
+            return position == useProxyRow || position == rotationRow || position == proxyAddRow || position == deleteAllRow || position == directRow || position == scanRow || position == linkRow || position >= subsStartRow && position < subsEndRow || position >= proxyStartRow && position < proxyEndRow;
         }
 
         @Override
@@ -1036,6 +1085,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     view = new SlideChooseView(mContext);
                     view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
                     break;
+                case VIEW_TYPE_SUBSCRIPTION:
                 case VIEW_TYPE_DIRECT_EXIT:
                     view = new TextDetailSettingsCell(mContext);
                     view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
@@ -1073,6 +1123,16 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 return -11;
             } else if (position == directRow) {
                 return -12;
+            } else if (position == scanRow) {
+                return -13;
+            } else if (position == linkRow) {
+                return -14;
+            } else if (position == subsHeaderRow) {
+                return -15;
+            } else if (position == subsShadowRow) {
+                return -16;
+            } else if (position >= subsStartRow && position < subsEndRow) {
+                return 0x7000000000000000L | (subs.get(position - subsStartRow).url.hashCode() & 0xffffffffL);
             } else if (position >= proxyStartRow && position < proxyEndRow) {
                 return proxyList.get(position - proxyStartRow).hashCode();
             } else {
@@ -1082,9 +1142,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
 
         @Override
         public int getItemViewType(int position) {
-            if (position == useProxyShadowRow || position == proxyShadowRow) {
+            if (position == useProxyShadowRow || position == proxyShadowRow || position == subsShadowRow) {
                 return VIEW_TYPE_SHADOW;
-            } else if (position == proxyAddRow || position == deleteAllRow) {
+            } else if (position == proxyAddRow || position == deleteAllRow || position == scanRow || position == linkRow) {
                 return VIEW_TYPE_TEXT_SETTING;
             } else if (position == useProxyRow || position == rotationRow) {
                 return VIEW_TYPE_TEXT_CHECK;
@@ -1092,6 +1152,10 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 return VIEW_TYPE_HEADER;
             } else if (position == directRow) {
                 return VIEW_TYPE_DIRECT_EXIT;
+            } else if (position == subsHeaderRow) {
+                return VIEW_TYPE_HEADER;
+            } else if (position >= subsStartRow && position < subsEndRow) {
+                return VIEW_TYPE_SUBSCRIPTION;
             } else if (position == rotationTimeoutRow) {
                 return VIEW_TYPE_SLIDE_CHOOSER;
             } else if (position >= proxyStartRow && position < proxyEndRow) {
