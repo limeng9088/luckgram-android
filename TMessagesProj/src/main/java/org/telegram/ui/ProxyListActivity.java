@@ -57,9 +57,11 @@ import org.telegram.ui.ActionBar.BackDrawable;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
+import org.telegram.luckgram.proxyexit.ProxyExitChecker;
 import org.telegram.ui.Cells.HeaderCell;
 import org.telegram.ui.Cells.ShadowSectionCell;
 import org.telegram.ui.Cells.TextCheckCell;
+import org.telegram.ui.Cells.TextDetailSettingsCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Cells.TextSettingsCell;
 import org.telegram.ui.Components.CheckBox2;
@@ -92,6 +94,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
     private int useProxyRow;
     private int useProxyShadowRow;
     private int connectionsHeaderRow;
+    private int directRow; // Luckgram 117: direct exit
     private int proxyStartRow;
     private int proxyEndRow;
     @Keep
@@ -115,6 +118,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
 
         private TextView textView;
         private TextView valueTextView;
+        private TextView exitTextView; // Luckgram 117
         private ImageView checkImageView;
         private SharedConfig.ProxyInfo currentInfo;
         private Drawable checkDrawable;
@@ -149,6 +153,18 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             valueTextView.setPadding(0, 0, 0, 0);
             addView(valueTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, (LocaleController.isRTL ? 56 : 21), 35, (LocaleController.isRTL ? 21 : 56), 0));
 
+            // Luckgram 117: exit IP / country of this proxy, one line under the status.
+            exitTextView = new TextView(context);
+            exitTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+            exitTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
+            exitTextView.setGravity(LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT);
+            exitTextView.setLines(1);
+            exitTextView.setMaxLines(1);
+            exitTextView.setSingleLine(true);
+            exitTextView.setEllipsize(TextUtils.TruncateAt.END);
+            exitTextView.setVisibility(GONE);
+            addView(exitTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, (LocaleController.isRTL ? 56 : 21), 56, (LocaleController.isRTL ? 21 : 56), 0));
+
             checkImageView = new ImageView(context);
             checkImageView.setImageResource(R.drawable.msg_info);
             checkImageView.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText3), PorterDuff.Mode.MULTIPLY));
@@ -168,7 +184,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
 
         @Override
         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            super.onMeasure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(64) + 1, MeasureSpec.EXACTLY));
+            super.onMeasure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(exitTextView.getVisibility() == VISIBLE ? 84 : 64) + 1, MeasureSpec.EXACTLY));
         }
 
         public void setProxy(SharedConfig.ProxyInfo proxyInfo) {
@@ -176,6 +192,21 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     ? proxyInfo.settings.getAddress() + " (WEB)"
                     : proxyInfo.settings.getAddress() + ":" + proxyInfo.settings.getPort());
             currentInfo = proxyInfo;
+            updateExit();
+        }
+
+        /** Luckgram 117: shows the cached exit of this proxy (SOCKS5 only). */
+        public void updateExit() {
+            String key = currentInfo == null ? null : ProxyExitChecker.key(currentInfo.settings);
+            int visibility = key == null ? GONE : VISIBLE;
+            if (exitTextView.getVisibility() != visibility) {
+                exitTextView.setVisibility(visibility);
+                requestLayout();
+            }
+            if (key != null) {
+                String text = ProxyExitChecker.text(ProxyExitChecker.get(key));
+                exitTextView.setText(text.isEmpty() ? ProxyExitChecker.checkingText() : text);
+            }
         }
 
         public void updateStatus() {
@@ -230,6 +261,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 float x = enabled ? toX : fromX;
                 textView.setTranslationX(x);
                 valueTextView.setTranslationX(x);
+                exitTextView.setTranslationX(x);
                 checkImageView.setTranslationX(x);
                 checkBox.setTranslationX((LocaleController.isRTL ? AndroidUtilities.dp(32) : -AndroidUtilities.dp(32)) + x);
                 checkImageView.setVisibility(enabled ? GONE : VISIBLE);
@@ -248,6 +280,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     float x = AndroidUtilities.lerp(fromX, toX, val);
                     textView.setTranslationX(x);
                     valueTextView.setTranslationX(x);
+                    exitTextView.setTranslationX(x);
                     checkImageView.setTranslationX(x);
                     checkBox.setTranslationX((LocaleController.isRTL ? AndroidUtilities.dp(32) : -AndroidUtilities.dp(32)) + x);
 
@@ -464,6 +497,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     textCheckCell.setChecked(true);
                 }
                 ConnectionsManager.setProxySettings(useProxySettings, SharedConfig.currentProxy.settings);
+            } else if (position == directRow) {
+                checkExits(true); // Luckgram 117: tap the direct row to check all exits again
+                onExitChecked();
             } else if (position == proxyAddRow) {
                 presentFragment(new ProxySettingsActivity());
             } else if (position == deleteAllRow) {
@@ -614,6 +650,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             useProxyShadowRow = -1;
         }
         connectionsHeaderRow = rowCount++;
+        directRow = rowCount++;
 
         if (notify) {
             proxyList.clear();
@@ -663,9 +700,35 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             deleteAllRow = -1;
         }
         checkProxyList();
+        checkExits(false);
         if (notify && listAdapter != null) {
             listAdapter.notifyDataSetChanged();
         }
+    }
+
+    /** Luckgram 117: checks the direct exit and the exit of every SOCKS5 proxy (cached 10 min). */
+    private void checkExits(boolean force) {
+        ProxyExitChecker.check(ProxyExitChecker.DIRECT, null, force, this::onExitChecked);
+        for (SharedConfig.ProxyInfo info : proxyList) {
+            String key = ProxyExitChecker.key(info.settings);
+            if (key != null) {
+                ProxyExitChecker.check(key, info.settings, force, this::onExitChecked);
+            }
+        }
+    }
+
+    private void onExitChecked() {
+        if (listView == null || listAdapter == null) {
+            return;
+        }
+        if (directRow >= 0) {
+            listAdapter.notifyItemChanged(directRow);
+        }
+        listView.forAllChild(view -> {
+            if (view instanceof TextDetailProxyCell) {
+                ((TextDetailProxyCell) view).updateExit();
+            }
+        });
     }
 
     private void checkProxyList() {
@@ -775,7 +838,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             VIEW_TYPE_TEXT_CHECK = 3,
             VIEW_TYPE_INFO = 4,
             VIEW_TYPE_PROXY_DETAIL = 5,
-            VIEW_TYPE_SLIDE_CHOOSER = 6;
+            VIEW_TYPE_SLIDE_CHOOSER = 6,
+            VIEW_TYPE_DIRECT_EXIT = 7; // Luckgram 117
 
         public static final int PAYLOAD_CHECKED_CHANGED = 0;
         public static final int PAYLOAD_SELECTION_CHANGED = 1;
@@ -869,6 +933,12 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     }
                     break;
                 }
+                case VIEW_TYPE_DIRECT_EXIT: {
+                    TextDetailSettingsCell cell = (TextDetailSettingsCell) holder.itemView;
+                    String text = ProxyExitChecker.text(ProxyExitChecker.get(ProxyExitChecker.DIRECT));
+                    cell.setTextAndValue(ProxyExitChecker.directTitle(), text.isEmpty() ? ProxyExitChecker.checkingText() : text, true);
+                    break;
+                }
                 case VIEW_TYPE_PROXY_DETAIL: {
                     TextDetailProxyCell cell = (TextDetailProxyCell) holder.itemView;
                     SharedConfig.ProxyInfo info = proxyList.get(position - proxyStartRow);
@@ -937,7 +1007,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
-            return position == useProxyRow || position == rotationRow || position == proxyAddRow || position == deleteAllRow || position >= proxyStartRow && position < proxyEndRow;
+            return position == useProxyRow || position == rotationRow || position == proxyAddRow || position == deleteAllRow || position == directRow || position >= proxyStartRow && position < proxyEndRow;
         }
 
         @Override
@@ -964,6 +1034,10 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     break;
                 case VIEW_TYPE_SLIDE_CHOOSER:
                     view = new SlideChooseView(mContext);
+                    view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    break;
+                case VIEW_TYPE_DIRECT_EXIT:
+                    view = new TextDetailSettingsCell(mContext);
                     view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
                     break;
                 case VIEW_TYPE_PROXY_DETAIL:
@@ -997,6 +1071,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 return -10;
             } else if (position == rotationTimeoutInfoRow) {
                 return -11;
+            } else if (position == directRow) {
+                return -12;
             } else if (position >= proxyStartRow && position < proxyEndRow) {
                 return proxyList.get(position - proxyStartRow).hashCode();
             } else {
@@ -1014,6 +1090,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                 return VIEW_TYPE_TEXT_CHECK;
             } else if (position == connectionsHeaderRow) {
                 return VIEW_TYPE_HEADER;
+            } else if (position == directRow) {
+                return VIEW_TYPE_DIRECT_EXIT;
             } else if (position == rotationTimeoutRow) {
                 return VIEW_TYPE_SLIDE_CHOOSER;
             } else if (position >= proxyStartRow && position < proxyEndRow) {
@@ -1028,7 +1106,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
     public ArrayList<ThemeDescription> getThemeDescriptions() {
         ArrayList<ThemeDescription> themeDescriptions = new ArrayList<>();
 
-        themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_CELLBACKGROUNDCOLOR, new Class[]{TextSettingsCell.class, TextCheckCell.class, HeaderCell.class, TextDetailProxyCell.class}, null, null, null, Theme.key_windowBackgroundWhite));
+        themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_CELLBACKGROUNDCOLOR, new Class[]{TextSettingsCell.class, TextCheckCell.class, HeaderCell.class, TextDetailProxyCell.class, TextDetailSettingsCell.class}, null, null, null, Theme.key_windowBackgroundWhite));
         themeDescriptions.add(new ThemeDescription(fragmentView, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_windowBackgroundGray));
 
 //        themeDescriptions.add(new ThemeDescription(actionBar, ThemeDescription.FLAG_BACKGROUND, null, null, null, null, Theme.key_actionBarDefault));
@@ -1049,6 +1127,9 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_TEXTCOLOR | ThemeDescription.FLAG_CHECKTAG | ThemeDescription.FLAG_IMAGECOLOR, new Class[]{TextDetailProxyCell.class}, new String[]{"valueTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText2));
         themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_TEXTCOLOR | ThemeDescription.FLAG_CHECKTAG | ThemeDescription.FLAG_IMAGECOLOR, new Class[]{TextDetailProxyCell.class}, new String[]{"valueTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGreenText));
         themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_TEXTCOLOR | ThemeDescription.FLAG_CHECKTAG | ThemeDescription.FLAG_IMAGECOLOR, new Class[]{TextDetailProxyCell.class}, new String[]{"valueTextView"}, null, null, null, Theme.key_text_RedRegular));
+        themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{TextDetailProxyCell.class}, new String[]{"exitTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText2));
+        themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{TextDetailSettingsCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
+        themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{TextDetailSettingsCell.class}, new String[]{"valueTextView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText2));
         themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_IMAGECOLOR, new Class[]{TextDetailProxyCell.class}, new String[]{"checkImageView"}, null, null, null, Theme.key_windowBackgroundWhiteGrayText3));
 
         themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{HeaderCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlueHeader));
