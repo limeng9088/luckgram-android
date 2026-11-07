@@ -88,6 +88,8 @@ jobs:
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
             update/VersionLine.java \
+            proxyexit/ExitInfo.java \
+            proxyexit/Socks5Https.java \
             nearby/NearbyLogic.java \
             discover/DiscoverMock.java \
             square/SquareLogic.java \
