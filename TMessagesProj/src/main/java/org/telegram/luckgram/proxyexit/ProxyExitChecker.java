@@ -89,8 +89,8 @@ public final class ProxyExitChecker {
                             : Socks5Https.getViaSocks5(proxy.getAddress(), proxy.getPort(), proxy.getUser(), proxy.getPassword(), url, TIMEOUT_MS);
                     info = ExitInfo.parse(body);
                     break;
-                } catch (Throwable e) {
-                    if (e.getMessage() != null && e.getMessage().startsWith("HTTP ")) {
+                } catch (Throwable err) {
+                    if (err.getMessage() != null && err.getMessage().startsWith("HTTP ")) {
                         break;
                     }
                 }
