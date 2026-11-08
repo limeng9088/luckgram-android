@@ -239,6 +239,8 @@ jobs:
           APK=TMessagesProj_App/build/outputs/apk/afat/release/app.apk
           AAPT=$(ls "$ANDROID_HOME"/build-tools/36.0.0/aapt2)
           "$AAPT" dump badging "$APK" | grep -E "^package:|application-label:"
+          "$AAPT" dump badging "$APK" | grep -q "package: name='com.luckgram.messenger'"
+          mkdir -p out && cp "$APK" "out/luckgram-$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)-${ABIS// /_}.apk"
 
       # Luckgram 119: the Xray core is in the APK, its size, and 16 KB alignment of every .so
       - name: Check libXray in APK
@@ -265,8 +267,6 @@ jobs:
           print("PT_LOAD alignment ok" if not bad else bad)
           sys.exit(1 if bad else 0)
           PY
-          "$AAPT" dump badging "$APK" | grep -q "package: name='com.luckgram.messenger'"
-          mkdir -p out && cp "$APK" "out/luckgram-$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)-${ABIS// /_}.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
