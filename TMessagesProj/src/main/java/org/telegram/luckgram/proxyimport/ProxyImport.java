@@ -11,6 +11,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.luckgram.proxyexit.Socks5Https;
+import org.telegram.luckgram.xray.XrayLogic;
+import org.telegram.luckgram.xray.XrayManager;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
@@ -35,8 +37,9 @@ import java.util.Set;
 
 /**
  * specs#118: add proxies from a scanned or typed link, and import / refresh / delete mihomo and
- * Clash subscriptions (SOCKS5 only). Subscriptions are kept on this device only
- * (SharedPreferences {@code luckgram_proxy_subs}); proxies go into Telegram's own proxy list.
+ * Clash subscriptions. Subscriptions are kept on this device only (SharedPreferences
+ * {@code luckgram_proxy_subs}); proxies go into Telegram's own proxy list. VLESS / VMess / Trojan /
+ * SS nodes (specs#119) go in as the loopback SOCKS5 of the built-in Xray core ({@link XrayManager}).
  */
 public final class ProxyImport {
 
@@ -105,7 +108,12 @@ public final class ProxyImport {
 
     // ------------------------------------------------------------------ proxies
 
+    /** The proxy for Telegram's list; null for an Xray node the core cannot use. */
     static ProxySettings toSettings(ProxyImportLogic.Entry e) {
+        if (ProxyImportLogic.TYPE_XRAY.equals(e.type)) {
+            XrayLogic.Node node = XrayLogic.parse(e.link);
+            return node == null ? null : XrayManager.register(node);
+        }
         ProxySettings.Builder b = ProxySettings.builder().setAddress(e.host).setPort(e.port);
         if (ProxyImportLogic.TYPE_MTPROTO.equals(e.type)) {
             b.setType(ProxySettings.Type.MTPROTO).setSecret(e.secret);
@@ -116,6 +124,8 @@ public final class ProxyImport {
     }
 
     static String keyOf(ProxySettings s) {
+        XrayManager.Rec xray = XrayManager.forSettings(s);
+        if (xray != null) return xray.key();
         if (s.getType() == ProxySettings.Type.SOCKS5) {
             return new ProxyImportLogic.Entry(ProxyImportLogic.TYPE_SOCKS5, s.getAddress(), s.getPort(), s.getUser(), s.getPassword(), "").key();
         }
@@ -184,8 +194,19 @@ public final class ProxyImport {
         switch (ProxyImportLogic.kind(text)) {
             case ProxyImportLogic.KIND_PROXY: {
                 ProxyImportLogic.Entry e = ProxyImportLogic.parseLink(text);
+                boolean xray = ProxyImportLogic.TYPE_XRAY.equals(e.type);
+                if (xray && !XrayManager.enabled()) {
+                    alert(fragment, T.inputTitle(), XrayManager.problem());
+                    break;
+                }
                 boolean existed = existingKeys().contains(e.key());
-                SharedConfig.addProxy(new SharedConfig.ProxyInfo(toSettings(e)));
+                ProxySettings settings = toSettings(e);
+                if (settings == null) {
+                    alert(fragment, T.inputTitle(), XrayManager.T.unavailable());
+                    break;
+                }
+                SharedConfig.addProxy(new SharedConfig.ProxyInfo(settings));
+                if (xray) XrayManager.apply();
                 changed();
                 BulletinFactory.of(fragment).createSimpleBulletin(org.telegram.messenger.R.raw.contact_check, existed ? T.alreadyAdded() : T.added()).show();
                 break;
@@ -247,18 +268,43 @@ public final class ProxyImport {
             sub = new Sub(url);
             list.add(sub);
         }
-        ProxyImportLogic.Diff d = ProxyImportLogic.diff(sub.keys, r.proxies, existingKeys());
+        // Xray nodes only when the core is on and can build them; the rest count as skipped
+        boolean xrayOn = XrayManager.enabled();
+        List<ProxyImportLogic.Entry> usable = new ArrayList<>();
+        int skipped = r.skipped;
+        for (ProxyImportLogic.Entry e : r.proxies) {
+            if (ProxyImportLogic.TYPE_XRAY.equals(e.type) && !xrayOn) {
+                skipped++;
+            } else {
+                usable.add(e);
+            }
+        }
+        ProxyImportLogic.Diff d = ProxyImportLogic.diff(sub.keys, usable, existingKeys());
         removeKeys(d.remove);
-        for (ProxyImportLogic.Entry e : d.add) SharedConfig.addProxy(new SharedConfig.ProxyInfo(toSettings(e)));
+        List<ProxyImportLogic.Entry> failed = new ArrayList<>();
+        for (ProxyImportLogic.Entry e : d.add) {
+            ProxySettings settings = toSettings(e);
+            if (settings == null) {
+                failed.add(e);
+            } else {
+                SharedConfig.addProxy(new SharedConfig.ProxyInfo(settings));
+            }
+        }
+        if (!failed.isEmpty()) {
+            d.add.removeAll(failed);
+            usable.removeAll(failed);
+            skipped += failed.size();
+        }
+        XrayManager.reconcile(true);
         // the subscription owns what it added now or before; a proxy that was already in the list
         // (added by hand) stays the user's and is never removed with the subscription
-        Set<String> owned = ProxyImportLogic.owned(sub.keys, r.proxies, d);
+        Set<String> owned = ProxyImportLogic.owned(sub.keys, usable, d);
         sub.keys.clear();
         sub.keys.addAll(owned);
         sub.updated = System.currentTimeMillis();
         save(list);
         changed();
-        alert(fragment, existing == null ? T.importTitle() : T.refreshTitle(), T.result(r.proxies.size(), d.add.size(), d.remove.size(), r.skipped));
+        alert(fragment, existing == null ? T.importTitle() : T.refreshTitle(), T.result(usable.size(), d.add.size(), d.remove.size(), skipped, !xrayOn));
     }
 
     /** Tap on a subscription row: refresh / delete / cancel. */
@@ -284,6 +330,7 @@ public final class ProxyImport {
                 .setMessage(T.deleteMessage(sub.keys.size()))
                 .setPositiveButton(T.delete(), (d, w) -> {
                     removeKeys(new ArrayList<>(sub.keys));
+                    XrayManager.reconcile(false);
                     List<Sub> list = subs();
                     for (int i = list.size() - 1; i >= 0; i--) if (list.get(i).url.equals(sub.url)) list.remove(i);
                     save(list);
@@ -322,13 +369,13 @@ public final class ProxyImport {
         public static String linkRow() { return t("输入链接或订阅地址", "Add from Link or Subscription"); }
         public static String subsHeader() { return t("订阅", "Subscriptions"); }
         static String inputTitle() { return t("添加代理", "Add Proxy"); }
-        static String inputMessage() { return t("粘贴代理链接（tg://socks、t.me/proxy、socks5://）或 mihomo / Clash 订阅地址。", "Paste a proxy link (tg://socks, t.me/proxy, socks5://) or a mihomo / Clash subscription URL."); }
+        static String inputMessage() { return t("粘贴代理链接（tg://socks、t.me/proxy、socks5://、vless://、vmess://、trojan://、ss://）或 mihomo / Clash 订阅地址。", "Paste a proxy link (tg://socks, t.me/proxy, socks5://, vless://, vmess://, trojan://, ss://) or a mihomo / Clash subscription URL."); }
         static String inputHint() { return t("链接或订阅地址", "Link or subscription URL"); }
         static String add() { return t("添加", "Add"); }
         static String added() { return t("已添加代理", "Proxy added"); }
         static String alreadyAdded() { return t("这个代理已在列表里", "This proxy is already in the list"); }
         static String unknownTitle() { return t("无法识别", "Not recognized"); }
-        static String unknown() { return t("无法识别的代理链接。支持 tg://socks、t.me/proxy、socks5:// 链接和 mihomo / Clash 订阅地址。", "This is not a proxy link. Supported: tg://socks, t.me/proxy, socks5:// links and mihomo / Clash subscription URLs."); }
+        static String unknown() { return t("无法识别的代理链接。支持 tg://socks、t.me/proxy、socks5://、vless://、vmess://、trojan://、ss:// 链接和 mihomo / Clash 订阅地址。", "This is not a proxy link. Supported: tg://socks, t.me/proxy, socks5://, vless://, vmess://, trojan://, ss:// links and mihomo / Clash subscription URLs."); }
         static String importTitle() { return t("导入订阅", "Import Subscription"); }
         static String refreshTitle() { return t("刷新订阅", "Refresh Subscription"); }
         static String downloadFailed() { return t("下载订阅失败，请检查地址和网络后重试。", "Could not download the subscription. Check the URL and your connection, then try again."); }
@@ -338,14 +385,16 @@ public final class ProxyImport {
         static String deleteMessage(int n) { return t("将同时删除由这个订阅导入的 " + n + " 个代理。手动添加的代理不受影响。", "The " + n + " proxies imported from it will be removed too. Proxies you added yourself stay."); }
         static String subLine(int n, String when) { return t(n + " 个代理 · 更新于 " + when, n + (n == 1 ? " proxy" : " proxies") + " · updated " + when); }
 
-        static String result(int total, int added, int removed, int skipped) {
+        static String result(int total, int added, int removed, int skipped, boolean coreOff) {
             StringBuilder b = new StringBuilder();
             b.append(t("订阅里有 " + total + " 个可用代理：新增 " + added + " 个", total + " usable " + (total == 1 ? "proxy" : "proxies") + ": " + added + " added"));
             if (removed > 0) b.append(t("，移除 " + removed + " 个", ", " + removed + " removed"));
             b.append(t("。", "."));
             if (skipped > 0) {
-                b.append("\n\n").append(t("跳过 " + skipped + " 个不支持的节点（Luckgram 只支持 SOCKS5 和 MTProto 代理，VLESS、Shadowsocks、VMess 等用不了）。",
-                        "Skipped " + skipped + " unsupported " + (skipped == 1 ? "entry" : "entries") + " (Luckgram supports SOCKS5 and MTProto proxies only, not VLESS, Shadowsocks, VMess and others)."));
+                b.append("\n\n").append(coreOff
+                        ? t("跳过 " + skipped + " 个节点：" + XrayManager.problem() + "。", "Skipped " + skipped + " " + (skipped == 1 ? "entry" : "entries") + ": " + XrayManager.problem() + ".")
+                        : t("跳过 " + skipped + " 个不支持的节点（支持 SOCKS5、MTProto、VLESS、VMess、Trojan、Shadowsocks；Hysteria、TUIC 等用不了）。",
+                        "Skipped " + skipped + " unsupported " + (skipped == 1 ? "entry" : "entries") + " (supported: SOCKS5, MTProto, VLESS, VMess, Trojan, Shadowsocks; not Hysteria, TUIC and others)."));
             }
             return b.toString();
         }

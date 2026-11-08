@@ -134,6 +134,11 @@ public final class LuckgramFeatures {
         add(toggle(org.telegram.luckgram.scan.ScanLogic.FEATURE_KEY, PROFILE_ORGANIZE, true,
             "扫一扫和代理配置", "Scan and proxy settings",
             "聊天列表「⋮」菜单最上面：扫一扫加好友、代理配置", "At the top of the chat list's \"⋮\" menu: scan to add friends, proxy settings"));
+        add(toggle(org.telegram.luckgram.xray.XrayManager.FEATURE_KEY, PROFILE_ORGANIZE, true,
+            "内置代理内核", "Built-in proxy core",
+            "在 App 内运行 Xray，可直接使用 VLESS、VMess、Trojan、Shadowsocks 节点；只代理 Luckgram 自己的流量，不用 VPN。开源组件：Xray-core（MPL-2.0，github.com/XTLS/Xray-core）、libXray（MIT，github.com/XTLS/libXray）",
+            "Runs Xray inside the app so VLESS, VMess, Trojan and Shadowsocks nodes work; only Luckgram's own traffic, no VPN. Open source: Xray-core (MPL-2.0, github.com/XTLS/Xray-core), libXray (MIT, github.com/XTLS/libXray)")
+            .onToggled(org.telegram.luckgram.xray.XrayManager::onToggled));
         add(toggle(org.telegram.luckgram.notes.UserNotesStore.FEATURE_KEY, PROFILE_ORGANIZE, true,
             "私人备注", "Private notes",
             "给联系人、群组和频道写只有自己能看到的备注", "Notes about contacts, groups and channels that only you can see")

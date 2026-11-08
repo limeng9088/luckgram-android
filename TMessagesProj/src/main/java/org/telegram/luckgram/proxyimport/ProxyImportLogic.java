@@ -12,8 +12,9 @@ import java.util.Set;
 
 /**
  * specs#118: what a scanned or typed text means for the proxy list, and the proxies in a
- * mihomo / Clash subscription. Only SOCKS5 (and MTProto from tg links) can be used by the app;
- * everything else in a subscription is counted as skipped.
+ * mihomo / Clash subscription. SOCKS5 and MTProto go into Telegram's list as they are; VLESS,
+ * VMess, Trojan and Shadowsocks (specs#119) are {@link #TYPE_XRAY} entries run by the built-in
+ * Xray core. Everything else in a subscription is counted as skipped.
  *
  * <p>Pure Java (java.* only), unit-tested in {@code ProxyImportLogicTest}. Same rules as iOS
  * {@code LuckgramProxyImportLogic}.
@@ -26,6 +27,8 @@ public final class ProxyImportLogic {
 
     public static final String TYPE_SOCKS5 = "socks5";
     public static final String TYPE_MTPROTO = "mtproto";
+    /** specs#119: a VLESS / VMess / Trojan / SS node; {@link Entry#link} is its canonical share link. */
+    public static final String TYPE_XRAY = "xray";
 
     /** Largest subscription accepted. */
     public static final int MAX_BYTES = 2 * 1024 * 1024;
@@ -41,18 +44,38 @@ public final class ProxyImportLogic {
         public final String user;
         public final String password;
         public final String secret;
+        /** {@link #TYPE_XRAY} only: canonical share link. */
+        public final String link;
+        /** {@link #TYPE_XRAY} only: protocol and name from the link. */
+        public final String protocol;
+        public final String name;
 
         public Entry(String type, String host, int port, String user, String password, String secret) {
+            this(type, host, port, user, password, secret, null);
+        }
+
+        private Entry(String type, String host, int port, String user, String password, String secret, org.telegram.luckgram.xray.XrayLogic.Node node) {
             this.type = type;
             this.host = host == null ? "" : host.trim();
             this.port = port;
             this.user = user == null ? "" : user;
             this.password = password == null ? "" : password;
             this.secret = secret == null ? "" : secret;
+            this.link = node == null ? "" : node.link;
+            this.protocol = node == null ? "" : node.protocol;
+            this.name = node == null ? "" : node.name;
+        }
+
+        public static Entry xray(org.telegram.luckgram.xray.XrayLogic.Node node) {
+            return new Entry(TYPE_XRAY, node.host, node.port, null, null, null, node);
         }
 
         /** Identity used to recognise the same proxy across refreshes. */
         public String key() {
+            if (TYPE_XRAY.equals(type)) {
+                int hash = link.indexOf('#');
+                return "xray|" + (hash >= 0 ? link.substring(0, hash) : link);
+            }
             return type + "|" + host.toLowerCase(Locale.ROOT) + "|" + port + "|" + user + "|" + password + "|" + secret;
         }
 
@@ -134,13 +157,18 @@ public final class ProxyImportLogic {
 
     /**
      * A proxy link: {@code tg://socks|proxy?...}, {@code https://t.me/socks|proxy?...} (also
-     * telegram.me / telegram.dog) or {@code socks5://[user:pass@]host:port} ({@code socks://},
-     * {@code socks5h://}). Null when it is none of these or is incomplete.
+     * telegram.me / telegram.dog), {@code socks5://[user:pass@]host:port} ({@code socks://},
+     * {@code socks5h://}), or a {@code vless:// vmess:// trojan:// ss://} share link (specs#119).
+     * Null when it is none of these or is incomplete.
      */
     public static Entry parseLink(String raw) {
         if (raw == null) return null;
         String text = raw.trim();
         String lower = text.toLowerCase(Locale.ROOT);
+        if (org.telegram.luckgram.xray.XrayLogic.looksLikeLink(text)) {
+            org.telegram.luckgram.xray.XrayLogic.Node node = org.telegram.luckgram.xray.XrayLogic.parse(text);
+            return node == null ? null : Entry.xray(node);
+        }
         for (String p : new String[]{"socks5h://", "socks5://", "socks://"}) {
             if (lower.startsWith(p)) return parseSocksUrl(text.substring(p.length()));
         }
@@ -327,6 +355,9 @@ public final class ProxyImportLogic {
         Map<String, String> cur = null;
         int itemIndent = -1;
         int keyIndent = -1;
+        // nested maps of the current item: indent of each open key and its dotted prefix
+        List<int[]> openIndent = new ArrayList<>();
+        List<String> openPrefix = new ArrayList<>();
         for (String line : lines) {
             if (line.trim().isEmpty() || line.trim().startsWith("#")) continue;
             int indent = line.length() - line.replaceAll("^ +", "").length();
@@ -346,18 +377,33 @@ public final class ProxyImportLogic {
                     keyIndent = indent + 1 + (after.length() - after.replaceAll("^ +", "").length());
                     cur = new LinkedHashMap<>();
                     items.add(cur);
+                    openIndent.clear();
+                    openPrefix.clear();
                     if (rest.startsWith("{")) {
-                        parseFlowMap(rest, cur);
+                        parseFlowMap(rest, cur, "");
                         cur = null;
                     } else if (!rest.isEmpty()) {
-                        putPair(rest, cur);
+                        String opened = putPair(rest, cur, "");
+                        if (opened != null) {
+                            openIndent.add(new int[]{keyIndent});
+                            openPrefix.add(opened);
+                        }
                     }
                     continue;
                 }
             }
-            // a key of the current block item (deeper nested maps are ignored)
-            if (cur != null && indent == keyIndent && !t.startsWith("-")) {
-                putPair(t, cur);
+            // a key of the current block item; nested maps become dotted keys (ws-opts.path)
+            if (cur == null || indent < keyIndent || t.startsWith("-")) continue;
+            while (!openIndent.isEmpty() && openIndent.get(openIndent.size() - 1)[0] >= indent) {
+                openIndent.remove(openIndent.size() - 1);
+                openPrefix.remove(openPrefix.size() - 1);
+            }
+            if (indent > keyIndent && openIndent.isEmpty()) continue; // under a list or scalar
+            String prefix = openPrefix.isEmpty() ? "" : openPrefix.get(openPrefix.size() - 1);
+            String opened = putPair(t, cur, prefix);
+            if (opened != null) {
+                openIndent.add(new int[]{indent});
+                openPrefix.add(opened);
             }
         }
         Set<Entry> found = new LinkedHashSet<>();
@@ -375,7 +421,12 @@ public final class ProxyImportLogic {
 
     private static Entry fromClash(Map<String, String> m) {
         String type = m.get("type");
-        if (type == null || !type.equalsIgnoreCase("socks5")) return null;
+        if (type == null) return null;
+        if (!type.equalsIgnoreCase("socks5")) {
+            String link = org.telegram.luckgram.xray.XrayLogic.fromClash(m);
+            org.telegram.luckgram.xray.XrayLogic.Node node = link == null ? null : org.telegram.luckgram.xray.XrayLogic.parse(link);
+            return node == null ? null : Entry.xray(node);
+        }
         String tls = m.get("tls");
         if (tls != null && tls.equalsIgnoreCase("true")) return null; // Telegram has no SOCKS5 over TLS
         String server = m.get("server");
@@ -384,13 +435,23 @@ public final class ProxyImportLogic {
         return new Entry(TYPE_SOCKS5, server, port, m.get("username"), m.get("password"), null);
     }
 
-    private static void putPair(String t, Map<String, String> into) {
+    /**
+     * {@code key: value} into {@code into} as {@code prefix + key}; a flow map value is flattened.
+     * Returns the prefix for the keys below when the value is empty (a block map opens), else null.
+     */
+    private static String putPair(String t, Map<String, String> into, String prefix) {
         int colon = keyColon(t);
-        if (colon <= 0) return;
-        String key = unquote(t.substring(0, colon).trim());
+        if (colon <= 0) return null;
+        String key = prefix + unquote(t.substring(0, colon).trim());
         String value = t.substring(colon + 1).trim();
-        if (value.startsWith("{") || value.startsWith("[") || value.isEmpty()) return; // nested
+        if (value.isEmpty() || value.startsWith("#")) return key + ".";
+        if (value.startsWith("{")) {
+            parseFlowMap(value, into, key + ".");
+            return null;
+        }
+        if (value.startsWith("[")) return null; // lists are not used
         into.put(key, unquote(stripComment(value)));
+        return null;
     }
 
     /** Index of the ':' that ends a key (outside quotes, followed by a space or the end). */
@@ -415,8 +476,8 @@ public final class ProxyImportLogic {
         return h >= 0 ? v.substring(0, h).trim() : v;
     }
 
-    /** {@code {a: 1, b: "x, y", c: {d: e}}} → a, b (nested maps skipped). */
-    static void parseFlowMap(String s, Map<String, String> into) {
+    /** {@code {a: 1, b: "x, y", c: {d: e}}} → a, b, c.d (with {@code prefix} in front). */
+    static void parseFlowMap(String s, Map<String, String> into, String prefix) {
         int start = s.indexOf('{');
         int depth = 0;
         char quote = 0;
@@ -436,19 +497,19 @@ public final class ProxyImportLogic {
                 part.append(c);
             } else if (c == '}' || c == ']') {
                 if (depth == 0) {
-                    putPair(part.toString().trim(), into);
+                    putPair(part.toString().trim(), into, prefix);
                     return;
                 }
                 depth--;
                 part.append(c);
             } else if (c == ',' && depth == 0) {
-                putPair(part.toString().trim(), into);
+                putPair(part.toString().trim(), into, prefix);
                 part.setLength(0);
             } else {
                 part.append(c);
             }
         }
-        putPair(part.toString().trim(), into);
+        putPair(part.toString().trim(), into, prefix);
     }
 
     static String unquote(String v) {

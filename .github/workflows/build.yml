@@ -51,6 +51,7 @@ jobs:
         abis: ${{ fromJSON(needs.plan.outputs.abis) }}
     env:
       NDK_VERSION: 27.2.12479018
+      LIBXRAY_VERSION: v26.10.31
       ABIS: ${{ matrix.abis }}
       LUCKGRAM_CCACHE: '1'
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -147,6 +148,46 @@ jobs:
           print("signing config injected")
           PY
 
+      # Luckgram 119: built-in Xray core. gomobile AAR from XTLS/libXray (MIT) with Xray-core
+      # (MPL-2.0), only for this job's ABIs, 16 KB page aligned (Google Play, Android 15+).
+      # Cached per version; the AAR is never committed.
+      - name: Restore libXray AAR
+        id: xray-cache
+        uses: actions/cache@v4
+        with:
+          path: TMessagesProj/libs/libXray.aar
+          key: libxray-${{ env.LIBXRAY_VERSION }}-${{ env.NDK_VERSION }}-${{ matrix.abis }}-v1
+
+      - name: Set up Go (libXray)
+        if: steps.xray-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache: false
+
+      - name: Build libXray AAR
+        if: steps.xray-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          T=""
+          for a in $ABIS; do
+            case $a in
+              arm64-v8a) T="$T,android/arm64";; x86_64) T="$T,android/amd64";;
+              armeabi-v7a) T="$T,android/arm";; x86) T="$T,android/386";;
+            esac
+          done
+          T=${T#,}
+          git clone -q --depth 1 --branch "$LIBXRAY_VERSION" https://github.com/XTLS/libXray.git "$RUNNER_TEMP/libXray"
+          cd "$RUNNER_TEMP/libXray"
+          GOMOBILE=$(go list -m -f '{{.Version}}' golang.org/x/mobile)
+          go install "golang.org/x/mobile/cmd/gomobile@$GOMOBILE"
+          gomobile init
+          gomobile bind -target "$T" -androidapi 23 -trimpath \
+            -ldflags="-checklinkname=0 -s -w -buildid= -extldflags=-Wl,-z,max-page-size=16384" \
+            -o libXray.aar .
+          cp libXray.aar "$GITHUB_WORKSPACE/TMessagesProj/libs/libXray.aar"
+          unzip -l libXray.aar | grep -E 'jni/|classes.jar'
+
       # 默认只编 arm64-v8a 以缩短原生编译时间；只改 CI 工作副本，不提交
       - name: Restrict ABIs
         run: |
@@ -200,6 +241,32 @@ jobs:
           "$AAPT" dump badging "$APK" | grep -E "^package:|application-label:"
           "$AAPT" dump badging "$APK" | grep -q "package: name='com.luckgram.messenger'"
           mkdir -p out && cp "$APK" "out/luckgram-$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)-${ABIS// /_}.apk"
+
+      # Luckgram 119: the Xray core is in the APK, its size, and 16 KB alignment of every .so
+      - name: Check libXray in APK
+        run: |
+          APK=TMessagesProj_App/build/outputs/apk/afat/release/app.apk
+          unzip -l "$APK" | grep -E 'lib/.*/libgojni\.so' || { echo "::error::libgojni.so missing from APK"; exit 1; }
+          unzip -l "$APK" | awk '/lib\/.*\/libgojni\.so/ {printf "libgojni.so %s: %.1f MB (uncompressed)\n", $4, $1/1048576}' | tee -a "$GITHUB_STEP_SUMMARY"
+          if "$ANDROID_HOME"/build-tools/36.0.0/zipalign -c -P 16 -v 4 "$APK" | grep -E 'lib/.*\.so' | grep -v '(OK'; then
+            echo "::error::.so not 16 KB aligned in the APK"; exit 1
+          fi
+          python3 - "$APK" <<'PY'
+          import sys, zipfile, struct
+          z = zipfile.ZipFile(sys.argv[1])
+          bad = []
+          for n in z.namelist():
+              if n.endswith("libgojni.so"):
+                  b = z.read(n)
+                  phoff = struct.unpack_from("<Q", b, 0x20)[0]; phentsize, phnum = struct.unpack_from("<HH", b, 0x36)
+                  for i in range(phnum):
+                      o = phoff + i * phentsize
+                      if struct.unpack_from("<I", b, o)[0] == 1:  # PT_LOAD
+                          align = struct.unpack_from("<Q", b, o + 48)[0]
+                          if align < 16384: bad.append((n, align))
+          print("PT_LOAD alignment ok" if not bad else bad)
+          sys.exit(1 if bad else 0)
+          PY
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
