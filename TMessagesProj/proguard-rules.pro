@@ -58,3 +58,9 @@
 # Use -keep to explicitly keep any other classes shrinking would remove
 #-dontoptimize
 #-dontobfuscate
+
+# Luckgram 119: libXray (gomobile) is called by reflection; gomobile's Seq binds by name from Go.
+-keep class libXray.** { *; }
+-keep class go.** { *; }
+-dontwarn libXray.**
+-dontwarn go.**

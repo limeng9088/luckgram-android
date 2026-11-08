@@ -91,20 +91,26 @@ public class ProxyImportLogicTest {
             "  - MATCH,g");
 
     @Test
-    public void clashOnlySocks5() {
+    public void clashSocks5AndXray() {
         ProxyImportLogic.Result r = ProxyImportLogic.parseSubscription(CLASH);
-        assertEquals(2, r.proxies.size());
-        assertEquals("198.51.100.24", r.proxies.get(0).host);
-        assertEquals("p, 1", r.proxies.get(0).password);
-        assertEquals("198.51.100.77", r.proxies.get(1).host);
-        assertEquals(1081, r.proxies.get(1).port);
-        assertEquals("u2", r.proxies.get(1).user);
-        assertEquals("p2", r.proxies.get(1).password);
-        assertEquals(3, r.skipped); // vless, socks5 over TLS, ss (its nested "type: socks5" ignored)
+        assertEquals(3, r.proxies.size());
+        ProxyImportLogic.Entry v = r.proxies.get(0);
+        assertEquals(ProxyImportLogic.TYPE_XRAY, v.type);
+        assertEquals("vless", v.protocol);
+        assertEquals("SG·vless", v.name);
+        assertEquals("agg.example.com", v.host);
+        assertTrue(v.link, v.link.contains("type=ws") && v.link.contains("path=%2Fa") && v.link.contains("host=agg.example.com"));
+        assertEquals("198.51.100.24", r.proxies.get(1).host);
+        assertEquals("p, 1", r.proxies.get(1).password);
+        assertEquals("198.51.100.77", r.proxies.get(2).host);
+        assertEquals(1081, r.proxies.get(2).port);
+        assertEquals("u2", r.proxies.get(2).user);
+        assertEquals("p2", r.proxies.get(2).password);
+        assertEquals(2, r.skipped); // socks5 over TLS, ss without cipher (its nested "type: socks5" ignored)
     }
 
     @Test
-    public void allVless() {
+    public void vlessWithoutUuidSkipped() {
         String body = "proxies:\n- {name: a, type: vless, server: x, port: 443}\n- {name: b, type: vless, server: y, port: 443}\n";
         ProxyImportLogic.Result r = ProxyImportLogic.parseSubscription(body);
         assertEquals(0, r.proxies.size());
@@ -116,12 +122,12 @@ public class ProxyImportLogicTest {
         String list = "tg://socks?server=198.51.100.1&port=1080\nvless://abc@x:443\nsocks5://u:p@198.51.100.2:1080\n\n# c\nsocks5://u:p@198.51.100.2:1080\n";
         String b64 = java.util.Base64.getEncoder().encodeToString(list.getBytes(StandardCharsets.UTF_8));
         ProxyImportLogic.Result r = ProxyImportLogic.parseSubscription(b64);
-        assertEquals(2, r.proxies.size());
-        assertEquals(1, r.skipped);
+        assertEquals(3, r.proxies.size()); // tg, vless, socks5 (duplicate dropped)
+        assertEquals(0, r.skipped);
         ProxyImportLogic.Result plain = ProxyImportLogic.parseSubscription(list);
-        assertEquals(2, plain.proxies.size());
+        assertEquals(3, plain.proxies.size());
         String noPad = b64.replace("=", "").replace('+', '-').replace('/', '_');
-        assertEquals(2, ProxyImportLogic.parseSubscription(noPad).proxies.size());
+        assertEquals(3, ProxyImportLogic.parseSubscription(noPad).proxies.size());
     }
 
     @Test

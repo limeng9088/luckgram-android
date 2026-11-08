@@ -19,6 +19,11 @@ dependencies {
     implementation project(':TMessagesProj')
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
+    // Luckgram 119: built-in Xray core (gomobile AAR built in CI from XTLS/libXray, MIT; Xray-core
+    // MPL-2.0). Not in git; without it the app builds and Xray nodes say "core not included".
+    if (file('../TMessagesProj/libs/libXray.aar').exists()) {
+        implementation files('../TMessagesProj/libs/libXray.aar')
+    }
 }
 
 android {

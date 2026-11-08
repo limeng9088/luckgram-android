@@ -181,7 +181,15 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             checkImageView.setScaleType(ImageView.ScaleType.CENTER);
             checkImageView.setContentDescription(getString(R.string.Edit));
             addView(checkImageView, LayoutHelper.createFrame(48, 48, (LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT) | Gravity.TOP, 8, 8, 8, 0));
-            checkImageView.setOnClickListener(v -> presentFragment(new ProxySettingsActivity(currentInfo)));
+            checkImageView.setOnClickListener(v -> {
+                // Luckgram 119: an Xray node is not edited as the loopback SOCKS5 it runs as
+                org.telegram.luckgram.xray.XrayManager.Rec xray = org.telegram.luckgram.xray.XrayManager.forSettings(currentInfo.settings);
+                if (xray != null) {
+                    showXrayMenu(currentInfo, xray);
+                } else {
+                    presentFragment(new ProxySettingsActivity(currentInfo));
+                }
+            });
 
             checkBox = new CheckBox2(context, 21);
             checkBox.setColor(Theme.key_checkbox, Theme.key_radioBackground, Theme.key_checkboxCheck);
@@ -198,6 +206,11 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         }
 
         public void setProxy(SharedConfig.ProxyInfo proxyInfo) {
+            org.telegram.luckgram.xray.XrayManager.Rec xray = org.telegram.luckgram.xray.XrayManager.forSettings(proxyInfo.settings);
+            if (xray != null) {
+                // Luckgram 119: protocol and the real server, not 127.0.0.1
+                textView.setText(org.telegram.luckgram.xray.XrayLogic.label(xray.protocol) + " · " + xray.title());
+            } else
             textView.setText(proxyInfo.settings.getType() == ProxySettings.Type.WEB
                     ? proxyInfo.settings.getAddress() + " (WEB)"
                     : proxyInfo.settings.getAddress() + ":" + proxyInfo.settings.getPort());
@@ -221,6 +234,12 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
 
         public void updateStatus() {
             int colorKey;
+            String xrayProblem = org.telegram.luckgram.xray.XrayManager.isXray(currentInfo) ? org.telegram.luckgram.xray.XrayManager.problem() : null;
+            if (xrayProblem != null) {
+                // Luckgram 119: the core is off, missing, starting or failed
+                valueTextView.setText(xrayProblem);
+                colorKey = org.telegram.luckgram.xray.XrayManager.T.starting().equals(xrayProblem) ? Theme.key_windowBackgroundWhiteGrayText2 : Theme.key_text_RedRegular;
+            } else
             if (SharedConfig.currentProxy == currentInfo && useProxySettings) {
                 if (currentConnectionState == ConnectionsManager.ConnectionStateConnected || currentConnectionState == ConnectionsManager.ConnectionStateUpdating) {
                     colorKey = Theme.key_windowBackgroundWhiteBlueText6;
@@ -486,6 +505,11 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     return;
                 }
                 SharedConfig.ProxyInfo info = proxyList.get(position - proxyStartRow);
+                if (org.telegram.luckgram.xray.XrayManager.isXray(info) && !org.telegram.luckgram.xray.XrayManager.enabled()) {
+                    // Luckgram 119: not selectable while the core is off or missing
+                    org.telegram.ui.Components.BulletinFactory.of(this).createSimpleBulletin(R.raw.error, org.telegram.luckgram.xray.XrayManager.problem()).show();
+                    return;
+                }
                 useProxySettings = true;
                 SharedPreferences.Editor editor = MessagesController.getGlobalMainSettings().edit();
                 info.settings.toSharedPreferences(editor);
@@ -527,6 +551,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     for (SharedConfig.ProxyInfo info : proxyList) {
                         SharedConfig.deleteProxy(info);
                     }
+                    org.telegram.luckgram.xray.XrayManager.reconcile(false);
                     useProxySettings = false;
                     NotificationCenter.getGlobalInstance().removeObserver(ProxyListActivity.this, NotificationCenter.proxySettingsChanged);
                     NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxySettingsChanged);
@@ -586,6 +611,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                             for (SharedConfig.ProxyInfo info : selectedItems) {
                                 SharedConfig.deleteProxy(info);
                             }
+                            org.telegram.luckgram.xray.XrayManager.reconcile(false);
                             if (SharedConfig.currentProxy == null) {
                                 useProxySettings = false;
                             }
@@ -613,7 +639,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                             if (links.length() > 0) {
                                 links.append("\n\n");
                             }
-                            links.append(info.settings.getLink());
+                            org.telegram.luckgram.xray.XrayManager.Rec xray = org.telegram.luckgram.xray.XrayManager.forSettings(info.settings);
+                            links.append(xray != null ? xray.link : info.settings.getLink());
                         }
 
                         Intent shareIntent = new Intent(Intent.ACTION_SEND);
@@ -632,6 +659,30 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
         });
 
         return fragmentView;
+    }
+
+    /** Luckgram 119: the info button of an Xray node: copy its share link or delete it. */
+    private void showXrayMenu(SharedConfig.ProxyInfo info, org.telegram.luckgram.xray.XrayManager.Rec xray) {
+        if (getParentActivity() == null) return;
+        new AlertDialog.Builder(getParentActivity())
+                .setTitle(xray.title())
+                .setMessage(xray.detail())
+                .setItems(new CharSequence[]{org.telegram.luckgram.xray.XrayManager.T.copyLink(), org.telegram.luckgram.xray.XrayManager.T.delete()}, (d, which) -> {
+                    if (which == 0) {
+                        AndroidUtilities.addToClipboard(xray.link);
+                        org.telegram.ui.Components.BulletinFactory.of(this).createSimpleBulletin(R.raw.copy, org.telegram.luckgram.xray.XrayManager.T.linkCopied()).show();
+                    } else {
+                        SharedConfig.deleteProxy(info);
+                        org.telegram.luckgram.xray.XrayManager.reconcile(false);
+                        if (SharedConfig.currentProxy == null) {
+                            useProxySettings = false;
+                        }
+                        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.proxySettingsChanged);
+                        updateRows(true);
+                    }
+                })
+                .setNegativeButton(getString(R.string.Cancel), null)
+                .show();
     }
 
     @Override

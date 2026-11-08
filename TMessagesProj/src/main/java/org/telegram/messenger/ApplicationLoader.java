@@ -249,6 +249,9 @@ public class ApplicationLoader extends Application {
         }
 
         SharedConfig.loadConfig();
+        // Luckgram 119: start the built-in Xray core before the first connection when the
+        // selected proxy is one of its nodes
+        org.telegram.luckgram.xray.XrayManager.onAppStart();
         SharedPrefsHelper.init(applicationContext);
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             UserConfig.getInstance(a).loadConfig();
