@@ -64,7 +64,7 @@ public class ProxyImportLogicTest {
     private static final String CLASH = String.join("\n",
             "mixed-port: 7890",
             "proxies:",
-            "  - {name: 'SG·vless', type: vless, server: agg.example.com, port: 443, uuid: x, ws-opts: {path: /a, headers: {Host: agg.example.com}}}",
+            "  - {name: 'SG·vless', type: vless, server: agg.example.com, port: 443, uuid: x, network: ws, ws-opts: {path: /a, headers: {Host: agg.example.com}}}",
             "  - {name: \"s5, flow\", type: socks5, server: 198.51.100.24, port: 1080, username: u1, password: 'p, 1'}",
             "  - name: s5-block",
             "    type: socks5",
