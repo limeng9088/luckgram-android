@@ -279,8 +279,7 @@ public final class ProxyImport {
                 usable.add(e);
             }
         }
-        Set<String> existing = existingKeys();
-        ProxyImportLogic.Diff d = ProxyImportLogic.diff(sub.keys, usable, existing);
+        ProxyImportLogic.Diff d = ProxyImportLogic.diff(sub.keys, usable, existingKeys());
         removeKeys(d.remove);
         List<ProxyImportLogic.Entry> failed = new ArrayList<>();
         for (ProxyImportLogic.Entry e : d.add) {
