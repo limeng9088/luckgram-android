@@ -38,6 +38,7 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
     private static final int ID_ACCOUNT = 11;
     private static final int ID_PRO = 12;
     private static final int ID_DIAG_EXPORT = 13;
+    private static final int ID_UPDATE_AUTO = 14;
     private static final int ID_PLACEHOLDER_BASE = 20;
     private static final int ID_DEBUG_MOCK = 30;
     private static final int ID_DEBUG_SELFTEST = 31;
@@ -152,6 +153,11 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
             items.add(UItem.asShadow(LuckgramStrings.get("服务器：", "Server: ") + (LuckgramAI.getInstance().isUsingMock() ? "mock" : LuckgramAI.apiBaseUrl())));
         }
 
+        // specs#124: background download of a new version on Wi-Fi / unmetered networks (default on).
+        org.telegram.luckgram.update.UpdateDownloadLogic.Texts updateTexts = org.telegram.luckgram.update.LuckgramUpdateDownloader.texts();
+        items.add(UItem.asCheck(ID_UPDATE_AUTO, updateTexts.autoSwitch()).setChecked(org.telegram.luckgram.update.LuckgramUpdateDownloader.autoEnabled()));
+        items.add(UItem.asShadow(updateTexts.autoSwitchInfo()));
+
         // specs#72: local diagnostic log (metadata only), exported as .txt.
         items.add(UItem.asButton(ID_DIAG_EXPORT, LuckgramStrings.exportDiagLog()));
         items.add(UItem.asShadow(LuckgramStrings.exportDiagLogInfo()));
@@ -221,6 +227,15 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
                     });
                 }
                 break;
+            case ID_UPDATE_AUTO: {
+                boolean v = !org.telegram.luckgram.update.LuckgramUpdateDownloader.autoEnabled();
+                org.telegram.luckgram.update.LuckgramUpdateDownloader.setAutoEnabled(v);
+                ((TextCheckCell) view).setChecked(v);
+                if (v) {
+                    org.telegram.luckgram.update.LuckgramUpdateDownloader.maybeAutoDownload(org.telegram.luckgram.update.LuckgramUpdates.state());
+                }
+                break;
+            }
             case ID_DEBUG_MOCK: {
                 boolean v = !LuckgramAI.getInstance().isUsingMock();
                 LuckgramAI.getInstance().setUseMock(v);

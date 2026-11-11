@@ -15,6 +15,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.json.JSONObject;
+
+import java.io.File;
 import org.telegram.luckgram.LuckgramAI;
 import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.luckgram.LuckgramSettings;
@@ -22,7 +24,7 @@ import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.NotificationCenter;
-import org.telegram.messenger.browser.Browser;
+import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.Theme;
 
 /**
@@ -56,6 +58,10 @@ public final class LuckgramUpdates {
 
     /** Main thread. */
     public static void checkIfDue() {
+        // specs#124: drop packages of other / installed versions once per run, then maybe download on Wi-Fi
+        UpdateLogic.State current = state();
+        LuckgramUpdateDownloader.cleanupOnce(current);
+        LuckgramUpdateDownloader.maybeAutoDownload(current);
         long now = System.currentTimeMillis();
         long last = LuckgramSettings.prefs().getLong(KEY_LAST_CHECK, 0);
         if (inFlight || !UpdateLogic.shouldCheck(now, last, lastFailureMs)) {
@@ -74,6 +80,7 @@ public final class LuckgramUpdates {
                         .putLong(KEY_LAST_CHECK, System.currentTimeMillis())
                         .apply();
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.luckgramUpdateChanged);
+                LuckgramUpdateDownloader.maybeAutoDownload(state()); // specs#124
             }
 
             @Override
@@ -89,14 +96,98 @@ public final class LuckgramUpdates {
         return UpdateLogic.evaluate(info, BuildConfig.BUILD_VERSION_STRING, currentBuild(), LuckgramStrings.isChinese());
     }
 
-    /** "有新版本 x.y.z · 更新". */
+    /** "有新版本 x.y.z · 更新" / "正在下载… · 45%" / "新版本 x.y.z 已下载 · 安装". */
     public static String rowText(UpdateLogic.State s) {
-        return LuckgramStrings.get("有新版本 " + s.latest + " · 更新", "New version " + s.latest + " · Update");
+        UpdateDownloadLogic.Texts t = LuckgramUpdateDownloader.texts();
+        if (LuckgramUpdateDownloader.readyFile(s) != null) {
+            return t.readyRow(s.latest);
+        }
+        if (LuckgramUpdateDownloader.isDownloading(s)) {
+            return t.downloadingRow(s.latest, LuckgramUpdateDownloader.percent());
+        }
+        return t.availableRow(s.latest);
     }
 
+    /**
+     * specs#124: the Settings row and the force page's button. Notes first (not on the force page,
+     * which shows them already), then install the downloaded package or download it with a progress
+     * dialog and install.
+     */
     public static void openDownload(Activity activity, UpdateLogic.State s) {
-        if (activity != null && s.url.startsWith("https://")) {
-            Browser.openUrl(activity, s.url);
+        onUpdateTapped(activity, s, false);
+    }
+
+    public static void onUpdateTapped(Activity activity, UpdateLogic.State s, boolean force) {
+        if (activity == null || !UpdateDownloadLogic.isHttps(s.url)) {
+            return;
+        }
+        UpdateDownloadLogic.Texts t = LuckgramUpdateDownloader.texts();
+        if (!force && !TextUtils.isEmpty(s.notes)) {
+            AlertDialog.Builder b = new AlertDialog.Builder(activity);
+            b.setTitle(t.notesTitle(s.latest));
+            b.setMessage(s.notes);
+            b.setPositiveButton(t.updateNow(), (d, w) -> downloadAndInstall(activity, s));
+            b.setNegativeButton(t.later(), null);
+            b.show();
+            return;
+        }
+        downloadAndInstall(activity, s);
+    }
+
+    private static void downloadAndInstall(Activity activity, UpdateLogic.State s) {
+        File ready = LuckgramUpdateDownloader.readyFile(s);
+        if (ready != null) {
+            LuckgramUpdateDownloader.install(activity, ready);
+            return;
+        }
+        UpdateDownloadLogic.Texts t = LuckgramUpdateDownloader.texts();
+        AlertDialog progress = new AlertDialog(activity, AlertDialog.ALERT_TYPE_LOADING);
+        progress.setTitle(t.downloadingTitle(s.latest));
+        progress.setMessage(s.size > 0 ? AndroidUtilities.formatFileSize(s.size) : " ");
+        progress.setCanceledOnTouchOutside(false);
+        progress.setCancelable(false);
+        LuckgramUpdateDownloader.Callback[] holder = new LuckgramUpdateDownloader.Callback[1];
+        progress.setNegativeButton(t.cancel(), (d, w) -> LuckgramUpdateDownloader.cancel());
+        holder[0] = new LuckgramUpdateDownloader.Callback() {
+            @Override
+            public void onProgress(int percent) {
+                if (percent >= 0) {
+                    progress.setProgress(percent);
+                }
+            }
+
+            @Override
+            public void onDone(File apk) {
+                dismiss(progress);
+                LuckgramUpdateDownloader.install(activity, apk);
+            }
+
+            @Override
+            public void onFailed(UpdateDownloadLogic.Failure failure, String detail) {
+                dismiss(progress);
+                if (activity.isFinishing()) {
+                    return;
+                }
+                AlertDialog.Builder b = new AlertDialog.Builder(activity);
+                b.setTitle(failure == UpdateDownloadLogic.Failure.VERIFY ? t.verifyFailedTitle() : t.failedTitle());
+                b.setMessage(t.failure(failure, detail));
+                b.setPositiveButton(t.retry(), (d, w) -> downloadAndInstall(activity, state()));
+                b.setNegativeButton(t.ok(), null);
+                b.show();
+            }
+        };
+        try {
+            progress.show();
+        } catch (Exception e) {
+            return;
+        }
+        LuckgramUpdateDownloader.start(s, false, holder[0]);
+    }
+
+    private static void dismiss(Dialog d) {
+        try {
+            d.dismiss();
+        } catch (Exception ignore) {
         }
     }
 
@@ -175,7 +266,7 @@ public final class LuckgramUpdates {
         bg.setColor(Theme.getColor(Theme.key_featuredStickers_addButton));
         button.setBackground(bg);
         button.setText(LuckgramStrings.get("更新", "Update"));
-        button.setOnClickListener(v -> openDownload(activity, s));
+        button.setOnClickListener(v -> onUpdateTapped(activity, state(), true));
         lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, AndroidUtilities.dp(48));
         lp.topMargin = AndroidUtilities.dp(24);
         box.addView(button, lp);
