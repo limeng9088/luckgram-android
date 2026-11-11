@@ -89,6 +89,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     public final static int VIEW_TYPE_INVITE_CONTACT_CELL = 8;
     public final static int VIEW_TYPE_PUBLIC_POST = 9;
     public final static int VIEW_TYPE_EMPTY_RESULT = 10;
+    public final static int VIEW_TYPE_LUCKGRAM_HIDDEN = 11;
 
     public static enum Filter {
         All(0, R.string.SearchMessagesFilterAll, R.string.SearchMessagesFilterAllFrom),
@@ -283,6 +284,9 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     }
 
     private boolean filter(Object obj) {
+        if (luckgramFilterHidden(obj)) {
+            return false;
+        }
         if (dialogsType != DialogsActivity.DIALOGS_TYPE_START_ATTACH_BOT) {
             return true;
         }
@@ -334,6 +338,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 if (delegate != null) {
                     delegate.runResultsEnterAnimation();
                 }
+                luckgramNotifyHiddenMatches();
             }
 
             @Override
@@ -1074,7 +1079,6 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 }
             }
             // Luckgram 12 (hidden chats): leave hidden chats out; tell the screen how many matched.
-            int luckgramHiddenMatches = 0;
             for (int a = 0; a < result.size(); a++) {
                 Object obj = result.get(a);
                 long did = 0;
@@ -1091,11 +1095,8 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                         names.remove(a);
                     }
                     a--;
-                    luckgramHiddenMatches++;
+                    luckgramHiddenSeen.add(did);
                 }
-            }
-            if (luckgramHiddenMatches > 0 && dialogsActivity != null) {
-                dialogsActivity.luckgramOnHiddenSearchMatches(this, luckgramHiddenMatches);
             }
             MessagesController.getInstance(currentAccount).putUsers(encUsers, true);
             searchResult = result;
@@ -1107,6 +1108,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 delegate.searchStateChanged(waitingResponseCount > 0, true);
                 delegate.runResultsEnterAnimation();
             }
+            luckgramNotifyHiddenMatches();
         });
     }
 
@@ -1143,6 +1145,55 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         return !luckgramIncludeHidden && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, dialogId);
     }
 
+    /** Hidden chats that matched the current query in any section (local, recent, server). */
+    private final java.util.HashSet<Long> luckgramHiddenSeen = new java.util.HashSet<>();
+    private String luckgramBulletinQuery;
+    private int luckgramHiddenRow = -1;
+
+    /**
+     * True when {@code obj} is a hidden chat that has to stay out of the results. Every source
+     * goes through here: {@link #filterRecent} (recent searches) and {@link SearchAdapterHelper}
+     * (server my_results / global results) call {@link #filter}.
+     */
+    private boolean luckgramFilterHidden(Object obj) {
+        long did = 0;
+        if (obj instanceof TLRPC.User) {
+            did = ((TLRPC.User) obj).id;
+        } else if (obj instanceof TLRPC.Chat) {
+            did = -((TLRPC.Chat) obj).id;
+        } else if (obj instanceof TLRPC.EncryptedChat) {
+            did = DialogObject.makeEncryptedDialogId(((TLRPC.EncryptedChat) obj).id);
+        }
+        if (did == 0 || !luckgramSkip(did)) {
+            return false;
+        }
+        if (!TextUtils.isEmpty(lastSearchText)) {
+            luckgramHiddenSeen.add(did);
+        }
+        return true;
+    }
+
+    private boolean luckgramShowHiddenRow() {
+        return searchWas && !luckgramIncludeHidden && !luckgramHiddenSeen.isEmpty() && !TextUtils.isEmpty(lastSearchText)
+            && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isEnabled();
+    }
+
+    /** The 「在隐藏的聊天中搜索」 row at the bottom of the results. */
+    public boolean luckgramIsHiddenRow(int position) {
+        return luckgramHiddenRow >= 0 && position == luckgramHiddenRow;
+    }
+
+    private void luckgramNotifyHiddenMatches() {
+        if (luckgramIncludeHidden || luckgramHiddenSeen.isEmpty() || dialogsActivity == null || lastSearchText == null) {
+            return;
+        }
+        if (lastSearchText.equals(luckgramBulletinQuery)) {
+            return;
+        }
+        luckgramBulletinQuery = lastSearchText;
+        dialogsActivity.luckgramOnHiddenSearchMatches(this, luckgramHiddenSeen.size());
+    }
+
     public void searchDialogs(String text, int folderId, boolean allowPublicPosts) {
         if (text != null && text.equals(lastSearchText) && (folderId == this.folderId || TextUtils.isEmpty(text))) {
             return;
@@ -1150,6 +1201,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         if (!luckgramResearching) {
             luckgramIncludeHidden = false;
         }
+        luckgramHiddenSeen.clear();
         luckgramLastAllowPublicPosts = allowPublicPosts;
         lastSearchText = text;
         this.folderId = folderId;
@@ -1408,6 +1460,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
 
     @Override
     public int getItemCount() {
+        luckgramHiddenRow = -1;
         if (waitingResponseCount == 3) {
             return 0;
         }
@@ -1476,10 +1529,16 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         if (localMessagesSearchEndReached) {
             localMessagesLoadingRow = count;
         }
+        if (luckgramShowHiddenRow()) {
+            luckgramHiddenRow = count++;
+        }
         return currentItemCount = count;
     }
 
     public Object getItem(int i) {
+        if (luckgramIsHiddenRow(i)) {
+            return null;
+        }
         if (!publicPosts.isEmpty()) {
             if (i > 0 && i - 1 < publicPosts.size()) {
                 return publicPosts.get(i - 1);
@@ -1584,6 +1643,9 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     }
 
     public boolean isGlobalSearch(int i) {
+        if (luckgramIsHiddenRow(i)) {
+            return false;
+        }
         if (!searchWas) {
             return false;
         }
@@ -1761,6 +1823,13 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
                 });
                 messagesEmptyLayout.setQuery(lastMessagesSearchString);
                 break;
+            case VIEW_TYPE_LUCKGRAM_HIDDEN: {
+                TextCell cell = new TextCell(mContext, resourcesProvider);
+                cell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
+                cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
+                view = cell;
+                break;
+            }
             case VIEW_TYPE_ADD_BY_PHONE:
             default:
                 view = new TextCell(mContext, 16, false);
@@ -1783,6 +1852,11 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     @Override
     public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
         switch (holder.getItemViewType()) {
+            case VIEW_TYPE_LUCKGRAM_HIDDEN: {
+                TextCell cell = (TextCell) holder.itemView;
+                cell.setTextAndIcon(org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.searchHiddenText(), R.drawable.msg_search, false);
+                break;
+            }
             case VIEW_TYPE_PROFILE_CELL: {
                 ProfileSearchCell cell = (ProfileSearchCell) holder.itemView;
                 cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
@@ -2262,6 +2336,9 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
 
     @Override
     public int getItemViewType(int i) {
+        if (luckgramIsHiddenRow(i)) {
+            return VIEW_TYPE_LUCKGRAM_HIDDEN;
+        }
         if (!searchResultHashtags.isEmpty()) {
             return i == 0 ? VIEW_TYPE_GRAY_SECTION : VIEW_TYPE_HASHTAG_CELL;
         }
