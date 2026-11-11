@@ -32,6 +32,7 @@ import java.net.URL;
 import java.security.MessageDigest;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * specs#124: downloads the APK inside the app (over the in-app proxy like every Luckgram request,
@@ -64,7 +65,8 @@ public final class LuckgramUpdateDownloader {
     private static String downloadingName;
     private static int percent = -1;
     private static Callback uiCallback;
-    private static volatile boolean cancelled;
+    /** One flag per download, so a new download never revives a cancelled one. */
+    private static AtomicBoolean cancelFlag = new AtomicBoolean(true);
     private static boolean cleanedThisRun;
     /** Set while the user is in the system "install unknown apps" page. */
     private static String pendingInstall;
@@ -166,9 +168,9 @@ public final class LuckgramUpdateDownloader {
      * a manual one, so turning the switch off no longer stops it.
      */
     public static void start(UpdateLogic.State s, boolean auto, Callback callback) {
-        uiCallback = callback;
         if (downloading) {
             if (nameFor(s).equals(downloadingName)) {
+                uiCallback = callback;
                 downloadingAuto = downloadingAuto && auto;
                 if (callback != null) {
                     callback.onProgress(percent);
@@ -177,6 +179,7 @@ public final class LuckgramUpdateDownloader {
             }
             cancel();
         }
+        uiCallback = callback;
         if (!UpdateDownloadLogic.isHttps(s.url)) {
             finishFailed(UpdateDownloadLogic.Failure.NOT_HTTPS, null, auto);
             return;
@@ -185,18 +188,19 @@ public final class LuckgramUpdateDownloader {
         downloadingAuto = auto;
         downloadingName = nameFor(s);
         percent = -1;
-        cancelled = false;
+        final AtomicBoolean cancelled = new AtomicBoolean(false);
+        cancelFlag = cancelled;
         changed();
         final String name = downloadingName;
         final String url = s.url;
         final String sha = s.sha256;
         final long size = s.size;
-        executor.execute(() -> run(name, url, sha, size));
+        executor.execute(() -> run(name, url, sha, size, cancelled));
     }
 
     /** Main thread. */
     public static void cancel() {
-        cancelled = true;
+        cancelFlag.set(true);
         downloading = false;
         downloadingName = null;
         percent = -1;
@@ -211,7 +215,7 @@ public final class LuckgramUpdateDownloader {
         }
     }
 
-    private static void run(String name, String url, String sha, long size) {
+    private static void run(String name, String url, String sha, long size, AtomicBoolean cancelled) {
         long start = System.currentTimeMillis();
         File d = dir();
         File part = new File(d, name + UpdateDownloadLogic.PART);
@@ -251,7 +255,7 @@ public final class LuckgramUpdateDownloader {
                 byte[] buf = new byte[64 * 1024];
                 int n;
                 while ((n = in.read(buf)) != -1) {
-                    if (cancelled) {
+                    if (cancelled.get()) {
                         break;
                     }
                     out.write(buf, 0, n);
@@ -269,7 +273,7 @@ public final class LuckgramUpdateDownloader {
                     }
                 }
             }
-            if (cancelled) {
+            if (cancelled.get()) {
                 //noinspection ResultOfMethodCallIgnored
                 part.delete();
                 return;
@@ -298,7 +302,7 @@ public final class LuckgramUpdateDownloader {
             String msg = String.valueOf(t.getMessage());
             boolean space = msg.contains("ENOSPC") || msg.toLowerCase().contains("no space");
             final String detail = t.getClass().getSimpleName();
-            if (!cancelled) {
+            if (!cancelled.get()) {
                 post(name, () -> finishFailed(space ? UpdateDownloadLogic.Failure.SPACE : UpdateDownloadLogic.Failure.NETWORK, space ? null : detail, downloadingAuto));
             }
         } finally {
