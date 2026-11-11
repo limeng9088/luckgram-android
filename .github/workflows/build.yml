@@ -396,8 +396,11 @@ jobs:
           CODE=$GITHUB_RUN_NUMBER
           TAG="android-${VER}-${GITHUB_RUN_NUMBER}"
           APK=$(basename out/*-arm64-v8a.apk)
-          BODY=$(printf '{"platform":"%s","version":"%s","build":%s,"url":"%s","source":"%s"}' \
-            android "$VER" "$CODE" "${DL_BASE:+$DL_BASE/android/${TAG}/${APK}}${DL_BASE:-https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}}" "${GITHUB_REPOSITORY}@${GITHUB_SHA} run ${GITHUB_RUN_NUMBER}")
+          # specs#123: checksum and size for the in-app download (#124).
+          SHA=$(sha256sum "out/$APK" | cut -d' ' -f1)
+          SIZE=$(stat -c %s "out/$APK")
+          BODY=$(printf '{"platform":"%s","version":"%s","build":%s,"url":"%s","sha256":"%s","size":%s,"source":"%s"}' \
+            android "$VER" "$CODE" "${DL_BASE:+$DL_BASE/android/${TAG}/${APK}}${DL_BASE:-https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK}}" "$SHA" "$SIZE" "${GITHUB_REPOSITORY}@${GITHUB_SHA} run ${GITHUB_RUN_NUMBER}")
           # Tokens only via env -> stdin (never argv); a missing secret skips that stage.
           set -euo pipefail
           publish() {
