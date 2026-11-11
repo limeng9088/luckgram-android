@@ -25,20 +25,29 @@ public final class UpdateLogic {
         public final String url;
         public final String notesZh;
         public final String notesEn;
+        /** specs#123/#124: lowercase hex SHA-256 and byte size of the APK; "" / 0 while the server has not got them. */
+        public final String sha256;
+        public final long size;
 
         public Info(String latest, long build, String min, String url, String notesZh, String notesEn) {
+            this(latest, build, min, url, notesZh, notesEn, "", 0);
+        }
+
+        public Info(String latest, long build, String min, String url, String notesZh, String notesEn, String sha256, long size) {
             this.latest = latest == null ? "" : latest;
             this.build = build;
             this.min = min == null ? "" : min;
             this.url = url == null ? "" : url;
             this.notesZh = notesZh == null ? "" : notesZh;
             this.notesEn = notesEn == null ? "" : notesEn;
+            this.sha256 = UpdateDownloadLogic.isSha256(sha256) ? sha256.toLowerCase(java.util.Locale.ROOT) : "";
+            this.size = Math.max(0, size);
         }
     }
 
     /** What the app shows. */
     public static final class State {
-        public static final State NONE = new State(false, false, "", "", "");
+        public static final State NONE = new State(false, false, "", "", "", 0, "", 0);
 
         /** "有新版本 x.y.z · 更新" on top of Settings. */
         public final boolean updateAvailable;
@@ -47,13 +56,20 @@ public final class UpdateLogic {
         public final String latest;
         public final String url;
         public final String notes;
+        /** Build of {@link #latest} (0 = unknown) and what the downloaded package must match (specs#124). */
+        public final long build;
+        public final String sha256;
+        public final long size;
 
-        State(boolean updateAvailable, boolean forceUpdate, String latest, String url, String notes) {
+        State(boolean updateAvailable, boolean forceUpdate, String latest, String url, String notes, long build, String sha256, long size) {
             this.updateAvailable = updateAvailable;
             this.forceUpdate = forceUpdate;
             this.latest = latest;
             this.url = url;
             this.notes = notes;
+            this.build = build;
+            this.sha256 = sha256;
+            this.size = size;
         }
     }
 
@@ -114,7 +130,8 @@ public final class UpdateLogic {
         }
         JSONObject notes = j.optJSONObject("notes");
         return new Info(j.optString("latest", ""), j.optLong("build", 0), j.optString("min", ""), j.optString("url", ""),
-                notes != null ? notes.optString("zh", "") : "", notes != null ? notes.optString("en", "") : "");
+                notes != null ? notes.optString("zh", "") : "", notes != null ? notes.optString("en", "") : "",
+                j.isNull("sha256") ? "" : j.optString("sha256", ""), j.optLong("size", 0));
     }
 
     public static String serialize(Info info) {
@@ -124,7 +141,7 @@ public final class UpdateLogic {
         try {
             JSONObject notes = new JSONObject().put("zh", info.notesZh).put("en", info.notesEn);
             return new JSONObject().put("latest", info.latest).put("build", info.build).put("min", info.min)
-                    .put("url", info.url).put("notes", notes).toString();
+                    .put("url", info.url).put("notes", notes).put("sha256", info.sha256).put("size", info.size).toString();
         } catch (Exception e) {
             return "";
         }
@@ -158,6 +175,9 @@ public final class UpdateLogic {
         }
         String notes = chinese ? (info.notesZh.isEmpty() ? info.notesEn : info.notesZh) : (info.notesEn.isEmpty() ? info.notesZh : info.notesEn);
         // Below min but latest not newer (misconfigured): still force, the link is the way out.
-        return new State(available || force, force, isVersion(info.latest) ? info.latest : info.min, info.url, notes);
+        boolean latestIsTarget = isVersion(info.latest) && (available || compareVersions(info.latest, info.min) >= 0);
+        // sha256/size/build describe the "latest" package; they don't apply when only "min" is usable
+        return new State(available || force, force, isVersion(info.latest) ? info.latest : info.min, info.url, notes,
+                latestIsTarget ? info.build : 0, latestIsTarget ? info.sha256 : "", latestIsTarget ? info.size : 0);
     }
 }

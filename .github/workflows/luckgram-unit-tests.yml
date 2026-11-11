@@ -87,6 +87,7 @@ jobs:
             procommunity/ProCommunityLogic.java \
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
+            update/UpdateDownloadLogic.java \
             update/VersionLine.java \
             proxyexit/ExitInfo.java \
             proxyexit/Socks5Https.java \
