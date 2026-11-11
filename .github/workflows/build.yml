@@ -95,7 +95,20 @@ jobs:
       # Native code (tgnet, voip, ffmpeg glue...) is about 7 minutes per ABI from scratch.
       # ccache keeps the objects between builds; only master saves, branches read master's.
       - name: Install ccache
-        run: sudo apt-get install -y -qq ccache > /dev/null && ccache --version | head -1
+        # The Ubuntu mirror sometimes can't be resolved from the runner: retry, then build without
+        # ccache rather than failing the whole build (LUCKGRAM_CCACHE=0 = plain compiler).
+        run: |
+          for i in 1 2 3; do
+            sudo apt-get install -y -qq ccache > /dev/null 2>&1 && break
+            sleep 20
+            sudo apt-get update -qq > /dev/null 2>&1 || true
+          done
+          if command -v ccache > /dev/null; then
+            ccache --version | head -1
+          else
+            echo "::warning::ccache could not be installed; building without it"
+            echo "LUCKGRAM_CCACHE=0" >> "$GITHUB_ENV"
+          fi
 
       - name: Restore ccache
         uses: actions/cache/restore@v4
@@ -207,12 +220,12 @@ jobs:
       # LUCKGRAM_ABIS limits the library's native build to the same ABIs (it compiled all four before).
       - name: Build afat release APK
         run: |
-          ccache -z > /dev/null
+          if command -v ccache > /dev/null; then ccache -z > /dev/null; fi
           ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace \
             -PLUCKGRAM_ABIS="$(printf '%s' "$ABIS" | tr ' ' ',')" \
             -PLUCKGRAM_QA="$LUCKGRAM_QA" \
             -Porg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
-          ccache -s | head -20
+          if command -v ccache > /dev/null; then ccache -s | head -20; fi
 
       - name: Save ccache (master only)
         if: (success() || failure()) && github.ref == 'refs/heads/master'
