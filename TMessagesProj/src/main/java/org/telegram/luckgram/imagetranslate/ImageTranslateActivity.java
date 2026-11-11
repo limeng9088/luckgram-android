@@ -93,7 +93,7 @@ public class ImageTranslateActivity extends BaseFragment {
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
-                if (id == -1) finishFragment();
+                if (id == -1) close();
             }
         });
         actionBar.setOnClickListener(v -> changeLanguage());
@@ -278,11 +278,15 @@ public class ImageTranslateActivity extends BaseFragment {
         toast(ImageTranslateSettings.copiedText());
     }
 
-    /** The translated image as a JPEG in the app's private cache (shared through the FileProvider). */
+    /**
+     * The translated image as a JPEG in the app's external cache (AndroidUtilities.getCacheDir()):
+     * MediaController.saveFile refuses files in internal storage, and the FileProvider covers it
+     * for share and send.
+     */
     private File writeTranslated() {
         if (translated == null) return null;
         try {
-            File dir = new File(ApplicationLoader.applicationContext.getFilesDir(), "cache/luckgram-image-translate");
+            File dir = new File(AndroidUtilities.getCacheDir(), "luckgram-image-translate");
             if (!dir.exists() && !dir.mkdirs()) return null;
             File f = new File(dir, "translated-" + System.currentTimeMillis() + ".jpg");
             try (FileOutputStream out = new FileOutputStream(f)) {
@@ -299,7 +303,12 @@ public class ImageTranslateActivity extends BaseFragment {
     private void save() {
         File f = writeTranslated();
         if (f == null || getParentActivity() == null) return;
-        MediaController.saveFile(f.getAbsolutePath(), getParentActivity(), 0, null, "image/jpeg", uri -> toast(ImageTranslateSettings.savedText()));
+        if (AndroidUtilities.isInternalUri(Uri.fromFile(f))) {
+            // no external storage: saveFile would silently do nothing
+            toast(ImageTranslateSettings.saveFailedText());
+            return;
+        }
+        MediaController.saveFile(f.getAbsolutePath(), getParentActivity(), 0, null, "image/jpeg", uri -> toast(uri != null ? ImageTranslateSettings.savedText() : ImageTranslateSettings.saveFailedText()));
     }
 
     private void share() {
@@ -322,7 +331,24 @@ public class ImageTranslateActivity extends BaseFragment {
         if (f == null) return;
         tempFiles.remove(f); // the sender owns it now
         sender.send(f);
-        finishFragment();
+        close();
+    }
+
+    private Runnable onClosed;
+
+    /** Runs once when the page goes away (entry's one-at-a-time guard). */
+    void setOnClosed(Runnable r) {
+        onClosed = r;
+    }
+
+    /** Pushed: back. In a sheet (opened over the photo viewer): dismiss the sheet. */
+    private void close() {
+        org.telegram.ui.ActionBar.BottomSheet sheet = getParentLayout() != null ? getParentLayout().getBottomSheet() : null;
+        if (sheet != null) {
+            sheet.dismiss();
+        } else {
+            finishFragment();
+        }
     }
 
     private void toast(String text) {
@@ -334,6 +360,10 @@ public class ImageTranslateActivity extends BaseFragment {
     @Override
     public void onFragmentDestroy() {
         super.onFragmentDestroy();
+        if (onClosed != null) {
+            onClosed.run();
+            onClosed = null;
+        }
         generation++;
         if (translated != null && translated != original) {
             translated.recycle();

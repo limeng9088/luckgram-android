@@ -111,6 +111,10 @@ public final class ImageTranslateSettings {
         return LuckgramStrings.get("已保存到相册", "Saved to gallery");
     }
 
+    public static String saveFailedText() {
+        return LuckgramStrings.get("保存失败", "Couldn't save the image");
+    }
+
     public static String onlyThisChatText() {
         return LuckgramStrings.get("仅本聊天", "Only this chat");
     }
