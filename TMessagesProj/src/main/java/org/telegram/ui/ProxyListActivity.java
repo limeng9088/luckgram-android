@@ -760,8 +760,8 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
             proxyEndRow = -1;
         }
         proxyAddRow = rowCount++;
-        scanRow = rowCount++;
-        linkRow = rowCount++;
+        scanRow = -1; // Luckgram: scan / link entries moved into the Add Proxy page
+        linkRow = -1;
         proxyShadowRow = rowCount++;
         subs = ProxyImport.subs();
         if (!subs.isEmpty()) {
@@ -991,7 +991,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
                     TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
                     textCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
                     if (position == proxyAddRow) {
-                        textCell.setText(getString(R.string.AddProxy), true);
+                        textCell.setText(getString(R.string.AddProxy), false);
                     } else if (position == scanRow) {
                         textCell.setText(ProxyImport.T.scanRow(), true);
                     } else if (position == linkRow) {

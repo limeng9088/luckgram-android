@@ -8,6 +8,8 @@
 
 package org.telegram.ui;
 
+import org.telegram.luckgram.proxyimport.ProxyImport;
+import org.telegram.luckgram.scan.LuckgramScan;
 import android.animation.ValueAnimator;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -175,6 +177,14 @@ public class ProxySettingsActivity extends BaseFragment {
     public ProxySettingsActivity(SharedConfig.ProxyInfo proxyInfo) {
         super();
         currentProxyInfo = proxyInfo;
+    }
+
+    @Override
+    public void onRequestPermissionsResultFragment(int requestCode, String[] permissions, int[] grantResults) {
+        if (LuckgramScan.onPermissionResult(this, requestCode, grantResults)) {
+            return; // Luckgram: camera for 「扫码添加代理」
+        }
+        super.onRequestPermissionsResultFragment(requestCode, permissions, grantResults);
     }
 
     private ClipboardManager.OnPrimaryClipChangedListener clipChangedListener = this::updatePasteCell;
@@ -546,6 +556,23 @@ public class ProxySettingsActivity extends BaseFragment {
         sectionCell[2] = new ShadowSectionCell(fragmentView.getContext());
         linearLayout2.addView(sectionCell[2], 1, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         sectionCell[2].setVisibility(View.GONE);
+
+        if (addingNewProxy) {
+            // Luckgram: 「扫码添加代理」 and 「输入链接或订阅地址」 live on the Add Proxy page, above the manual form
+            TextSettingsCell scanCell = new TextSettingsCell(context);
+            scanCell.setBackground(Theme.getSelectorDrawable(true));
+            scanCell.setText(ProxyImport.T.scanRow(), true);
+            scanCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+            scanCell.setOnClickListener(v -> LuckgramScan.openForProxy(this));
+            linearLayout2.addView(scanCell, 0, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            TextSettingsCell linkCell = new TextSettingsCell(context);
+            linkCell.setBackground(Theme.getSelectorDrawable(true));
+            linkCell.setText(ProxyImport.T.linkRow(), false);
+            linkCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+            linkCell.setOnClickListener(v -> ProxyImport.showInput(this));
+            linearLayout2.addView(linkCell, 1, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+            linearLayout2.addView(new ShadowSectionCell(context), 2, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        }
 
         shareCell = new TextSettingsCell(context);
         shareCell.setBackgroundDrawable(Theme.getSelectorDrawable(true));
