@@ -8490,6 +8490,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return false;
         }
         if (searchViewPager != null && adapter == searchViewPager.dialogsSearchAdapter) {
+            if (searchViewPager.dialogsSearchAdapter.luckgramIsHiddenRow(position)) {
+                return false;
+            }
             Object item = searchViewPager.dialogsSearchAdapter.getItem(position);
             if (!searchViewPager.dialogsSearchAdapter.isSearchWas()) {
                 AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
@@ -13593,6 +13596,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return false;
         });
         searchViewPager.searchListView.setOnItemClickListener((view, position, x, y) -> {
+            if (searchViewPager.dialogsSearchAdapter.luckgramIsHiddenRow(position)) {
+                searchViewPager.dialogsSearchAdapter.luckgramSearchHidden();
+                return;
+            }
             Object item = searchViewPager.dialogsSearchAdapter.getItem(position);
             if (item instanceof TLRPC.TL_sponsoredPeer) {
                 final TLRPC.TL_sponsoredPeer peer = (TLRPC.TL_sponsoredPeer) item;
