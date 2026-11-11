@@ -7,6 +7,13 @@ on:
         description: 'ABI 列表（空格分隔），例如 "arm64-v8a" 或 "armeabi-v7a arm64-v8a x86 x86_64"'
         required: false
         default: 'arm64-v8a'
+      qa:
+        # specs#44: QA package (-PLUCKGRAM_QA=true): debug group visible in Luckgram settings,
+        # "Test Backend" on the login page, Luckgram API = api-dev. Artifact only, never released.
+        description: 'QA 测试包（调试分组可见，连 api-dev；只出 artifact，不发版）'
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [master]
     paths-ignore: ['**.md']
@@ -15,7 +22,7 @@ on:
 # waiting, so merging several PRs in a row builds the running one and the last one.
 # Branch builds (workflow_dispatch) still cancel each other.
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.ref }}${{ github.event.inputs.qa == 'true' && '-qa' || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 permissions:
@@ -54,6 +61,7 @@ jobs:
       NDK_VERSION: 27.2.12479018
       LIBXRAY_VERSION: v26.10.31
       ABIS: ${{ matrix.abis }}
+      LUCKGRAM_QA: ${{ github.event.inputs.qa == 'true' && 'true' || 'false' }}
       LUCKGRAM_CCACHE: '1'
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -87,7 +95,20 @@ jobs:
       # Native code (tgnet, voip, ffmpeg glue...) is about 7 minutes per ABI from scratch.
       # ccache keeps the objects between builds; only master saves, branches read master's.
       - name: Install ccache
-        run: sudo apt-get install -y -qq ccache > /dev/null && ccache --version | head -1
+        # The Ubuntu mirror sometimes can't be resolved from the runner: retry, then build without
+        # ccache rather than failing the whole build (LUCKGRAM_CCACHE=0 = plain compiler).
+        run: |
+          for i in 1 2 3; do
+            sudo apt-get install -y -qq ccache > /dev/null 2>&1 && break
+            sleep 20
+            sudo apt-get update -qq > /dev/null 2>&1 || true
+          done
+          if command -v ccache > /dev/null; then
+            ccache --version | head -1
+          else
+            echo "::warning::ccache could not be installed; building without it"
+            echo "LUCKGRAM_CCACHE=0" >> "$GITHUB_ENV"
+          fi
 
       - name: Restore ccache
         uses: actions/cache/restore@v4
@@ -199,11 +220,12 @@ jobs:
       # LUCKGRAM_ABIS limits the library's native build to the same ABIs (it compiled all four before).
       - name: Build afat release APK
         run: |
-          ccache -z > /dev/null
+          if command -v ccache > /dev/null; then ccache -z > /dev/null; fi
           ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace \
             -PLUCKGRAM_ABIS="$(printf '%s' "$ABIS" | tr ' ' ',')" \
+            -PLUCKGRAM_QA="$LUCKGRAM_QA" \
             -Porg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
-          ccache -s | head -20
+          if command -v ccache > /dev/null; then ccache -s | head -20; fi
 
       - name: Save ccache (master only)
         if: (success() || failure()) && github.ref == 'refs/heads/master'
@@ -241,7 +263,8 @@ jobs:
           AAPT=$(ls "$ANDROID_HOME"/build-tools/36.0.0/aapt2)
           "$AAPT" dump badging "$APK" | grep -E "^package:|application-label:"
           "$AAPT" dump badging "$APK" | grep -q "package: name='com.luckgram.messenger'"
-          mkdir -p out && cp "$APK" "out/luckgram-$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)-${ABIS// /_}.apk"
+          QA_SUFFIX=""; [ "$LUCKGRAM_QA" = true ] && QA_SUFFIX="-qa"
+          mkdir -p out && cp "$APK" "out/luckgram-$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)-${ABIS// /_}${QA_SUFFIX}.apk"
 
       # Luckgram 119: the Xray core is in the APK, its size, and 16 KB alignment of every .so
       - name: Check libXray in APK
@@ -272,7 +295,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: luckgram-android-${{ github.run_number }}-${{ strategy.job-index }}
+          name: luckgram-android-${{ github.run_number }}-${{ strategy.job-index }}${{ env.LUCKGRAM_QA == 'true' && '-qa' || '' }}
           path: out/*.apk
           if-no-files-found: error
 
@@ -280,7 +303,7 @@ jobs:
   # x86_64 build failed, the release still goes out without it.
   release:
     needs: build
-    if: always() && github.ref == 'refs/heads/master' && needs.build.result != 'cancelled'
+    if: always() && github.ref == 'refs/heads/master' && github.event.inputs.qa != 'true' && needs.build.result != 'cancelled'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
