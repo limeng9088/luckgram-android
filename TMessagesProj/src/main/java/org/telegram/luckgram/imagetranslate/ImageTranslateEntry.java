@@ -31,6 +31,8 @@ public final class ImageTranslateEntry {
     public static final String ACTION_ID = "image_translate";
     /** Images are decoded at most this large (the OCR boxes are normalized, so any size works). */
     private static final int MAX_SIDE = 2560;
+    /** One translation at a time: repeated taps while recognizing or while the page is open do nothing. */
+    private static boolean busy;
 
     private ImageTranslateEntry() {
     }
@@ -47,6 +49,10 @@ public final class ImageTranslateEntry {
         if (activity == null || image == null) {
             return;
         }
+        if (busy) {
+            return;
+        }
+        busy = true;
         long dialogId = message != null ? message.getDialogId() : 0;
         final ImageTranslateActivity.SendTranslated sender = sender(host);
         AlertDialog progress = new AlertDialog(activity, AlertDialog.ALERT_TYPE_SPINNER);
@@ -59,28 +65,46 @@ public final class ImageTranslateEntry {
                     Bitmap bitmap = decodeUpright(image);
                     AndroidUtilities.runOnUIThread(() -> {
                         if (!progress.isShowing()) { // cancelled
+                            busy = false;
                             return;
                         }
                         progress.dismiss();
-                        if (bitmap == null) {
+                        if (bitmap == null || !result.hasText()) {
+                            busy = false;
                             toast(activity, ImageTranslateSettings.noTextText());
                             return;
                         }
-                        if (!result.hasText()) {
-                            toast(activity, ImageTranslateSettings.noTextText());
-                            return;
-                        }
-                        host.presentFragment(new ImageTranslateActivity(bitmap, blocks(result), result.language, dialogId, sender));
+                        open(host, new ImageTranslateActivity(bitmap, blocks(result), result.language, dialogId, sender));
                     });
                 });
             }
 
             @Override
             public void onError(String code) {
+                busy = false;
                 progress.dismiss();
                 toast(activity, ImageTranslateSettings.noTextText());
             }
         });
+    }
+
+    /**
+     * The full-screen viewer and the gallery preview (PhotoViewer) are a window above the fragment
+     * stack: a pushed page would open underneath them. There the page opens in its own window
+     * (a sheet) on top; elsewhere it is pushed as usual.
+     */
+    private static void open(BaseFragment host, ImageTranslateActivity page) {
+        page.setOnClosed(() -> busy = false);
+        if (org.telegram.ui.PhotoViewer.hasInstance() && org.telegram.ui.PhotoViewer.getInstance().isVisible()) {
+            BaseFragment.BottomSheetParams params = new BaseFragment.BottomSheetParams();
+            params.occupyNavigationBar = true;
+            params.onDismiss = () -> busy = false;
+            if (host.showAsSheet(page, params) == null) {
+                busy = false;
+            }
+        } else if (!host.presentFragment(page)) {
+            busy = false;
+        }
     }
 
     /** Gallery preview (needs 4): the preview's replacer swaps in the translated image; null elsewhere (no send button). */
