@@ -37,8 +37,8 @@ public class LuckgramVoiceBarLogicTest {
     @Test
     public void onlyNearZeroInputIsSilence() {
         assertTrue(LuckgramVoiceBarLogic.isSilent(0));
-        assertTrue(LuckgramVoiceBarLogic.isSilent(29.9));
-        assertFalse(LuckgramVoiceBarLogic.isSilent(30));
+        assertTrue(LuckgramVoiceBarLogic.isSilent(59.9));
+        assertFalse(LuckgramVoiceBarLogic.isSilent(60));
         assertFalse(LuckgramVoiceBarLogic.isSilent(1500));
     }
 
@@ -47,7 +47,8 @@ public class LuckgramVoiceBarLogicTest {
         assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("Thank you so much for watching."));
         assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination(" ご視聴ありがとうございました "));
         assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("私のビデオを見てくれてありがとう。"));
-        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("Thank you so much for watching, see you at 8"));
+        assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("メッセージなし。ご視聴ありがとうございました。"));
+        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("Thank you so much for watching my long video about cooking, see you at 8"));
         assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("晚上八点见"));
         assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination(null));
     }
