@@ -104,6 +104,7 @@ public final class SquareUi {
         SilentLink.clearCache();
         profile = null;
         myAuthorId = null;
+        SquareActivity.clearFeeds();
     }
 
     /**

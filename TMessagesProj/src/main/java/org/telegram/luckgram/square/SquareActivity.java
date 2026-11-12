@@ -43,8 +43,14 @@ public class SquareActivity extends UniversalFragment {
     private static final int ID_POST = 1000;
 
     private final SquareLogic.Texts tx = SquareUi.tx();
-    /** One list per tab, kept while the page is open. */
-    private final HashMap<String, SquareLogic.Feed> feeds = new HashMap<>();
+    /**
+     * One list per tab. Kept for as long as the app runs, so closing the page and opening it again
+     * shows the same posts at the same place without a request (unless older than 5 minutes).
+     * The first page of each tab is also saved on the device: after a restart the page opens with
+     * those posts and refreshes over them.
+     */
+    private static final HashMap<String, SquareLogic.Feed> feeds = new HashMap<>();
+    private static final String KEY_SAVED = "square_feed_page_";
     private SquareLogic.Feed feed = feedFor(SquareLogic.TAB_LATEST);
     private final HashMap<SquareLogic.Feed, LuckgramAI.Request> refreshRequests = new HashMap<>();
     private final HashMap<SquareLogic.Feed, LuckgramAI.Request> moreRequests = new HashMap<>();
@@ -75,10 +81,25 @@ public class SquareActivity extends UniversalFragment {
         return 0;
     }
 
-    private SquareLogic.Feed feedFor(String tab) {
+    private static SquareLogic.Feed feedFor(String tab) {
         SquareLogic.Feed f = feeds.get(tab);
-        if (f == null) feeds.put(tab, f = new SquareLogic.Feed(tab));
+        if (f == null) {
+            feeds.put(tab, f = new SquareLogic.Feed(tab));
+            SquareLogic.Saved saved = SquareLogic.decodeSaved(org.telegram.luckgram.LuckgramSettings.getString(KEY_SAVED + tab, null), System.currentTimeMillis());
+            if (saved != null) f.restore(saved.page, saved.savedAtMs);
+        }
         return f;
+    }
+
+    /** The saved first pages no longer match (a post deleted, an author blocked): the next start loads fresh ones. */
+    private static void dropSavedPages() {
+        for (String tab : TAB_ORDER) org.telegram.luckgram.LuckgramSettings.remove(KEY_SAVED + tab);
+    }
+
+    /** Forgets every list, in memory and on the device (unlink, logout, "delete my Square data"). */
+    public static void clearFeeds() {
+        feeds.clear();
+        dropSavedPages();
     }
 
     // ---------------------------------------------------------------- post cards
@@ -199,6 +220,8 @@ public class SquareActivity extends UniversalFragment {
         ((android.widget.FrameLayout) v).addView(refreshView, org.telegram.ui.Components.LayoutHelper.createFrame(
             org.telegram.ui.Components.LayoutHelper.MATCH_PARENT, SquareRefreshView.heightDp(), android.view.Gravity.TOP, 0, 44, 0, 0));
         refreshView.attach(listView);
+        // back where the reader was (the list of the last visit)
+        if (feed.scrollIndex > 0 || feed.scrollOffset != 0) listView.layoutManager.scrollToPositionWithOffset(feed.scrollIndex, feed.scrollOffset);
         if (feed.refreshing && !feed.posts.isEmpty()) refreshView.showRefreshing(tx.refreshing());
         listView.addOnScrollListener(new androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
             @Override
@@ -235,7 +258,10 @@ public class SquareActivity extends UniversalFragment {
         updatedPosts.clear();
         removedPosts.clear();
         blockedAuthors.clear();
-        refresh(feed, false);
+        // whatever an earlier page was loading went away with it
+        for (SquareLogic.Feed f : feeds.values()) f.cancelLoading();
+        // posts from the last visit (or the saved first page) are already there; ask only when they are old
+        if (feed.isStale(System.currentTimeMillis())) refresh(feed, false);
         return super.onFragmentCreate();
     }
 
@@ -249,6 +275,7 @@ public class SquareActivity extends UniversalFragment {
             updatedPosts.clear();
         }
         if (!removedPosts.isEmpty() || !blockedAuthors.isEmpty()) {
+            dropSavedPages();
             for (SquareLogic.Feed f : feeds.values()) {
                 for (String id : removedPosts) f.removePost(id);
                 for (String id : blockedAuthors) f.removeAuthor(id);
@@ -272,6 +299,16 @@ public class SquareActivity extends UniversalFragment {
         AndroidUtilities.cancelRunOnUIThread(checkVisible);
         SquareEventReporter.add(tracker(feed).hideAll(System.currentTimeMillis()));
         SquareEventReporter.flush(true);
+        saveScroll();
+    }
+
+    /** Remembers where the reader is in the open tab. */
+    private void saveScroll() {
+        if (listView == null) return;
+        int position = listView.layoutManager.findFirstVisibleItemPosition();
+        View first = position < 0 ? null : listView.layoutManager.findViewByPosition(position);
+        feed.scrollIndex = Math.max(0, position);
+        feed.scrollOffset = first == null ? 0 : first.getTop() - listView.getPaddingTop();
     }
 
     @Override
@@ -280,6 +317,7 @@ public class SquareActivity extends UniversalFragment {
         for (LuckgramAI.Request r : moreRequests.values()) r.cancel();
         refreshRequests.clear();
         moreRequests.clear();
+        for (SquareLogic.Feed f : feeds.values()) f.cancelLoading();
         AndroidUtilities.cancelRunOnUIThread(checkVisible);
         super.onFragmentDestroy();
     }
@@ -304,12 +342,7 @@ public class SquareActivity extends UniversalFragment {
         if (next.equals(feed.tab)) return;
         // leave the old tab as it is, position included
         SquareEventReporter.add(tracker(feed).hideAll(System.currentTimeMillis()));
-        if (listView != null) {
-            int position = listView.layoutManager.findFirstVisibleItemPosition();
-            View first = position < 0 ? null : listView.layoutManager.findViewByPosition(position);
-            feed.scrollIndex = Math.max(0, position);
-            feed.scrollOffset = first == null ? 0 : first.getTop() - listView.getPaddingTop();
-        }
+        saveScroll();
         feed = feedFor(next);
         update(false);
         if (listView != null) listView.layoutManager.scrollToPositionWithOffset(feed.scrollIndex, feed.scrollOffset);
@@ -361,7 +394,10 @@ public class SquareActivity extends UniversalFragment {
                 // a new load: impressions count again (contract: once per load)
                 SquareEventReporter.add(tracker(f).hideAll(System.currentTimeMillis()));
                 trackers.remove(f);
-                int fresh = f.applyRefresh(SquareLogic.parsePosts(result), System.currentTimeMillis());
+                long now = System.currentTimeMillis();
+                int fresh = f.applyRefresh(SquareLogic.parsePosts(result), now);
+                // kept for the next start of the app
+                org.telegram.luckgram.LuckgramSettings.setString(KEY_SAVED + f.tab, SquareLogic.encodeSaved(result, now));
                 pruneCards();
                 if (f != feed) return;
                 update(false);
@@ -509,14 +545,17 @@ public class SquareActivity extends UniversalFragment {
             Runnable notInterested = SquareLogic.TAB_RECOMMEND.equals(feed.tab) ? () -> {
                 event(SquareEvents.NOT_INTERESTED, p);
                 feed.posts.remove(p);
+                dropSavedPages();
                 update();
                 SquareUi.bulletin(SquareActivity.this).createSimpleBulletin(R.raw.done, tx.notInterestedDone()).show();
             } : null;
             showPostMenu(SquareActivity.this, p, () -> {
                 for (SquareLogic.Feed f : feeds.values()) f.removePost(p.id);
+                dropSavedPages();
                 update();
             }, () -> {
                 for (SquareLogic.Feed f : feeds.values()) f.removeAuthor(p.author.id);
+                dropSavedPages();
                 update();
             }, notInterested);
         }

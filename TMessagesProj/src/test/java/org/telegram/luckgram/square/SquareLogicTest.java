@@ -363,4 +363,38 @@ public class SquareLogicTest {
         assertEquals("1 new post", new SquareLogic.Texts(false).refreshed(1));
         assertEquals("12 new posts", new SquareLogic.Texts(false).refreshed(12));
     }
+
+    @Test
+    public void savedFirstPageIsShownAtOnceAndRefreshedWhenOld() throws Exception {
+        JSONObject first = new JSONObject("{\"items\":[{\"id\":\"p1\"},{\"id\":\"p2\"}],\"next_cursor\":\"c\"}");
+        String stored = SquareLogic.encodeSaved(first, 1000);
+        SquareLogic.Saved saved = SquareLogic.decodeSaved(stored, 2000);
+        assertNotNull(saved);
+        assertEquals(1000, saved.savedAtMs);
+
+        SquareLogic.Feed f = new SquareLogic.Feed(SquareLogic.TAB_LATEST);
+        assertTrue(f.restore(saved.page, saved.savedAtMs));
+        assertEquals("p1 p2", ids(f));
+        assertEquals("c", f.nextCursor);
+        assertEquals(SquareLogic.Feed.FOOTER_LOADING_MORE, f.footer()); // no outlines: there is a list
+        assertFalse(f.isStale(1000 + SquareLogic.Feed.STALE_MS - 1)); // opened again soon: no request
+        assertTrue(f.isStale(1000 + SquareLogic.Feed.STALE_MS));
+        assertFalse(f.restore(saved.page, saved.savedAtMs)); // never over a list that is there
+
+        // refreshing over it: the saved posts stay until the new page comes, which says what is new
+        assertTrue(f.beginRefresh());
+        assertEquals("p1 p2", ids(f));
+        assertEquals(1, f.applyRefresh(page(null, "p3", "p2"), 5000));
+
+        // a page that was closed while loading leaves nothing in flight
+        f.beginRefresh();
+        f.cancelLoading();
+        assertTrue(f.beginRefresh());
+
+        assertNull(SquareLogic.decodeSaved(null, 0));
+        assertNull(SquareLogic.decodeSaved("not json", 2000));
+        assertNull(SquareLogic.decodeSaved(SquareLogic.encodeSaved(new JSONObject("{\"items\":[]}"), 1000), 2000));
+        assertNull(SquareLogic.decodeSaved(stored, 1000 + SquareLogic.SAVED_MAX_AGE_MS + 1)); // too old
+        assertNull(SquareLogic.decodeSaved(stored, 999)); // clock went back
+    }
 }

@@ -271,6 +271,46 @@ public final class SquareLogic {
         }
     }
 
+    // ---------------------------------------------------------------- saved first page
+
+    /** A saved first page older than this is not shown any more. */
+    public static final long SAVED_MAX_AGE_MS = 7 * 24 * 3600_000L;
+
+    /** A first page as it was saved, and when. */
+    public static final class Saved {
+        public final Page<Post> page;
+        public final long savedAtMs;
+
+        Saved(Page<Post> page, long savedAtMs) {
+            this.page = page;
+            this.savedAtMs = savedAtMs;
+        }
+    }
+
+    /** What is kept on the device for a tab: the server's first page as it came, and the time. */
+    public static String encodeSaved(JSONObject firstPage, long now) {
+        try {
+            return new JSONObject().put("saved_at", now).put("page", firstPage).toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** @return null when there is nothing usable: unreadable, empty, too old, or from the future */
+    public static Saved decodeSaved(String stored, long now) {
+        if (stored == null || stored.isEmpty()) return null;
+        try {
+            JSONObject o = new JSONObject(stored);
+            long savedAt = o.optLong("saved_at", 0);
+            JSONObject page = o.optJSONObject("page");
+            if (page == null || savedAt <= 0 || savedAt > now || now - savedAt > SAVED_MAX_AGE_MS) return null;
+            Page<Post> parsed = parsePosts(page);
+            return parsed.items.isEmpty() ? null : new Saved(parsed, savedAt);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     // ---------------------------------------------------------------- feed state
 
     /**
@@ -345,6 +385,28 @@ public final class SquareLogic {
             scrollIndex = 0;
             scrollOffset = 0;
             return fresh;
+        }
+
+        /**
+         * The first page saved by an earlier visit ({@link #decodeSaved}): shown at once when the
+         * page opens, before anything is requested. It counts as loaded at the time it was saved,
+         * so an old one is refreshed right away — with the posts on screen meanwhile.
+         *
+         * @return false when the tab already has a list
+         */
+        public boolean restore(Page<Post> page, long savedAtMs) {
+            if (loadedOnce || page == null || page.items.isEmpty()) return false;
+            appendUnique(posts, page.items);
+            nextCursor = page.nextCursor;
+            loadedOnce = true;
+            loadedAtMs = savedAtMs;
+            return true;
+        }
+
+        /** The page that was loading is gone (its requests were cancelled): nothing is in flight. */
+        public void cancelLoading() {
+            refreshing = false;
+            loadingMore = false;
         }
 
         /** The refresh failed: whatever was on screen stays. */
