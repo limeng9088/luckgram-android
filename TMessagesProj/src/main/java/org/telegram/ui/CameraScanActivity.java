@@ -393,6 +393,13 @@ public class CameraScanActivity extends BaseFragment {
                         x = width / 2 - flashButton.getMeasuredWidth() / 2;
                     }
                     y = (height - size) / 2 + size + dp(80);
+                    if (luckgramHintUnderFrame()) {
+                        // Luckgram: hint right under the frame, buttons below it (no overlap on tall screens)
+                        int hy = (height - size) / 2 + size + dp(24);
+                        int hx = (int) (width * 0.05f);
+                        descriptionText.layout(hx, hy, hx + descriptionText.getMeasuredWidth(), hy + descriptionText.getMeasuredHeight());
+                        y = Math.max(y, hy + descriptionText.getMeasuredHeight() + dp(24));
+                    }
                     flashButton.layout(x, y, x + flashButton.getMeasuredWidth(), y + flashButton.getMeasuredHeight());
 
                     if (galleryButton != null) {
@@ -407,13 +414,18 @@ public class CameraScanActivity extends BaseFragment {
                     }
                 }
 
-                if (currentType != TYPE_QR_WEB_BOT) {
+                if (currentType != TYPE_QR_WEB_BOT && !luckgramHintUnderFrame()) {
                     y = (int) (height * 0.74f);
                     int x = (int) (width * 0.05f);
                     descriptionText.layout(x, y, x + descriptionText.getMeasuredWidth(), y + descriptionText.getMeasuredHeight());
                 }
 
                 updateNormalBounds();
+            }
+
+            /** Luckgram: a QR scanner with a hint (e.g. 「扫描代理二维码或订阅地址二维码」). */
+            private boolean luckgramHintUnderFrame() {
+                return currentType == TYPE_QR && descriptionText != null && descriptionText.length() > 0;
             }
 
             Path path = new Path();
@@ -671,8 +683,9 @@ public class CameraScanActivity extends BaseFragment {
                 }
             }
             titleTextView.setTextColor(0xffffffff);
-            if (currentType == TYPE_QR_WEB_BOT) {
-                descriptionText.setTextColor(0x99ffffff);
+            if (currentType == TYPE_QR_WEB_BOT || currentType == TYPE_QR) {
+                // Luckgram: TYPE_QR too, the default gray is hard to read over the camera
+                descriptionText.setTextColor(currentType == TYPE_QR ? 0xccffffff : 0x99ffffff);
             }
             recognizedMrzView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
             recognizedMrzView.setPadding(dp(10), 0, dp(10), dp(10));
