@@ -5160,6 +5160,22 @@ public class ChatActivityEnterView extends FrameLayout implements
                 translateAndSendOnce();
             });
         }
+        if (canAiWriteFromSendMenu()) {
+            // Luckgram specs#128: with text the 「+」 gives way to send (specs#94), so AI writing sits here too
+            options.add(R.drawable.luckgram_ai, org.telegram.luckgram.LuckgramStrings.get("AI 写作", "AI writing"), () -> {
+                if (messageSendPreview != null) {
+                    messageSendPreview.dismiss(false);
+                    messageSendPreview = null;
+                }
+                // after the send preview has faded, so the AI menu is not drawn under it
+                AndroidUtilities.runOnUIThread(() -> {
+                    org.telegram.luckgram.writing.AiWritingController c = getAiWritingController();
+                    if (c != null && messageEditText != null && messageEditText.length() > 0) {
+                        c.showMenu(sendButton != null ? sendButton : this);
+                    }
+                }, 250);
+            });
+        }
         if (sendWithoutSoundButtonValue) {
             options.add(R.drawable.input_notify_off, getString(R.string.SendWithoutSound), () -> {
                 sentFromPreview = System.currentTimeMillis();
@@ -6483,6 +6499,16 @@ public class ChatActivityEnterView extends FrameLayout implements
         updateFieldRight(lastAttachVisible);
     }
 
+    /** specs#128: the send button's long-press menu offers AI writing while the 「+」 is hidden by text. */
+    private boolean canAiWriteFromSendMenu() {
+        if (!isLuckgramPlusMode() || editingMessageObject != null || !org.telegram.luckgram.writing.AiWritingController.isEnabled()
+                || messageEditText == null || messageEditText.length() == 0) {
+            return false;
+        }
+        org.telegram.luckgram.writing.AiWritingController c = getAiWritingController();
+        return c != null && c.shouldShowButton();
+    }
+
     private void updateAiWritingButton() {
         if (aiWritingButton == null) {
             return;
@@ -6822,7 +6848,7 @@ public class ChatActivityEnterView extends FrameLayout implements
                 if (c.shouldShowButton()) {
                     c.showMenu(attachButton != null ? attachButton : this);
                 } else {
-                    BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.info, org.telegram.luckgram.LuckgramStrings.get("先输入文字，再用 AI 写作润色", "Type something first, then use AI writing")).show();
+                    BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.info, org.telegram.luckgram.LuckgramStrings.get("先输入文字，再长按发送键选「AI 写作」", "Type something, then long-press send and choose AI writing")).show();
                     openKeyboardInternal();
                 }
                 break;
