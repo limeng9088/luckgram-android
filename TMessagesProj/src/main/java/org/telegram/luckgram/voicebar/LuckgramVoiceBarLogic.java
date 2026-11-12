@@ -38,6 +38,65 @@ public final class LuckgramVoiceBarLogic {
         return peakAmplitude < SILENCE_AMPLITUDE;
     }
 
+    /** A voice stays above {@link #SILENCE_AMPLITUDE} for a while; a click or a bump is one loud moment. */
+    public static final double MINIMUM_LOUD_SECONDS = 0.3;
+
+    /** A gap between two amplitude readings counts for at most this much, however late the second one comes. */
+    public static final double LOUD_STEP_LIMIT = 0.25;
+
+    /** Adds the time since the previous amplitude reading to the total if the input is loud now. */
+    public static double loudSeconds(double total, double amplitude, double sincePrevious) {
+        if (amplitude < SILENCE_AMPLITUDE) {
+            return total;
+        }
+        return total + Math.min(LOUD_STEP_LIMIT, Math.max(0, sincePrevious));
+    }
+
+    public static boolean isSilent(double peakAmplitude, double loudSeconds) {
+        return peakAmplitude < SILENCE_AMPLITUDE || loudSeconds < MINIMUM_LOUD_SECONDS;
+    }
+
+    /**
+     * Length (in code points, after normalizing) of the longest piece that comes twice without overlapping,
+     * provided it has at least 4 different characters (「哈哈哈哈」 is laughter, not a loop).
+     */
+    static int longestRepeat(String normalized) {
+        final int total = normalized.codePointCount(0, normalized.length());
+        final int n = Math.min(400, total);
+        if (n < 2) {
+            return 0;
+        }
+        final int[] a = new int[n];
+        for (int i = 0, offset = 0; i < n; i++) {
+            a[i] = normalized.codePointAt(offset);
+            offset += Character.charCount(a[i]);
+        }
+        int best = 0;
+        int[] previous = new int[n + 1];
+        for (int i = 1; i <= n; i++) {
+            final int[] current = new int[n + 1];
+            for (int j = i + 1; j <= n; j++) {
+                if (a[i - 1] == a[j - 1] && previous[j - 1] < j - i) {
+                    final int length = previous[j - 1] + 1;
+                    current[j] = length;
+                    if (length > best && distinct(a, i - length, i) >= 4) {
+                        best = length;
+                    }
+                }
+            }
+            previous = current;
+        }
+        return best;
+    }
+
+    private static int distinct(int[] a, int from, int to) {
+        final java.util.HashSet<Integer> seen = new java.util.HashSet<>();
+        for (int i = from; i < to && seen.size() < 4; i++) {
+            seen.add(a[i]);
+        }
+        return seen.size();
+    }
+
     /** What speech-to-text models make up for recordings with no speech in them. */
     private static final String[] SILENCE_PHRASES = {
         "thankyousomuchforwatching", "thankyouforwatching", "thanksforwatching", "メッセージなし", "subtitlesbytheamaraorgcommunity",
@@ -80,7 +139,7 @@ public final class LuckgramVoiceBarLogic {
 
     /**
      * The transcript is something a model invents for silence, not something that was said:
-     * a short text around a stock phrase, one sentence three times over, or (faint recording only) nothing but fillers.
+     * a short text around a stock phrase, one sentence three times over, a loop of the same words, or (faint recording only) nothing but fillers.
      */
     public static boolean isSilenceHallucination(String text, boolean weakSignal) {
         if (text == null) {
@@ -114,6 +173,11 @@ public final class LuckgramVoiceBarLogic {
             if (!FILLER_SENTENCES.contains(sentence)) {
                 onlyFillers = false;
             }
+        }
+        // a loop: 「BREATHING IN DEEPLY BREATHING OUT DEEPLY BREATHING IN DEEPLY …」, half of the text or more said twice
+        final int repeated = longestRepeat(normalized);
+        if (repeated >= 6 && repeated * 4 >= normalized.codePointCount(0, normalized.length())) {
+            return true;
         }
         return weakSignal && !counts.isEmpty() && onlyFillers;
     }

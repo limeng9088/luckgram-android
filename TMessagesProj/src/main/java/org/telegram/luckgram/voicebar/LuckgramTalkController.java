@@ -58,6 +58,8 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
     private boolean holding;
     private boolean started;
     private double peakAmplitude;
+    private double loudSeconds;
+    private long amplitudeTime;
     private int zone;
     private long downTime;
     private boolean awaitingText;
@@ -148,6 +150,8 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
         holding = true;
         started = false;
         peakAmplitude = 0;
+        loudSeconds = 0;
+        amplitudeTime = 0;
         zone = LuckgramVoiceBarLogic.ZONE_SEND;
         downTime = SystemClock.elapsedRealtime();
         if (bar.getParent() != null) {
@@ -165,7 +169,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
 
     private void finish(int how) {
         holding = false;
-        final boolean toText = how == LuckgramVoiceBarLogic.ZONE_TEXT && (started || SystemClock.elapsedRealtime() - downTime >= 400) && !LuckgramVoiceBarLogic.isSilent(peakAmplitude);
+        final boolean toText = how == LuckgramVoiceBarLogic.ZONE_TEXT && (started || SystemClock.elapsedRealtime() - downTime >= 400) && !LuckgramVoiceBarLogic.isSilent(peakAmplitude, loudSeconds);
         if (!toText) {
             removeOverlay();
         }
@@ -181,7 +185,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
             return;
         }
         if (how == LuckgramVoiceBarLogic.ZONE_TEXT) {
-            if (LuckgramVoiceBarLogic.isSilent(peakAmplitude)) {
+            if (LuckgramVoiceBarLogic.isSilent(peakAmplitude, loudSeconds)) {
                 // nothing to convert; a model would make something up
                 MediaController.getInstance().stopRecording(0, false, 0, false, 0);
                 host.showHint(nothingHeard());
@@ -236,6 +240,11 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
         } else if (id == NotificationCenter.recordProgressChanged) {
             if (args.length > 1 && args[1] instanceof Double) {
                 peakAmplitude = Math.max(peakAmplitude, (Double) args[1]);
+                final long now = SystemClock.elapsedRealtime();
+                if (amplitudeTime > 0) {
+                    loudSeconds = LuckgramVoiceBarLogic.loudSeconds(loudSeconds, (Double) args[1], (now - amplitudeTime) / 1000.0);
+                }
+                amplitudeTime = now;
                 if (overlay != null) {
                     overlay.addAmplitude((Double) args[1]);
                 }
