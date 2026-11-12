@@ -54,6 +54,30 @@ public class LuckgramVoiceBarLogicTest {
     }
 
     @Test
+    public void loopsAreNotTranscripts() {
+        assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("BREATHING IN DEEPLY BREATHING OUT DEEPLY BREATHING IN DEEPLY BREATHING OUT DEEPLY"));
+        assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("下方影片の説明については、下方のリンク先をクリックすることで、下方のリンク先をクリックすることができます。"));
+        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("哈哈哈哈哈哈哈哈哈哈哈哈"));
+        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("好的好的好的"));
+        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("明天上午十点开会，记得带上周的报告，下午三点再和客户开会"));
+        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("I will be there at eight, and I will bring the documents you asked for"));
+    }
+
+    @Test
+    public void aClickIsNotAVoice() {
+        double loud = LuckgramVoiceBarLogic.loudSeconds(0, 1500, 2.0);
+        assertEquals(0.25, loud, 0.0001);
+        assertTrue(LuckgramVoiceBarLogic.isSilent(1500, loud));
+        loud = LuckgramVoiceBarLogic.loudSeconds(loud, 20, 0.05);
+        assertEquals(0.25, loud, 0.0001);
+        for (int i = 0; i < 4; i++) {
+            loud = LuckgramVoiceBarLogic.loudSeconds(loud, 400, 0.05);
+        }
+        assertFalse(LuckgramVoiceBarLogic.isSilent(1500, loud));
+        assertTrue(LuckgramVoiceBarLogic.isSilent(20, 5.0));
+    }
+
+    @Test
     public void repeatedAndFillerSentencesAreNotTranscripts() {
         assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("That's it. Thank you. God bless. God bless. God bless."));
         assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("Thank you. Bye.", true));
