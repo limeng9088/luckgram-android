@@ -12,8 +12,10 @@ import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -33,6 +35,7 @@ import java.util.List;
 /**
  * Luckgram specs#94: the WeChat-style 「+」 panel that takes the keyboard's place under the input
  * bar. A grid of 2 rows × 4 columns per page; more items page sideways with page dots.
+ * specs#147: colored icon squares, the grid centered in the panel, press and entrance motion.
  * The host ({@code ChatActivityEnterView}) decides which items exist and handles the taps.
  */
 @SuppressLint("ViewConstructor")
@@ -44,12 +47,15 @@ public class LuckgramPlusPanel extends FrameLayout {
         public final CharSequence title;
         /** Shown dimmed (e.g. no permission to send media); still tappable so the host can explain why. */
         public final boolean dimmed;
+        /** Position in the color table of {@link LuckgramPlusPanelColors}; the host's ids start at 1. */
+        final int colorIndex;
 
         public Item(int id, int icon, CharSequence title, boolean dimmed) {
             this.id = id;
             this.icon = icon;
             this.title = title;
             this.dimmed = dimmed;
+            this.colorIndex = id - 1;
         }
     }
 
@@ -67,6 +73,9 @@ public class LuckgramPlusPanel extends FrameLayout {
     private final DotsView dots;
     private final ArrayList<Item> items = new ArrayList<>();
     private int pageCount;
+    /** The panel is about to slide in: the cells of the page in view come up one after another. */
+    private boolean animateCells;
+    private final Runnable stopAnimatingCells = () -> animateCells = false;
 
     public LuckgramPlusPanel(Context context, Theme.ResourcesProvider resourcesProvider, Delegate delegate) {
         super(context);
@@ -120,6 +129,11 @@ public class LuckgramPlusPanel extends FrameLayout {
     public void setItems(List<Item> newItems) {
         items.clear();
         items.addAll(newItems);
+        animateCells = getVisibility() != VISIBLE;
+        removeCallbacks(stopAnimatingCells);
+        if (animateCells) {
+            postDelayed(stopAnimatingCells, 600);
+        }
         pageCount = Math.max(1, (items.size() + PER_PAGE - 1) / PER_PAGE);
         dots.setCount(pageCount);
         dots.setVisibility(pageCount > 1 ? VISIBLE : INVISIBLE);
@@ -141,16 +155,33 @@ public class LuckgramPlusPanel extends FrameLayout {
     private View createPage(int page) {
         LinearLayout column = new LinearLayout(getContext());
         column.setOrientation(LinearLayout.VERTICAL);
-        column.setPadding(dp(12), dp(14), dp(12), 0);
+        column.setGravity(Gravity.CENTER_VERTICAL);
+        column.setPadding(dp(12), dp(8), dp(12), 0);
+        column.setClipChildren(false);
+        final boolean animate = animateCells && page == pager.getCurrentItem();
+        if (animate) {
+            animateCells = false;
+        }
         for (int r = 0; r < ROWS; r++) {
             LinearLayout row = new LinearLayout(getContext());
             row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setClipChildren(false);
             for (int c = 0; c < COLUMNS; c++) {
                 int index = page * PER_PAGE + r * COLUMNS + c;
                 View cell = index < items.size() ? createCell(items.get(index)) : new View(getContext());
                 row.addView(cell, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.TOP));
+                if (animate && index < items.size()) {
+                    final float alpha = cell.getAlpha();
+                    cell.setAlpha(0f);
+                    cell.setScaleX(0.82f);
+                    cell.setScaleY(0.82f);
+                    cell.setTranslationY(dp(10));
+                    cell.animate().alpha(alpha).scaleX(1f).scaleY(1f).translationY(0f)
+                            .setStartDelay(40 + (r + c) * 28L).setDuration(240)
+                            .setInterpolator(new OvershootInterpolator(1.6f)).start();
+                }
             }
-            column.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, r == 0 ? 0 : 14, 0, 0));
+            column.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, r == 0 ? 0 : 20, 0, 0));
         }
         return column;
     }
@@ -164,14 +195,14 @@ public class LuckgramPlusPanel extends FrameLayout {
         cell.setContentDescription(item.title);
 
         ImageView icon = new ImageView(getContext());
-        icon.setScaleType(ImageView.ScaleType.CENTER);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        icon.setPadding(dp(16), dp(16), dp(16), dp(16));
         icon.setImageResource(item.icon);
         icon.setColorFilter(new PorterDuffColorFilter(LuckgramPlusPanelColors.icon(dark), PorterDuff.Mode.SRC_IN));
-        GradientDrawable square = new GradientDrawable();
-        square.setCornerRadius(dp(14));
-        square.setColor(LuckgramPlusPanelColors.square(dark));
+        GradientDrawable square = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, LuckgramPlusPanelColors.square(item.colorIndex));
+        square.setCornerRadius(dp(18));
         icon.setBackground(square);
-        cell.addView(icon, LayoutHelper.createLinear(58, 58, Gravity.CENTER_HORIZONTAL));
+        cell.addView(icon, LayoutHelper.createLinear(60, 60, Gravity.CENTER_HORIZONTAL));
 
         TextView title = new TextView(getContext());
         title.setText(item.title);
@@ -180,10 +211,19 @@ public class LuckgramPlusPanel extends FrameLayout {
         title.setGravity(Gravity.CENTER_HORIZONTAL);
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
-        cell.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 2, 6, 2, 0));
+        cell.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 2, 7, 2, 0));
 
         cell.setAlpha(item.dimmed ? LuckgramPlusPanelColors.DIMMED_ALPHA : 1f);
-        cell.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_ROUNDRECT_6DP));
+        // pressed: the square sinks a little and springs back, no grey box around the whole cell
+        cell.setOnTouchListener((v, event) -> {
+            final int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                icon.animate().scaleX(0.9f).scaleY(0.9f).setDuration(90).setInterpolator(null).start();
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                icon.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(new OvershootInterpolator(3f)).start();
+            }
+            return false;
+        });
         cell.setOnClickListener(v -> {
             if (delegate != null) {
                 delegate.onItemClick(item);
