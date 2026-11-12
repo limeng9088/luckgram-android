@@ -44,11 +44,26 @@ public final class LuckgramVoiceBarLogic {
         "ご視聴ありがとうございました", "私のビデオを見てくれてありがとう", "谢谢观看", "謝謝觀看", "字幕由amaraorg社区提供",
     };
 
-    /** The transcript is one of the stock phrases a model invents for silence, not something that was said. */
-    public static boolean isSilenceHallucination(String text) {
-        if (text == null) {
-            return false;
-        }
+    /**
+     * Loudest amplitude below which the recording was at most faint noise: a transcript made only of filler
+     * sentences is then not believed either.
+     */
+    public static final double WEAK_AMPLITUDE = 180;
+
+    public static boolean isWeak(double peakAmplitude) {
+        return peakAmplitude < WEAK_AMPLITUDE;
+    }
+
+    /**
+     * Filler sentences a model strings together for near-silence (「That's it. Thank you. God bless.」). People do
+     * say these, so they only count when the recording was faint.
+     */
+    private static final java.util.Set<String> FILLER_SENTENCES = new java.util.HashSet<>(java.util.Arrays.asList(
+        "thankyou", "thanks", "thankyouverymuch", "thatsit", "godbless", "bye", "byebye", "you", "ok", "okay", "yeah",
+        "谢谢", "謝謝", "谢谢大家", "ありがとう", "ありがとうございました", "おやすみなさい"
+    ));
+
+    private static String normalize(String text) {
         final StringBuilder b = new StringBuilder();
         for (int i = 0; i < text.length(); i++) {
             final char c = text.charAt(i);
@@ -56,16 +71,50 @@ public final class LuckgramVoiceBarLogic {
                 b.append(Character.toLowerCase(c));
             }
         }
-        final String normalized = b.toString();
-        if (normalized.codePointCount(0, normalized.length()) > 40) {
+        return b.toString();
+    }
+
+    public static boolean isSilenceHallucination(String text) {
+        return isSilenceHallucination(text, false);
+    }
+
+    /**
+     * The transcript is something a model invents for silence, not something that was said:
+     * a short text around a stock phrase, one sentence three times over, or (faint recording only) nothing but fillers.
+     */
+    public static boolean isSilenceHallucination(String text, boolean weakSignal) {
+        if (text == null) {
+            return false;
+        }
+        final String normalized = normalize(text);
+        if (normalized.isEmpty()) {
             return false;
         }
         // short text built around a stock phrase (「メッセージなし。ご視聴ありがとうございました。」) counts too
-        for (String phrase : SILENCE_PHRASES) {
-            if (normalized.contains(phrase)) {
-                return true;
+        if (normalized.codePointCount(0, normalized.length()) <= 40) {
+            for (String phrase : SILENCE_PHRASES) {
+                if (normalized.contains(phrase)) {
+                    return true;
+                }
             }
         }
-        return false;
+        final java.util.HashMap<String, Integer> counts = new java.util.HashMap<>();
+        boolean onlyFillers = true;
+        for (String part : text.split("[.!?。！？\\n]")) {
+            final String sentence = normalize(part);
+            if (sentence.isEmpty()) {
+                continue;
+            }
+            final Integer seen = counts.get(sentence);
+            final int count = seen == null ? 1 : seen + 1;
+            if (count >= 3) {
+                return true;
+            }
+            counts.put(sentence, count);
+            if (!FILLER_SENTENCES.contains(sentence)) {
+                onlyFillers = false;
+            }
+        }
+        return weakSignal && !counts.isEmpty() && onlyFillers;
     }
 }
