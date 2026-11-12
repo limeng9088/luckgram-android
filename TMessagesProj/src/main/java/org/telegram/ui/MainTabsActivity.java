@@ -612,7 +612,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         // Luckgram 09: always offer "Add account"; at the limit it says "at most N accounts"
         if (true) {
             o.add(R.drawable.msg_addbot, getString(R.string.AddAccount), () -> {
-                // Luckgram 32/135: free 5 (remote config) / Pro = all slots; free users at the limit get the Pro upgrade
+                // Luckgram 32/135: free 10 (remote config) / Pro = all slots; free users at the limit get the Pro upgrade
                 org.telegram.luckgram.accounts.LuckgramAccounts.addAccount(this);
             });
         }

@@ -10,8 +10,8 @@ public class AccountLimitTest {
 
     @Test
     public void defaults() {
-        assertEquals(5, AccountLimit.DEFAULT_MAX_FREE);
-        assertEquals(5, AccountLimit.limit(false, AccountLimit.DEFAULT_MAX_FREE));
+        assertEquals(10, AccountLimit.DEFAULT_MAX_FREE);
+        assertEquals(10, AccountLimit.limit(false, AccountLimit.DEFAULT_MAX_FREE));
         assertEquals(AccountLimit.SLOT_CAPACITY, AccountLimit.limit(true, AccountLimit.DEFAULT_MAX_FREE));
     }
 
