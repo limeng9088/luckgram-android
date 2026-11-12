@@ -61,6 +61,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
     private int zone;
     private long downTime;
     private boolean awaitingText;
+    private boolean converting;
     private LuckgramAI.Request request;
     private boolean destroyed;
 
@@ -164,7 +165,10 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
 
     private void finish(int how) {
         holding = false;
-        removeOverlay();
+        final boolean toText = how == LuckgramVoiceBarLogic.ZONE_TEXT && (started || SystemClock.elapsedRealtime() - downTime >= 400) && !LuckgramVoiceBarLogic.isSilent(peakAmplitude);
+        if (!toText) {
+            removeOverlay();
+        }
         host.onRecordingChanged(false);
         if (how == LuckgramVoiceBarLogic.ZONE_CANCEL) {
             MediaController.getInstance().stopRecording(0, false, 0, false, 0);
@@ -184,11 +188,24 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
                 return;
             }
             awaitingText = true;
-            host.onTranscribing(true);
+            setConverting(true);
             MediaController.getInstance().stopRecording(2, false, 0, false, 0);
         } else {
             MediaController.getInstance().stopRecording(1, true, 0, false, 0);
         }
+    }
+
+    /** 「转文字」 is running: the overlay stays as the text bubble until it ends; a tap on it cancels. */
+    private void setConverting(boolean value) {
+        converting = value;
+        if (value) {
+            if (overlay != null) {
+                overlay.setConverting(true, this::cancel);
+            }
+        } else {
+            removeOverlay();
+        }
+        host.onTranscribing(value);
     }
 
     private void removeOverlay() {
@@ -240,7 +257,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
         } else if (id == NotificationCenter.audioRecordTooShort) {
             if (awaitingText) {
                 awaitingText = false;
-                host.onTranscribing(false);
+                setConverting(false);
             }
             host.showHint(tooShort());
         } else if (id == NotificationCenter.audioDidSent) {
@@ -248,12 +265,17 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
             if (awaitingText) {
                 awaitingText = false;
                 if (path == null) {
-                    host.onTranscribing(false);
+                    setConverting(false);
                     return;
                 }
                 transcribe(new File(path));
             } else if (path == null) {
                 host.onVoiceSent();
+            } else {
+                try {
+                    new File(path).delete();
+                } catch (Throwable ignore) {
+                }
             }
         }
     }
@@ -279,8 +301,8 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
             }
             final byte[] audio = data;
             AndroidUtilities.runOnUIThread(() -> {
-                if (destroyed) {
-                    return;
+                if (destroyed || !converting) {
+                    return; // cancelled while the file was read
                 }
                 if (audio == null || audio.length == 0 || context == null) {
                     failText(null);
@@ -294,7 +316,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
                             return;
                         }
                         final String text = t == null || t.text == null ? "" : t.text.trim();
-                        host.onTranscribing(false);
+                        setConverting(false);
                         if (text.isEmpty() || LuckgramVoiceBarLogic.isSilenceHallucination(text)) {
                             host.showHint(nothingHeard());
                         } else {
@@ -316,7 +338,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
     }
 
     private void failText(LuckgramAIError error) {
-        host.onTranscribing(false);
+        setConverting(false);
         String reason = error != null ? error.getLocalizedMessage() : null;
         host.showHint(org.telegram.luckgram.LuckgramStrings.get("转文字失败", "Couldn't convert to text") + (reason != null && !reason.isEmpty() ? "：" + reason : ""));
     }
@@ -332,9 +354,11 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
         if (request != null) {
             request.cancel();
             request = null;
-            host.onTranscribing(false);
         }
-        awaitingText = false;
+        if (awaitingText || converting) {
+            awaitingText = false;
+            setConverting(false);
+        }
     }
 
     public void destroy() {
