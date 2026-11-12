@@ -40,7 +40,7 @@ public class ProPerksTest {
     @Test
     public void subtitlesUseRemoteNumbers() {
         ProPerks.Numbers n = new ProPerks.Numbers();
-        n.accountsMaxPro = 50;
+        n.accountsMaxFree = 5;
         n.chatPro = 500;
         n.chatFree = 50;
         n.monthlyCredits = 50;
@@ -48,7 +48,8 @@ public class ProPerksTest {
         n.translatePro = 2000;
         n.translateFree = 200;
         ProPerks.Texts zh = new ProPerks.Texts(true);
-        assertEquals("可同时登录 50 个账号；账号备份加密存到云端。", zh.perkSubtitle("accounts", n));
+        assertEquals("同时登录的账号数量不限（免费 5 个）；账号备份加密存到云端。", zh.perkSubtitle("accounts", n));
+        assertEquals("同时登录的账号数量不限；账号备份加密存到云端。", zh.perkSubtitle("accounts", new ProPerks.Numbers()));
         assertEquals("AI 对话每天 500 次（免费 50 次），每月另送 50 个 AI 点数，用于高级模型。", zh.perkSubtitle("ai", n));
         assertEquals("总结最多 1000 条消息并可追问（免费 100 条）。", zh.perkSubtitle("summary", n));
         assertEquals("每天翻译 2000 次（免费 200 次）。", zh.perkSubtitle("translate", n));

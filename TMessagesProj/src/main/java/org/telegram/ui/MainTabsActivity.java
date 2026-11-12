@@ -609,10 +609,10 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         accountNumbers.addAll(org.telegram.luckgram.accounts.LuckgramAccounts.orderedAccounts());
 
         ItemOptions o = ItemOptions.makeOptions(this, button);
-        // Luckgram 09: always offer "Add account"; at the limit it says "at most 20 accounts"
+        // Luckgram 09: always offer "Add account"; at the limit it says "at most N accounts"
         if (true) {
             o.add(R.drawable.msg_addbot, getString(R.string.AddAccount), () -> {
-                // Luckgram 32: free 20 / Pro 50 (remote config); free users at the limit get the Pro upgrade
+                // Luckgram 32/135: free 5 (remote config) / Pro = all slots; free users at the limit get the Pro upgrade
                 org.telegram.luckgram.accounts.LuckgramAccounts.addAccount(this);
             });
         }

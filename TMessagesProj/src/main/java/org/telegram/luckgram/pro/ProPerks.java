@@ -31,7 +31,7 @@ public final class ProPerks {
     public static final String CFG_PERKS = "pro.perks";
     public static final String CFG_MONTHLY_CREDITS = "pro.monthly_credits";
     public static final String CFG_SUMMARY_MAX = "pro.summary_max_messages";
-    public static final String CFG_ACCOUNTS_MAX_PRO = "accounts.max_pro";
+    public static final String CFG_ACCOUNTS_MAX_FREE = "accounts.max_free";
     public static final String CFG_CHAT_PRO = "quota.pro.chat_per_day";
     public static final String CFG_CHAT_FREE = "quota.free.chat_per_day";
     public static final String CFG_TRANSLATE_PRO = "quota.pro.translate_per_day";
@@ -56,7 +56,7 @@ public final class ProPerks {
 
     /** Numbers for the perk texts; 0 = unknown (left out of the text). */
     public static final class Numbers {
-        public int accountsMaxPro;
+        public int accountsMaxFree;
         public int chatPro, chatFree;
         public int monthlyCredits = DEFAULT_MONTHLY_CREDITS;
         public int summaryMaxPro = ProState.SUMMARY_MAX_PRO;
@@ -176,11 +176,12 @@ public final class ProPerks {
                 case ProState.PERK_AGENT_MARKET:
                     return t("发现并使用更多 AI 智能体。", "Discover and use more AI agents.");
                 case ProState.PERK_ACCOUNTS:
-                    return n.accountsMaxPro > 0
-                        ? t("可同时登录 " + n.accountsMaxPro + " 个账号；账号备份加密存到云端。",
-                            "Log in to up to " + n.accountsMaxPro + " accounts at once; account backups are encrypted in the cloud.")
-                        : t("可同时登录更多账号；账号备份加密存到云端。",
-                            "Log in to more accounts at once; account backups are encrypted in the cloud.");
+                    // 135: Pro has no account limit (free: accounts.max_free, default 5)
+                    return n.accountsMaxFree > 0
+                        ? t("同时登录的账号数量不限（免费 " + n.accountsMaxFree + " 个）；账号备份加密存到云端。",
+                            "Log in to unlimited accounts at once (free: " + n.accountsMaxFree + "); account backups are encrypted in the cloud.")
+                        : t("同时登录的账号数量不限；账号备份加密存到云端。",
+                            "Log in to unlimited accounts at once; account backups are encrypted in the cloud.");
                 case ProState.PERK_AI: {
                     String daily = n.chatPro > 0
                         ? t("AI 对话每天 " + n.chatPro + " 次" + (n.chatFree > 0 ? "（免费 " + n.chatFree + " 次）" : ""),
