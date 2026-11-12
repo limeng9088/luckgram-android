@@ -764,7 +764,7 @@ public final class SquareLogic {
 
         public String title() { return t("广场", "Square"); }
         public String latest() { return t("最新", "Latest"); }
-        public String hot() { return t("热门", "Trending"); }
+        public String hot() { return t("热门", "Hot"); } // short: three tabs share the title of the iOS page
         public String recommend() { return t("推荐", "For you"); }
         public String notInterested() { return t("不感兴趣", "Not interested"); }
         public String notInterestedDone() { return t("将减少推荐类似内容", "You'll see fewer posts like this"); }
