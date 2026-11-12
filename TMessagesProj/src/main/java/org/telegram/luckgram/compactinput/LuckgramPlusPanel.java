@@ -66,6 +66,9 @@ public class LuckgramPlusPanel extends FrameLayout {
     private static final int COLUMNS = 4;
     private static final int ROWS = 2;
     private static final int PER_PAGE = COLUMNS * ROWS;
+    /** dp: icon square 60 + gap 7 + one title line 16. */
+    private static final int CELL_HEIGHT = 83;
+    private static final int ROW_SPACING = 20;
 
     private final Theme.ResourcesProvider resourcesProvider;
     private final Delegate delegate;
@@ -118,10 +121,11 @@ public class LuckgramPlusPanel extends FrameLayout {
                 dots.setProgress(position + positionOffset);
             }
         });
-        addView(pager, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 22));
+        addView(pager, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 38));
 
         dots = new DotsView(context);
-        addView(dots, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 22, Gravity.BOTTOM));
+        // kept clear of the system gesture bar at the bottom edge
+        addView(dots, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 22, Gravity.BOTTOM, 0, 0, 0, 16));
 
         updateColors();
     }
@@ -153,10 +157,19 @@ public class LuckgramPlusPanel extends FrameLayout {
     }
 
     private View createPage(int page) {
-        LinearLayout column = new LinearLayout(getContext());
+        LinearLayout column = new LinearLayout(getContext()) {
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                // the two rows sit in the middle of the panel
+                final int free = MeasureSpec.getSize(heightMeasureSpec) - dp(ROWS * CELL_HEIGHT + (ROWS - 1) * ROW_SPACING);
+                setPadding(dp(12), Math.max(dp(10), free / 2), dp(12), 0);
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            }
+        };
         column.setOrientation(LinearLayout.VERTICAL);
-        column.setGravity(Gravity.CENTER_VERTICAL);
-        column.setPadding(dp(12), dp(8), dp(12), 0);
+        // rows start at the same line on every page, also when the last page has one row only
+        column.setGravity(Gravity.TOP);
+
         column.setClipChildren(false);
         final boolean animate = animateCells && page == pager.getCurrentItem();
         if (animate) {
@@ -168,8 +181,11 @@ public class LuckgramPlusPanel extends FrameLayout {
             row.setClipChildren(false);
             for (int c = 0; c < COLUMNS; c++) {
                 int index = page * PER_PAGE + r * COLUMNS + c;
-                View cell = index < items.size() ? createCell(items.get(index)) : new View(getContext());
-                row.addView(cell, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.TOP));
+                final boolean filled = index < items.size();
+                View cell = filled ? createCell(items.get(index)) : new View(getContext());
+                // an empty slot only keeps the column width: a plain View with WRAP_CONTENT takes all the height on offer,
+                // which made a half-filled page as tall as two panels and pushed its row out of the top
+                row.addView(cell, LayoutHelper.createLinear(0, filled ? LayoutHelper.WRAP_CONTENT : 0, 1f, Gravity.TOP));
                 if (animate && index < items.size()) {
                     final float alpha = cell.getAlpha();
                     cell.setAlpha(0f);
@@ -181,7 +197,7 @@ public class LuckgramPlusPanel extends FrameLayout {
                             .setInterpolator(new OvershootInterpolator(1.6f)).start();
                 }
             }
-            column.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, r == 0 ? 0 : 20, 0, 0));
+            column.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, r == 0 ? 0 : ROW_SPACING, 0, 0));
         }
         return column;
     }
