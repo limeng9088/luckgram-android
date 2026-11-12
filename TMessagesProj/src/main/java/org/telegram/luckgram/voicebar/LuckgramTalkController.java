@@ -57,6 +57,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
     private LuckgramTalkOverlay overlay;
     private boolean holding;
     private boolean started;
+    private double peakAmplitude;
     private int zone;
     private long downTime;
     private boolean awaitingText;
@@ -145,6 +146,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
         }
         holding = true;
         started = false;
+        peakAmplitude = 0;
         zone = LuckgramVoiceBarLogic.ZONE_SEND;
         downTime = SystemClock.elapsedRealtime();
         if (bar.getParent() != null) {
@@ -175,6 +177,12 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
             return;
         }
         if (how == LuckgramVoiceBarLogic.ZONE_TEXT) {
+            if (LuckgramVoiceBarLogic.isSilent(peakAmplitude)) {
+                // nothing to convert; a model would make something up
+                MediaController.getInstance().stopRecording(0, false, 0, false, 0);
+                host.showHint(nothingHeard());
+                return;
+            }
             awaitingText = true;
             host.onTranscribing(true);
             MediaController.getInstance().stopRecording(2, false, 0, false, 0);
@@ -188,6 +196,10 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
             overlay.remove();
             overlay = null;
         }
+    }
+
+    private static String nothingHeard() {
+        return org.telegram.luckgram.LuckgramStrings.get("没有听到内容", "Nothing was heard");
     }
 
     private static String tooShort() {
@@ -205,8 +217,11 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
                 overlay.start();
             }
         } else if (id == NotificationCenter.recordProgressChanged) {
-            if (overlay != null && args.length > 1 && args[1] instanceof Double) {
-                overlay.addAmplitude((Double) args[1]);
+            if (args.length > 1 && args[1] instanceof Double) {
+                peakAmplitude = Math.max(peakAmplitude, (Double) args[1]);
+                if (overlay != null) {
+                    overlay.addAmplitude((Double) args[1]);
+                }
             }
         } else if (id == NotificationCenter.recordStartError) {
             if (holding) {
@@ -280,8 +295,8 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
                         }
                         final String text = t == null || t.text == null ? "" : t.text.trim();
                         host.onTranscribing(false);
-                        if (text.isEmpty()) {
-                            host.showHint(org.telegram.luckgram.LuckgramStrings.get("没有听到内容", "Nothing was heard"));
+                        if (text.isEmpty() || LuckgramVoiceBarLogic.isSilenceHallucination(text)) {
+                            host.showHint(nothingHeard());
                         } else {
                             host.onTranscribed(text);
                         }

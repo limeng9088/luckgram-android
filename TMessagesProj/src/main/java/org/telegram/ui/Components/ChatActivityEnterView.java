@@ -2702,14 +2702,14 @@ public class ChatActivityEnterView extends FrameLayout implements
 
             @Override
             protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+                if (luckgramTalkMode && child != luckgramTalkBar && child != attachButton && child != attachLayout) {
+                    return false; // Luckgram specs#145: only 「按住 说话」 and the 「+」 show in talk mode (the field and its hint too)
+                }
                 if (child != null && child == messageEditText) {
                     return drawMessageEditText(canvas, () -> super.drawChild(canvas, child, drawingTime));
                 }
                 if (shouldDrawRecordedAudioPanelInParent && child == recordedAudioPanel) {
                     return true;
-                }
-                if (luckgramTalkMode && child != luckgramTalkBar && child != attachButton && child != attachLayout) {
-                    return false; // Luckgram specs#145: only 「按住 说话」 and the 「+」 show in talk mode
                 }
                 return super.drawChild(canvas, child, drawingTime);
             }
@@ -6042,6 +6042,9 @@ public class ChatActivityEnterView extends FrameLayout implements
                     return;
                 }
                 updateAiWritingButton();
+                if (luckgramTalkMode && editable.length() > 0) {
+                    setLuckgramTalkMode(false, false); // Luckgram specs#145: text put in from elsewhere (mention, bot, …) must be visible
+                }
                 if (prevText != null) {
                     ignorePrevTextChange = true;
                     editable.replace(0, editable.length(), prevText);
@@ -11615,6 +11618,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void setFieldFocused() {
+        if (luckgramTalkMode) {
+            return; // Luckgram specs#145: 「按住 说话」 stays up (reply, forward, …); the toggle brings the keyboard back
+        }
         AccessibilityManager am = (AccessibilityManager) parentActivity.getSystemService(Context.ACCESSIBILITY_SERVICE);
         if (messageEditText != null && !am.isTouchExplorationEnabled()) {
             try {
@@ -11626,6 +11632,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void setFieldFocused(boolean focus) {
+        if (luckgramTalkMode && focus) {
+            return; // Luckgram specs#145: 「按住 说话」 stays up (reply, forward, …); the toggle brings the keyboard back
+        }
         AccessibilityManager am = (AccessibilityManager) parentActivity.getSystemService(Context.ACCESSIBILITY_SERVICE);
         if (messageEditText == null || am.isTouchExplorationEnabled()) {
             return;
@@ -14237,6 +14246,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void openKeyboardInternal() {
+        if (luckgramTalkMode) {
+            return; // Luckgram specs#145: 「按住 说话」 stays up (reply, forward, …); the toggle brings the keyboard back
+        }
         if (hasBotWebView() && botCommandsMenuIsShowing() || BaseFragment.hasSheets(parentFragment)) {
             return;
         }
@@ -14277,6 +14289,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void openKeyboard() {
+        if (luckgramTalkMode) {
+            return; // Luckgram specs#145: 「按住 说话」 stays up (reply, forward, …); the toggle brings the keyboard back
+        }
         if (hasBotWebView() && botCommandsMenuIsShowing() || BaseFragment.hasSheets(parentFragment)) {
             return;
         }

@@ -30,4 +30,38 @@ public final class LuckgramVoiceBarLogic {
         long s = Math.max(0, ms) / 1000;
         return (s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
     }
+
+    /** Loudest {@code recordProgressChanged} amplitude (16-bit RMS) below which nothing was said at all. */
+    public static final double SILENCE_AMPLITUDE = 30;
+
+    public static boolean isSilent(double peakAmplitude) {
+        return peakAmplitude < SILENCE_AMPLITUDE;
+    }
+
+    /** What speech-to-text models make up for recordings with no speech in them. Whole-text matches only. */
+    private static final String[] SILENCE_PHRASES = {
+        "thankyousomuchforwatching", "thankyouforwatching", "thanksforwatching", "subtitlesbytheamaraorgcommunity",
+        "ご視聴ありがとうございました", "私のビデオを見てくれてありがとう", "谢谢观看", "謝謝觀看", "字幕由amaraorg社区提供",
+    };
+
+    /** The transcript is one of the stock phrases a model invents for silence, not something that was said. */
+    public static boolean isSilenceHallucination(String text) {
+        if (text == null) {
+            return false;
+        }
+        final StringBuilder b = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            final char c = text.charAt(i);
+            if (Character.isLetterOrDigit(c)) {
+                b.append(Character.toLowerCase(c));
+            }
+        }
+        final String normalized = b.toString();
+        for (String phrase : SILENCE_PHRASES) {
+            if (phrase.equals(normalized)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
