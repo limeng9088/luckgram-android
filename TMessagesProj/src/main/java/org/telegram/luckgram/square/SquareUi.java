@@ -355,6 +355,7 @@ public final class SquareUi {
                     @Override
                     public void onResult(JSONObject result) {
                         bulletin(f).createSimpleBulletin(R.raw.done, tx.blocked()).show();
+                        SquareActivity.blockedAuthors.add(author.id);
                         if (done != null) done.run();
                     }
 

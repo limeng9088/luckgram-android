@@ -144,7 +144,7 @@ public class SquarePostActivity extends UniversalFragment {
                 loadingPost = false;
                 if (error.httpStatus == 404 || "not_found".equals(error.code)) {
                     SquareUi.bulletin(SquarePostActivity.this).createErrorBulletin(tx.postGone()).show();
-                    SquareActivity.dirty = true;
+                    SquareActivity.removedPosts.add(postId);
                     finishFragment();
                     return;
                 }
@@ -301,7 +301,7 @@ public class SquarePostActivity extends UniversalFragment {
                             input.setText("");
                             AndroidUtilities.hideKeyboard(input);
                         }
-                        SquareActivity.dirty = true;
+                        SquareActivity.noteChanged(post);
                         update();
                         SquareUi.bulletin(SquarePostActivity.this).createSimpleBulletin(R.raw.done, tx.commentSent()).show();
                     }
@@ -365,7 +365,7 @@ public class SquarePostActivity extends UniversalFragment {
                 }
                 if (replyTo == c) replyTo = null;
                 rethread();
-                SquareActivity.dirty = true;
+                SquareActivity.noteChanged(post);
                 update();
                 SquareUi.bulletin(SquarePostActivity.this).createSimpleBulletin(R.raw.done, tx.deleted()).show();
             }
@@ -394,7 +394,7 @@ public class SquarePostActivity extends UniversalFragment {
         @Override
         public void onLike(SquareLogic.Post p) {
             SquareUi.toggleLike(SquarePostActivity.this, p, () -> {
-                SquareActivity.dirty = true;
+                SquareActivity.noteChanged(post);
                 update();
             });
         }

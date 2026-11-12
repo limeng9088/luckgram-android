@@ -129,7 +129,7 @@ public class LuckgramAccountActivity extends UniversalFragment {
             public void onResult(JSONObject result) {
                 busy = false;
                 org.telegram.luckgram.square.SquareUi.clearCache();
-                org.telegram.luckgram.square.SquareActivity.dirty = true;
+                org.telegram.luckgram.square.SquareActivity.posted = true;
                 listView.adapter.update(true);
                 BulletinFactory.of(LuckgramAccountActivity.this).createSimpleBulletin(org.telegram.messenger.R.raw.done, sq.deletedMyData()).show();
             }

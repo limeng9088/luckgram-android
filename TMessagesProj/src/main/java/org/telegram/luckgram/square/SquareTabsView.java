@@ -35,6 +35,7 @@ public class SquareTabsView extends FrameLayout {
     /** Indicator position in tab units (0 = first tab), animated towards {@link #selected}. */
     private float indicator;
     private ValueAnimator animator;
+    private Runnable onReselect;
 
     public SquareTabsView(Context context, String[] titles, int selected, Utilities.Callback<Integer> onSelect, Theme.ResourcesProvider resourcesProvider) {
         super(context);
@@ -57,7 +58,10 @@ public class SquareTabsView extends FrameLayout {
             tv.setSingleLine(true);
             tv.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_profile_tabSelector, resourcesProvider)));
             tv.setOnClickListener(v -> {
-                if (index == this.selected) return;
+                if (index == this.selected) {
+                    if (onReselect != null) onReselect.run();
+                    return;
+                }
                 select(index, true);
                 onSelect.run(index);
             });
@@ -66,6 +70,11 @@ public class SquareTabsView extends FrameLayout {
         }
         addView(row, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         updateColors();
+    }
+
+    /** Tapping the tab that is already selected (the feed goes back to the top and refreshes). */
+    public void setOnReselect(Runnable onReselect) {
+        this.onReselect = onReselect;
     }
 
     /** Moves the highlight to {@code index} without notifying the callback. */
