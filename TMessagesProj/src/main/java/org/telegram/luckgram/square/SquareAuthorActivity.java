@@ -86,10 +86,7 @@ public class SquareAuthorActivity extends UniversalFragment {
                 } else if (id == SUB_REPORT) {
                     SquareUi.report(SquareAuthorActivity.this, "user", userId);
                 } else if (id == SUB_BLOCK && author != null) {
-                    SquareUi.block(SquareAuthorActivity.this, author, () -> {
-                        SquareActivity.dirty = true;
-                        finishFragment();
-                    });
+                    SquareUi.block(SquareAuthorActivity.this, author, SquareAuthorActivity.this::finishFragment);
                 }
             }
         });
@@ -241,7 +238,7 @@ public class SquareAuthorActivity extends UniversalFragment {
         @Override
         public void onLike(SquareLogic.Post p) {
             SquareUi.toggleLike(SquareAuthorActivity.this, p, () -> {
-                SquareActivity.dirty = true;
+                SquareActivity.noteChanged(p);
                 update();
             });
         }

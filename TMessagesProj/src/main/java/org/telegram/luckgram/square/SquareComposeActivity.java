@@ -763,7 +763,7 @@ public class SquareComposeActivity extends UniversalFragment implements Notifica
                 @Override
                 public void onResult(JSONObject result) {
                     publishing = false;
-                    SquareActivity.dirty = true;
+                    SquareActivity.posted = true;
                     SquareLogic.Post p = SquareLogic.parsePost(result);
                     if (!p.author.id.isEmpty()) SquareUi.myAuthorId = p.author.id;
                     if (video != null) {

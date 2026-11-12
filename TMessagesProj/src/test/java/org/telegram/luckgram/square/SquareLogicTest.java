@@ -227,4 +227,180 @@ public class SquareLogicTest {
             }
         }
     }
+    // ---------------------------------------------------------------- feed state
+
+    private static SquareLogic.Post post(String id, String author) {
+        SquareLogic.Post p = new SquareLogic.Post();
+        p.id = id;
+        p.author.id = author;
+        return p;
+    }
+
+    private static SquareLogic.Page<SquareLogic.Post> page(String cursor, String... ids) {
+        SquareLogic.Page<SquareLogic.Post> page = new SquareLogic.Page<>();
+        for (String id : ids) page.items.add(post(id, "a"));
+        page.nextCursor = cursor;
+        return page;
+    }
+
+    private static String ids(SquareLogic.Feed f) {
+        StringBuilder b = new StringBuilder();
+        for (SquareLogic.Post p : f.posts) b.append(p.id).append(' ');
+        return b.toString().trim();
+    }
+
+    @Test
+    public void refreshKeepsTheListUntilTheNewPageArrives() {
+        SquareLogic.Feed f = new SquareLogic.Feed(SquareLogic.TAB_LATEST);
+        assertEquals(SquareLogic.Feed.FOOTER_SKELETON, f.footer());
+        assertTrue(f.beginRefresh());
+        assertFalse(f.beginRefresh()); // one at a time
+        assertEquals(0, f.applyRefresh(page("c1", "p3", "p2", "p1"), 1000)); // first load: nothing is "new"
+        assertEquals("p3 p2 p1", ids(f));
+        assertEquals(SquareLogic.Feed.FOOTER_LOADING_MORE, f.footer());
+
+        assertTrue(f.beginRefresh());
+        assertEquals("p3 p2 p1", ids(f)); // still on screen while refreshing
+        assertEquals(SquareLogic.Feed.FOOTER_LOADING_MORE, f.footer());
+        assertEquals(2, f.applyRefresh(page(null, "p5", "p4", "p3"), 2000));
+        assertEquals("p5 p4 p3", ids(f));
+        assertFalse(f.refreshing);
+        assertEquals(SquareLogic.Feed.FOOTER_END, f.footer());
+        assertEquals(0, f.applyRefresh(page(null, "p5", "p4", "p3"), 3000));
+    }
+
+    @Test
+    public void failedRefreshLeavesTheListAlone() {
+        SquareLogic.Feed f = new SquareLogic.Feed(SquareLogic.TAB_HOT);
+        f.beginRefresh();
+        f.failRefresh();
+        assertEquals(SquareLogic.Feed.FOOTER_FIRST_ERROR, f.footer());
+        assertTrue(f.isStale(0));
+
+        f.beginRefresh();
+        assertEquals(SquareLogic.Feed.FOOTER_SKELETON, f.footer());
+        f.applyRefresh(page("c", "p1", "p2"), 10);
+        f.beginRefresh();
+        f.failRefresh();
+        assertEquals("p1 p2", ids(f));
+        assertEquals("c", f.nextCursor);
+        assertEquals(SquareLogic.Feed.FOOTER_LOADING_MORE, f.footer());
+        assertTrue(f.beginRefresh()); // can try again
+    }
+
+    @Test
+    public void loadsMoreBeforeTheEndAndDropsPagesOfAReplacedList() {
+        SquareLogic.Feed f = new SquareLogic.Feed(SquareLogic.TAB_LATEST);
+        assertFalse(f.canLoadMore());
+        f.beginRefresh();
+        f.applyRefresh(page("c1", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"), 0);
+        assertFalse(f.shouldLoadMore(2));
+        assertTrue(f.shouldLoadMore(7 - SquareLogic.Feed.PREFETCH));
+        int g = f.beginMore();
+        assertFalse(f.canLoadMore()); // already loading
+        assertTrue(f.applyMore(page(null, "p8", "p9"), g));
+        assertEquals("p1 p2 p3 p4 p5 p6 p7 p8 p9", ids(f));
+        assertFalse(f.shouldLoadMore(8)); // no cursor left
+        assertEquals(SquareLogic.Feed.FOOTER_END, f.footer());
+
+        // a page requested before a refresh must not be appended to the new list
+        f.beginRefresh();
+        f.applyRefresh(page("c2", "n1", "n2"), 0);
+        g = f.beginMore();
+        f.beginRefresh();
+        f.applyRefresh(page("c3", "m1"), 0);
+        assertFalse(f.loadingMore);
+        assertFalse(f.applyMore(page(null, "n3"), g));
+        f.failMore(g);
+        assertFalse(f.moreFailed);
+        assertEquals("m1", ids(f));
+
+        // a failed page waits for a tap instead of retrying on every scroll
+        g = f.beginMore();
+        f.failMore(g);
+        assertEquals(SquareLogic.Feed.FOOTER_MORE_ERROR, f.footer());
+        assertFalse(f.shouldLoadMore(0));
+        assertTrue(f.canLoadMore());
+    }
+
+    @Test
+    public void staleAfterFiveMinutesAndEmptyStates() {
+        SquareLogic.Feed f = new SquareLogic.Feed(SquareLogic.TAB_RECOMMEND);
+        f.beginRefresh();
+        f.applyRefresh(page(null), 1000);
+        assertEquals(SquareLogic.Feed.FOOTER_EMPTY, f.footer());
+        assertFalse(f.isStale(1000 + SquareLogic.Feed.STALE_MS - 1));
+        assertTrue(f.isStale(1000 + SquareLogic.Feed.STALE_MS));
+        f.beginRefresh();
+        assertEquals(SquareLogic.Feed.FOOTER_SKELETON, f.footer()); // empty and loading again
+
+        // read for a long time, stepped out for a moment: not refreshed under the reader
+        long left = 1000 + 3 * SquareLogic.Feed.STALE_MS;
+        f.markSeen(left);
+        assertFalse(f.isStale(left + 60_000));
+        assertTrue(f.isStale(left + SquareLogic.Feed.STALE_MS));
+    }
+
+    @Test
+    public void quietMergeUpdatesCountsInPlace() {
+        SquareLogic.Feed f = new SquareLogic.Feed(SquareLogic.TAB_LATEST);
+        f.beginRefresh();
+        f.applyRefresh(page("c", "p1", "p2", "p3"), 0);
+        SquareLogic.Post liked = post("p2", "a");
+        liked.likeCount = 5;
+        liked.liked = true;
+        List<SquareLogic.Post> fresh = Arrays.asList(post("p9", "a"), liked, post("p3", "a"));
+        assertEquals(1, f.mergeSilently(fresh));
+        assertEquals("p1 p2 p3", ids(f)); // nothing added, removed or moved
+        assertEquals(5, f.posts.get(1).likeCount);
+        assertEquals("c", f.nextCursor);
+
+        f.posts.get(0).author.id = "b";
+        assertEquals(1, f.removeAuthor("b"));
+        assertTrue(f.removePost("p3"));
+        assertFalse(f.removePost("p3"));
+        assertEquals("p2", ids(f));
+    }
+
+    @Test
+    public void refreshedTexts() {
+        assertEquals("更新了 3 条新内容", new SquareLogic.Texts(true).refreshed(3));
+        assertEquals("已是最新内容", new SquareLogic.Texts(true).refreshed(0));
+        assertEquals("1 new post", new SquareLogic.Texts(false).refreshed(1));
+        assertEquals("12 new posts", new SquareLogic.Texts(false).refreshed(12));
+    }
+
+    @Test
+    public void savedFirstPageIsShownAtOnceAndRefreshedWhenOld() throws Exception {
+        JSONObject first = new JSONObject("{\"items\":[{\"id\":\"p1\"},{\"id\":\"p2\"}],\"next_cursor\":\"c\"}");
+        String stored = SquareLogic.encodeSaved(first, 1000);
+        SquareLogic.Saved saved = SquareLogic.decodeSaved(stored, 2000);
+        assertNotNull(saved);
+        assertEquals(1000, saved.savedAtMs);
+
+        SquareLogic.Feed f = new SquareLogic.Feed(SquareLogic.TAB_LATEST);
+        assertTrue(f.restore(saved.page, saved.savedAtMs));
+        assertEquals("p1 p2", ids(f));
+        assertEquals("c", f.nextCursor);
+        assertEquals(SquareLogic.Feed.FOOTER_LOADING_MORE, f.footer()); // no outlines: there is a list
+        assertFalse(f.isStale(1000 + SquareLogic.Feed.STALE_MS - 1)); // opened again soon: no request
+        assertTrue(f.isStale(1000 + SquareLogic.Feed.STALE_MS));
+        assertFalse(f.restore(saved.page, saved.savedAtMs)); // never over a list that is there
+
+        // refreshing over it: the saved posts stay until the new page comes, which says what is new
+        assertTrue(f.beginRefresh());
+        assertEquals("p1 p2", ids(f));
+        assertEquals(1, f.applyRefresh(page(null, "p3", "p2"), 5000));
+
+        // a page that was closed while loading leaves nothing in flight
+        f.beginRefresh();
+        f.cancelLoading();
+        assertTrue(f.beginRefresh());
+
+        assertNull(SquareLogic.decodeSaved(null, 0));
+        assertNull(SquareLogic.decodeSaved("not json", 2000));
+        assertNull(SquareLogic.decodeSaved(SquareLogic.encodeSaved(new JSONObject("{\"items\":[]}"), 1000), 2000));
+        assertNull(SquareLogic.decodeSaved(stored, 1000 + SquareLogic.SAVED_MAX_AGE_MS + 1)); // too old
+        assertNull(SquareLogic.decodeSaved(stored, 999)); // clock went back
+    }
 }

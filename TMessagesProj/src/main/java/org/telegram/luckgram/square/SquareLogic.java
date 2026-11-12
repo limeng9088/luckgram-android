@@ -7,6 +7,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
@@ -270,6 +271,260 @@ public final class SquareLogic {
         }
     }
 
+    // ---------------------------------------------------------------- saved first page
+
+    /** A saved first page older than this is not shown any more. */
+    public static final long SAVED_MAX_AGE_MS = 7 * 24 * 3600_000L;
+
+    /** A first page as it was saved, and when. */
+    public static final class Saved {
+        public final Page<Post> page;
+        public final long savedAtMs;
+
+        Saved(Page<Post> page, long savedAtMs) {
+            this.page = page;
+            this.savedAtMs = savedAtMs;
+        }
+    }
+
+    /** What is kept on the device for a tab: the server's first page as it came, and the time. */
+    public static String encodeSaved(JSONObject firstPage, long now) {
+        try {
+            return new JSONObject().put("saved_at", now).put("page", firstPage).toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** @return null when there is nothing usable: unreadable, empty, too old, or from the future */
+    public static Saved decodeSaved(String stored, long now) {
+        if (stored == null || stored.isEmpty()) return null;
+        try {
+            JSONObject o = new JSONObject(stored);
+            long savedAt = o.optLong("saved_at", 0);
+            JSONObject page = o.optJSONObject("page");
+            if (page == null || savedAt <= 0 || savedAt > now || now - savedAt > SAVED_MAX_AGE_MS) return null;
+            Page<Post> parsed = parsePosts(page);
+            return parsed.items.isEmpty() ? null : new Saved(parsed, savedAt);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ---------------------------------------------------------------- feed state
+
+    /**
+     * One tab of the feed, kept for as long as the page is open. A refresh never empties the list:
+     * the posts on screen stay until the new first page has arrived and then are swapped in one
+     * step; a failed refresh leaves them untouched. Tabs keep their own list and scroll position,
+     * so switching back shows what was there, and reloads only when it is older than
+     * {@link #STALE_MS}. The same class lives in SquareLogic.swift.
+     */
+    public static final class Feed {
+        /** A tab shown again after this long refreshes itself. */
+        public static final long STALE_MS = 5 * 60_000L;
+        /** The next page is requested when this many posts are left below the last visible one. */
+        public static final int PREFETCH = 4;
+        /** A page that has not come after this long counts as failed (the list stays, the reader is told). */
+        public static final long REQUEST_TIMEOUT_MS = 15_000L;
+
+        public static final int FOOTER_SKELETON = 0;
+        public static final int FOOTER_FIRST_ERROR = 1;
+        public static final int FOOTER_EMPTY = 2;
+        public static final int FOOTER_LOADING_MORE = 3;
+        public static final int FOOTER_MORE_ERROR = 4;
+        public static final int FOOTER_END = 5;
+
+        public final String tab;
+        public final ArrayList<Post> posts = new ArrayList<>();
+        public String nextCursor;
+        public boolean loadedOnce;
+        public long loadedAtMs;
+        /** When the reader last had this tab on screen ({@link #markSeen}). */
+        public long seenAtMs;
+        public boolean refreshing;
+        public boolean refreshFailed;
+        public boolean loadingMore;
+        public boolean moreFailed;
+        /** Bumped by every applied refresh: a page requested for the previous list is dropped. */
+        public int generation;
+        /** First visible row and its offset, saved when the tab is left. */
+        public int scrollIndex;
+        public int scrollOffset;
+
+        public Feed(String tab) {
+            this.tab = tab;
+        }
+
+        /** @return false when a refresh is already running */
+        public boolean beginRefresh() {
+            if (refreshing) return false;
+            refreshing = true;
+            refreshFailed = false;
+            return true;
+        }
+
+        /**
+         * The first page arrived: it replaces the list in one step.
+         *
+         * @return how many of its posts were not in the list before (0 on the very first load)
+         */
+        public int applyRefresh(Page<Post> page, long now) {
+            int fresh = 0;
+            if (loadedOnce) {
+                HashSet<String> old = new HashSet<>();
+                for (Post p : posts) old.add(p.id);
+                for (Post p : page.items) if (!old.contains(p.id)) fresh++;
+            }
+            posts.clear();
+            appendUnique(posts, page.items);
+            nextCursor = page.nextCursor;
+            loadedOnce = true;
+            loadedAtMs = now;
+            refreshing = false;
+            refreshFailed = false;
+            loadingMore = false;
+            moreFailed = false;
+            generation++;
+            scrollIndex = 0;
+            scrollOffset = 0;
+            return fresh;
+        }
+
+        /**
+         * The first page saved by an earlier visit ({@link #decodeSaved}): shown at once when the
+         * page opens, before anything is requested. It counts as loaded at the time it was saved,
+         * so an old one is refreshed right away — with the posts on screen meanwhile.
+         *
+         * @return false when the tab already has a list
+         */
+        public boolean restore(Page<Post> page, long savedAtMs) {
+            if (loadedOnce || page == null || page.items.isEmpty()) return false;
+            appendUnique(posts, page.items);
+            nextCursor = page.nextCursor;
+            loadedOnce = true;
+            loadedAtMs = savedAtMs;
+            return true;
+        }
+
+        /** The page that was loading is gone (its requests were cancelled): nothing is in flight. */
+        public void cancelLoading() {
+            refreshing = false;
+            loadingMore = false;
+        }
+
+        /** The refresh failed: whatever was on screen stays. */
+        public void failRefresh() {
+            refreshing = false;
+            refreshFailed = true;
+        }
+
+        public boolean canLoadMore() {
+            return loadedOnce && !refreshing && !loadingMore && nextCursor != null;
+        }
+
+        /** @param lastVisiblePost index of the lowest post on screen */
+        public boolean shouldLoadMore(int lastVisiblePost) {
+            return canLoadMore() && !moreFailed && lastVisiblePost >= posts.size() - 1 - PREFETCH;
+        }
+
+        /** @return the generation to pass back to {@link #applyMore} / {@link #failMore} */
+        public int beginMore() {
+            loadingMore = true;
+            moreFailed = false;
+            return generation;
+        }
+
+        /** @return false when the page belongs to a list that was replaced meanwhile */
+        public boolean applyMore(Page<Post> page, int forGeneration) {
+            if (forGeneration != generation) return false;
+            appendUnique(posts, page.items);
+            nextCursor = page.nextCursor;
+            loadingMore = false;
+            return true;
+        }
+
+        public void failMore(int forGeneration) {
+            if (forGeneration != generation) return;
+            loadingMore = false;
+            moreFailed = true;
+        }
+
+        /** The reader leaves the tab (another tab, another page, the app in the background). */
+        public void markSeen(long now) {
+            seenAtMs = now;
+        }
+
+        /**
+         * Whether to refresh when the tab is shown again: only when it was neither loaded nor
+         * looked at for {@link #STALE_MS}. Someone who steps out for a moment comes back to the
+         * same posts at the same place, however long they had been reading before.
+         */
+        public boolean isStale(long now) {
+            return !loadedOnce || now - Math.max(loadedAtMs, seenAtMs) >= STALE_MS;
+        }
+
+        /**
+         * Posts changed on another page (a like, a comment): the ones in this list take the new
+         * counts in place; nothing is added, removed or moved, so the reader keeps their position.
+         *
+         * @return how many posts changed
+         */
+        public int mergeSilently(List<Post> fresh) {
+            int changed = 0;
+            for (Post f : fresh) {
+                for (Post p : posts) {
+                    if (!p.id.equals(f.id)) continue;
+                    if (p.likeCount != f.likeCount || p.commentCount != f.commentCount || p.liked != f.liked
+                        || !p.status.equals(f.status) || !p.text.equals(f.text)) {
+                        changed++;
+                        // same object: pages that were opened with this post see the new counts too
+                        p.likeCount = f.likeCount;
+                        p.commentCount = f.commentCount;
+                        p.liked = f.liked;
+                        p.status = f.status;
+                        p.hiddenReason = f.hiddenReason;
+                        p.text = f.text;
+                    }
+                    break;
+                }
+            }
+            return changed;
+        }
+
+        public boolean removePost(String postId) {
+            for (int i = 0; i < posts.size(); i++) {
+                if (posts.get(i).id.equals(postId)) {
+                    posts.remove(i);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public int removeAuthor(String authorId) {
+            int removed = 0;
+            for (int i = posts.size() - 1; i >= 0; i--) {
+                if (posts.get(i).author.id.equals(authorId)) {
+                    posts.remove(i);
+                    removed++;
+                }
+            }
+            return removed;
+        }
+
+        /** What goes under the posts. */
+        public int footer() {
+            if (posts.isEmpty()) {
+                if (!loadedOnce) return refreshFailed ? FOOTER_FIRST_ERROR : FOOTER_SKELETON;
+                if (refreshing) return FOOTER_SKELETON;
+                if (nextCursor == null) return FOOTER_EMPTY;
+            }
+            if (moreFailed) return FOOTER_MORE_ERROR;
+            return nextCursor != null ? FOOTER_LOADING_MORE : FOOTER_END;
+        }
+    }
+
     /**
      * One level of comments plus one level of replies: each comment followed by its replies, in
      * server order. Replies to a reply are shown under the top comment; orphans become comments.
@@ -519,6 +774,15 @@ public final class SquareLogic {
         public String empty() { return t("还没有动态，来发第一条吧", "No posts yet. Be the first to share something."); }
         public String noMore() { return t("已经到底了", "You're all caught up"); }
         public String refresh() { return t("刷新", "Refresh"); }
+        public String refreshing() { return t("正在刷新", "Refreshing"); }
+        /** Shown for a moment after a refresh; {@code n} posts were not in the list before. */
+        public String refreshed(int n) {
+            if (n <= 0) return t("已是最新内容", "You're up to date");
+            return zh ? "更新了 " + n + " 条新内容" : (n == 1 ? "1 new post" : n + " new posts");
+        }
+        public String loadFailed() { return t("加载失败，请检查网络后重试", "Couldn't load. Check your connection and try again."); }
+        public String retry() { return t("重试", "Try again"); }
+        public String moreFailed() { return t("加载失败，点击重试", "Couldn't load more. Tap to retry."); }
 
         public String hidden() { return t("已隐藏", "Hidden"); }
         /** {@code reason} is a report reason code (S11: the most reported one) or free text. */
