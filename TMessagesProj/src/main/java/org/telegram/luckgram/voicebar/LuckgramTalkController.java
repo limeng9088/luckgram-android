@@ -317,7 +317,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
                         }
                         final String text = t == null || t.text == null ? "" : t.text.trim();
                         setConverting(false);
-                        if (text.isEmpty() || LuckgramVoiceBarLogic.isSilenceHallucination(text)) {
+                        if (text.isEmpty() || LuckgramVoiceBarLogic.isSilenceHallucination(text, LuckgramVoiceBarLogic.isWeak(peakAmplitude))) {
                             host.showHint(nothingHeard());
                         } else {
                             host.onTranscribed(text);

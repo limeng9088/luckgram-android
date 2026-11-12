@@ -52,4 +52,18 @@ public class LuckgramVoiceBarLogicTest {
         assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("晚上八点见"));
         assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination(null));
     }
+
+    @Test
+    public void repeatedAndFillerSentencesAreNotTranscripts() {
+        assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("That's it. Thank you. God bless. God bless. God bless."));
+        assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("Thank you. Bye.", true));
+        assertTrue(LuckgramVoiceBarLogic.isSilenceHallucination("谢谢。", true));
+        // said out loud, these are real
+        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("Thank you. Bye."));
+        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("谢谢"));
+        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("Thank you, see you at eight.", true));
+        assertFalse(LuckgramVoiceBarLogic.isSilenceHallucination("好的。好的。", true));
+        assertTrue(LuckgramVoiceBarLogic.isWeak(100));
+        assertFalse(LuckgramVoiceBarLogic.isWeak(180));
+    }
 }
