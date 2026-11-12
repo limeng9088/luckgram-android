@@ -7009,6 +7009,30 @@ public class ChatActivityEnterView extends FrameLayout implements
         }
     }
 
+    /** The theme changed while the chat is open (e.g. system dark mode): the bar's own pieces follow. */
+    private void luckgramUpdateBarColors() {
+        final PorterDuffColorFilter iconFilter = new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY);
+        if (attachButton != null) {
+            attachButton.setColorFilter(iconFilter);
+        }
+        if (luckgramVoiceToggle != null) {
+            luckgramVoiceToggle.setColorFilter(iconFilter);
+        }
+        if (luckgramTalkEmoji != null) {
+            luckgramTalkEmoji.setColorFilter(iconFilter);
+        }
+        if (luckgramTalkBar != null) {
+            luckgramTalkBar.setTextColor(getThemedColor(Theme.key_glass_defaultIcon));
+        }
+        if (messageEditText != null) {
+            messageEditText.setHintColor(getThemedColor(Theme.key_chat_messagePanelHint));
+            messageEditText.setHintTextColor(getThemedColor(Theme.key_chat_messagePanelHint));
+        }
+        if (luckgramPlusPanel != null) {
+            luckgramPlusPanel.updateColors();
+        }
+    }
+
     private void createLuckgramPlusPanel() {
         if (luckgramPlusPanel != null) {
             return;
@@ -11477,6 +11501,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     @Override
     public void updateColors() {
         applyTranslateOutColors();
+        luckgramUpdateBarColors();
         if (aiWritingTextButton != null) {
             aiWritingTextButton.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
         }
