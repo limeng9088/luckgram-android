@@ -2702,7 +2702,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
             @Override
             protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
-                if (luckgramTalkMode && child != luckgramTalkBar && child != attachButton && child != attachLayout) {
+                if (luckgramTalkMode && child != luckgramTalkBar && child != luckgramTalkEmoji && child != attachButton && child != attachLayout) {
                     return false; // Luckgram specs#145: only 「按住 说话」 and the 「+」 show in talk mode (the field and its hint too)
                 }
                 if (child != null && child == messageEditText) {
@@ -6736,6 +6736,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     private boolean luckgramTalkMode;
     private ImageView luckgramVoiceToggle;
     private TextView luckgramTalkBar;
+    private ImageView luckgramTalkEmoji;
     private boolean luckgramTranscribing;
     private org.telegram.luckgram.voicebar.LuckgramTalkController luckgramTalkController;
 
@@ -6809,6 +6810,25 @@ public class ChatActivityEnterView extends FrameLayout implements
             return handled || event.getActionMasked() == MotionEvent.ACTION_DOWN;
         });
         messageEditTextContainer.addView(luckgramTalkBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.BOTTOM));
+
+        // the emoji button stays right of the bar; it leads back to the field with the emoji panel
+        luckgramTalkEmoji = new ImageView(context);
+        luckgramTalkEmoji.setScaleType(ImageView.ScaleType.CENTER);
+        luckgramTalkEmoji.setImageResource(R.drawable.input_smile);
+        luckgramTalkEmoji.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+        luckgramTalkEmoji.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_CIRCLE_20DP, dp(18)));
+        luckgramTalkEmoji.setContentDescription(getString(R.string.AccDescrEmojiButton));
+        luckgramTalkEmoji.setVisibility(GONE);
+        luckgramTalkEmoji.setOnClickListener(v -> {
+            if (luckgramTalkController != null && luckgramTalkController.isBusy()) {
+                return;
+            }
+            setLuckgramTalkMode(false, false);
+            if (emojiButton != null) {
+                emojiButton.performClick();
+            }
+        });
+        messageEditTextContainer.addView(luckgramTalkEmoji, LayoutHelper.createFrame(40, DEFAULT_HEIGHT, Gravity.BOTTOM | Gravity.RIGHT));
         luckgramSyncTalkBarMargin();
         luckgramUpdateTalkBarText();
     }
@@ -6820,9 +6840,16 @@ public class ChatActivityEnterView extends FrameLayout implements
         // leave the 「+」 (and whatever else sits right of the field) visible and tappable
         final int right = ((FrameLayout.LayoutParams) messageEditText.getLayoutParams()).rightMargin;
         final FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) luckgramTalkBar.getLayoutParams();
-        if (lp.rightMargin != right) {
-            lp.rightMargin = right;
+        if (lp.rightMargin != right + dp(40)) {
+            lp.rightMargin = right + dp(40);
             luckgramTalkBar.setLayoutParams(lp);
+        }
+        if (luckgramTalkEmoji != null) {
+            final FrameLayout.LayoutParams elp = (FrameLayout.LayoutParams) luckgramTalkEmoji.getLayoutParams();
+            if (elp.rightMargin != right) {
+                elp.rightMargin = right;
+                luckgramTalkEmoji.setLayoutParams(elp);
+            }
         }
     }
 
@@ -6860,6 +6887,9 @@ public class ChatActivityEnterView extends FrameLayout implements
             ? org.telegram.luckgram.LuckgramStrings.get("切换到键盘", "Switch to keyboard")
             : org.telegram.luckgram.LuckgramStrings.get("切换到按住说话", "Switch to hold to talk"));
         luckgramTalkBar.setVisibility(talk ? VISIBLE : GONE);
+        if (luckgramTalkEmoji != null) {
+            luckgramTalkEmoji.setVisibility(talk ? VISIBLE : GONE);
+        }
         luckgramUpdateTalkBarText();
         messageEditTextContainer.invalidate();
         if (talk) {
