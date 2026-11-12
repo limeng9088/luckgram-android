@@ -13113,9 +13113,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (StoryRecorder.isVisible() || (getLastStoryViewer() != null && getLastStoryViewer().isFullyVisible())) {
             animated = false;
         }
-        boolean onlySelfStories = !isArchive() && getStoriesController().hasOnlySelfStories();
+        // Luckgram 12: the hidden chats list has no stories row. The stories cell draws its own
+        // "Telegram" title over the action bar, which hid the 「隐藏的聊天」 title (specs#125 P3).
+        final boolean luckgramHiddenList = initialDialogsType == DIALOGS_TYPE_LUCKGRAM_HIDDEN;
+        boolean onlySelfStories = !isArchive() && !luckgramHiddenList && getStoriesController().hasOnlySelfStories();
         boolean newVisibility;
-        if (communityId != 0) {
+        if (communityId != 0 || luckgramHiddenList) {
             newVisibility = false;
         } else if (isArchive()) {
             newVisibility = !getStoriesController().getHiddenList().isEmpty();
