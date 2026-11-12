@@ -176,7 +176,7 @@ public final class ProPerks {
                 case ProState.PERK_AGENT_MARKET:
                     return t("发现并使用更多 AI 智能体。", "Discover and use more AI agents.");
                 case ProState.PERK_ACCOUNTS:
-                    // 135: Pro has no account limit (free: accounts.max_free, default 5)
+                    // 135: Pro has no account limit (free: accounts.max_free, default 10)
                     return n.accountsMaxFree > 0
                         ? t("同时登录的账号数量不限（免费 " + n.accountsMaxFree + " 个）；账号备份加密存到云端。",
                             "Log in to unlimited accounts at once (free: " + n.accountsMaxFree + "); account backups are encrypted in the cloud.")

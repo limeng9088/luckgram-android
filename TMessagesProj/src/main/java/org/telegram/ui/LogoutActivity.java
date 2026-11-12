@@ -124,7 +124,7 @@ public class LogoutActivity extends BaseFragment {
         listView.setAdapter(listAdapter);
         listView.setOnItemClickListener((view, position, x, y) -> {
             if (position == addAccountRow) {
-                // Luckgram 32/135: free 5 (remote config) / Pro = all slots; free users at the limit get the Pro upgrade
+                // Luckgram 32/135: free 10 (remote config) / Pro = all slots; free users at the limit get the Pro upgrade
                 org.telegram.luckgram.accounts.LuckgramAccounts.addAccount(LogoutActivity.this);
             } else if (position == passcodeRow) {
                 presentFragment(PasscodeActivity.determineOpenFragment());

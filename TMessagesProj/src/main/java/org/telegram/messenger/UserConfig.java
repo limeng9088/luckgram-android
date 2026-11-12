@@ -24,7 +24,7 @@ import java.util.Arrays;
 public class UserConfig extends BaseController {
 
     public static int selectedAccount;
-    // Luckgram 09/32: 50 compiled slots; how many may be used is LuckgramAccounts.maxAccounts() (135: free 5 / Pro = all slots)
+    // Luckgram 09/32: 50 compiled slots; how many may be used is LuckgramAccounts.maxAccounts() (135: free 10 / Pro = all slots)
     public final static int MAX_ACCOUNT_COUNT = org.telegram.luckgram.accounts.LuckgramAccounts.MAX_ACCOUNTS;
     public final static int MAX_ACCOUNT_DEFAULT_COUNT = MAX_ACCOUNT_COUNT;
 

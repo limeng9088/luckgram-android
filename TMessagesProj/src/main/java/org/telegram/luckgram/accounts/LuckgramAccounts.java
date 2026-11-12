@@ -67,7 +67,7 @@ public final class LuckgramAccounts {
         return LuckgramSettings.remoteLong(AccountLimit.KEY_MAX_FREE, AccountLimit.DEFAULT_MAX_FREE);
     }
 
-    /** How many accounts this user may have logged in at once (free 5 via remote config / Pro = all slots). */
+    /** How many accounts this user may have logged in at once (free 10 via remote config / Pro = all slots). */
     public static int maxAccounts() {
         return AccountLimit.limit(isPro(), remoteMaxFree());
     }
