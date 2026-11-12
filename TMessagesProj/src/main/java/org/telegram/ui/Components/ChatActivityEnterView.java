@@ -2708,6 +2708,9 @@ public class ChatActivityEnterView extends FrameLayout implements
                 if (shouldDrawRecordedAudioPanelInParent && child == recordedAudioPanel) {
                     return true;
                 }
+                if (luckgramTalkMode && child != luckgramTalkBar && child != attachButton && child != attachLayout) {
+                    return false; // Luckgram specs#145: only 「按住 说话」 and the 「+」 show in talk mode
+                }
                 return super.drawChild(canvas, child, drawingTime);
             }
         };
@@ -3005,17 +3008,20 @@ public class ChatActivityEnterView extends FrameLayout implements
             @Override
             public void setVisibility(int visibility) {
                 super.setVisibility(visibility);
+                luckgramUpdateVoiceBar(); // Luckgram specs#145: the field takes the mic's slot
             }
 
             @Override
             public boolean onInterceptTouchEvent(MotionEvent ev) {
                 if (isLiveComment) return false;
+                if (luckgramVoiceBarOn) return false; // Luckgram specs#145: no mic button, 「按住 说话」 instead
                 return true;
             }
 
             @Override
             public boolean onTouchEvent(MotionEvent motionEvent) {
                 if (isLiveComment) return false;
+                if (luckgramVoiceBarOn) return false;
                 createRecordCircle();
                 if (motionEvent.getAction() == MotionEvent.ACTION_DOWN) {
                     if (recordCircle.isSendButtonVisible()) {
@@ -3247,6 +3253,9 @@ public class ChatActivityEnterView extends FrameLayout implements
 
             @Override
             protected void dispatchDraw(@NonNull Canvas canvas) {
+                if (luckgramVoiceBarOn) {
+                    return; // Luckgram specs#145
+                }
                 if (!audioVideoButtonContainerForbidden) {
                     float s = 1;
                     if (expandStickersButton != null) {
@@ -3475,6 +3484,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         padding = dp(10f);
         audioVideoSendButton.setPadding(padding, padding, padding, padding);
         audioVideoButtonContainer.addView(audioVideoSendButton, LayoutHelper.createFrame(DEFAULT_HEIGHT, DEFAULT_HEIGHT));
+        AndroidUtilities.runOnUIThread(this::luckgramUpdateVoiceBar); // Luckgram specs#145
 
         cancelBotButton = new ImageView(context);
         cancelBotButton.setVisibility(INVISIBLE);
@@ -6714,12 +6724,247 @@ public class ChatActivityEnterView extends FrameLayout implements
     private Boolean luckgramAttachIsPlus;
 
     /** The paperclip is the 「+」 and the Luckgram buttons live in its panel. Only in a real chat, not while editing. */
+    // ------------------------------------------------------------ Luckgram: WeChat-style voice bar (specs#145)
+
+    /** The toggle left of the field is shown and the mic button is gone. Updated by {@link #luckgramUpdateVoiceBar}. */
+    private boolean luckgramVoiceBarOn;
+    private boolean luckgramVoiceBarApplied;
+    /** The field is swapped for 「按住 说话」. */
+    private boolean luckgramTalkMode;
+    private ImageView luckgramVoiceToggle;
+    private TextView luckgramTalkBar;
+    private boolean luckgramTranscribing;
+    private org.telegram.luckgram.voicebar.LuckgramTalkController luckgramTalkController;
+
+    private boolean isLuckgramVoiceBarActive() {
+        return isLuckgramPlusMode() && audioVideoButtonContainer != null && messageEditTextContainer != null && !isLiveComment
+            && org.telegram.luckgram.voicebar.LuckgramVoiceBar.isEnabled()
+            && !isInScheduleMode() && parentFragment.getChatMode() == 0
+            && !AlertsCreator.needsPaidMessageAlert(currentAccount, dialog_id);
+    }
+
+    private void luckgramUpdateVoiceBar() {
+        if (messageEditTextContainer == null || audioVideoButtonContainer == null) {
+            return;
+        }
+        final boolean active = isLuckgramVoiceBarActive();
+        if (!active && !luckgramVoiceBarApplied) {
+            return;
+        }
+        if (active && luckgramVoiceToggle == null) {
+            createLuckgramVoiceBar();
+        }
+        if (luckgramVoiceBarOn != active) {
+            luckgramVoiceBarOn = active;
+            audioVideoButtonContainer.invalidate();
+            luckgramVoiceToggle.setVisibility(active ? VISIBLE : GONE);
+            if (!active) {
+                setLuckgramTalkMode(false, false);
+            }
+        }
+        // the mic's slot right of the field is only kept while something else (send, …) is in it
+        final boolean micSlot = audioVideoButtonContainer.getVisibility() == VISIBLE;
+        final int left = active ? dp(40) : 0;
+        final int right = active && micSlot ? 0 : dp(DEFAULT_HEIGHT);
+        final FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) messageEditTextContainer.getLayoutParams();
+        if (lp.leftMargin != left || lp.rightMargin != right) {
+            lp.leftMargin = left;
+            lp.rightMargin = right;
+            messageEditTextContainer.setLayoutParams(lp);
+        }
+        luckgramVoiceBarApplied = active;
+    }
+
+    private void createLuckgramVoiceBar() {
+        final Context context = getContext();
+        luckgramVoiceToggle = new ImageView(context);
+        luckgramVoiceToggle.setScaleType(ImageView.ScaleType.CENTER);
+        luckgramVoiceToggle.setImageResource(R.drawable.input_mic);
+        luckgramVoiceToggle.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
+        luckgramVoiceToggle.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_CIRCLE_20DP, dp(18)));
+        luckgramVoiceToggle.setContentDescription(org.telegram.luckgram.LuckgramStrings.get("切换到按住说话", "Switch to hold to talk"));
+        luckgramVoiceToggle.setOnClickListener(v -> {
+            if (luckgramTalkController != null && luckgramTalkController.isBusy()) {
+                return;
+            }
+            setLuckgramTalkMode(!luckgramTalkMode, true);
+        });
+        textFieldContainer.addView(luckgramVoiceToggle, LayoutHelper.createFrame(40, DEFAULT_HEIGHT, Gravity.BOTTOM | Gravity.LEFT));
+
+        luckgramTalkBar = new TextView(context);
+        luckgramTalkBar.setGravity(Gravity.CENTER);
+        luckgramTalkBar.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        luckgramTalkBar.setTypeface(AndroidUtilities.bold());
+        luckgramTalkBar.setTextColor(getThemedColor(Theme.key_glass_defaultIcon));
+        luckgramTalkBar.setVisibility(GONE);
+        luckgramTalkBar.setOnTouchListener((v, event) -> {
+            if (luckgramTranscribing) {
+                return true;
+            }
+            final boolean handled = getLuckgramTalkController().onTouch(v, event);
+            luckgramUpdateTalkBarText();
+            return handled || event.getActionMasked() == MotionEvent.ACTION_DOWN;
+        });
+        messageEditTextContainer.addView(luckgramTalkBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.BOTTOM));
+        luckgramSyncTalkBarMargin();
+        luckgramUpdateTalkBarText();
+    }
+
+    private void luckgramSyncTalkBarMargin() {
+        if (luckgramTalkBar == null || messageEditText == null) {
+            return;
+        }
+        // leave the 「+」 (and whatever else sits right of the field) visible and tappable
+        final int right = ((FrameLayout.LayoutParams) messageEditText.getLayoutParams()).rightMargin;
+        final FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) luckgramTalkBar.getLayoutParams();
+        if (lp.rightMargin != right) {
+            lp.rightMargin = right;
+            luckgramTalkBar.setLayoutParams(lp);
+        }
+    }
+
+    private void luckgramUpdateTalkBarText() {
+        if (luckgramTalkBar == null) {
+            return;
+        }
+        final boolean holding = luckgramTalkController != null && luckgramTalkController.isHolding();
+        final String text;
+        if (luckgramTranscribing) {
+            text = org.telegram.luckgram.LuckgramStrings.get("正在转文字…", "Converting to text…");
+        } else if (holding) {
+            text = org.telegram.luckgram.LuckgramStrings.get("松开 发送", "Release to send");
+        } else {
+            text = org.telegram.luckgram.LuckgramStrings.get("按住 说话", "Hold to talk");
+        }
+        luckgramTalkBar.setText(text);
+        luckgramTalkBar.setAlpha(luckgramTranscribing ? 0.5f : (holding ? 0.6f : 1f));
+        luckgramTalkBar.setContentDescription(text);
+    }
+
+    private void setLuckgramTalkMode(boolean talk, boolean byUser) {
+        if (luckgramVoiceToggle == null || luckgramTalkMode == talk) {
+            return;
+        }
+        if (talk && !luckgramVoiceBarOn) {
+            return;
+        }
+        if (!talk && luckgramTalkController != null) {
+            luckgramTalkController.cancel();
+        }
+        luckgramTalkMode = talk;
+        luckgramVoiceToggle.setImageResource(talk ? R.drawable.input_keyboard : R.drawable.input_mic);
+        luckgramVoiceToggle.setContentDescription(talk
+            ? org.telegram.luckgram.LuckgramStrings.get("切换到键盘", "Switch to keyboard")
+            : org.telegram.luckgram.LuckgramStrings.get("切换到按住说话", "Switch to hold to talk"));
+        luckgramTalkBar.setVisibility(talk ? VISIBLE : GONE);
+        luckgramUpdateTalkBarText();
+        messageEditTextContainer.invalidate();
+        if (talk) {
+            if (isPopupShowing()) {
+                hidePopup(false);
+            }
+            closeKeyboard();
+            if (messageEditText != null) {
+                messageEditText.clearFocus();
+            }
+        } else if (byUser && messageEditText != null) {
+            messageEditText.requestFocus();
+            openKeyboardInternal();
+        }
+    }
+
+    private org.telegram.luckgram.voicebar.LuckgramTalkController getLuckgramTalkController() {
+        if (luckgramTalkController == null) {
+            luckgramTalkController = new org.telegram.luckgram.voicebar.LuckgramTalkController(new org.telegram.luckgram.voicebar.LuckgramTalkController.Host() {
+                @Override
+                public Activity activity() {
+                    return parentActivity;
+                }
+
+                @Override
+                public boolean prepareToRecord() {
+                    if (parentActivity == null || delegate == null || parentFragment == null || !luckgramVoiceBarOn) {
+                        return false;
+                    }
+                    if (Build.VERSION.SDK_INT >= 23 && parentActivity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                        parentActivity.requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 3);
+                        return false;
+                    }
+                    final TLRPC.Chat chat = parentFragment.getCurrentChat();
+                    final TLRPC.UserFull userFull = parentFragment.getCurrentUserInfo();
+                    if (chat != null && !ChatObject.canSendVoice(chat) || userFull != null && userFull.voice_messages_forbidden) {
+                        delegate.needShowMediaBanHint();
+                        return false;
+                    }
+                    return true;
+                }
+
+                @Override
+                public void startRecording(int guid) {
+                    delegate.onPreAudioVideoRecord();
+                    final TL_stories.StoryItem storyItem = delegate.getReplyToStory();
+                    MediaController.getInstance().startRecording(currentAccount, dialog_id, replyingMessageObject, getThreadMessage(), storyItem, guid, true, parentFragment != null ? parentFragment.getMessageChatSendParams() : null, getSendMonoForumPeerId(), getSendMessageSuggestionParams());
+                }
+
+                @Override
+                public void onRecordingChanged(boolean recording) {
+                    if (recording) {
+                        accountInstance.getMessagesController().sendTyping(dialog_id, getThreadMessageId(), 1, 0);
+                    } else {
+                        accountInstance.getMessagesController().sendTyping(dialog_id, getThreadMessageId(), 2, 0);
+                    }
+                    luckgramUpdateTalkBarText();
+                }
+
+                @Override
+                public void onVoiceSent() {
+                    if (delegate != null) {
+                        delegate.onMessageSend(null, true, 0, 0, 0);
+                    }
+                }
+
+                @Override
+                public void onTranscribing(boolean transcribing) {
+                    luckgramTranscribing = transcribing;
+                    luckgramUpdateTalkBarText();
+                }
+
+                @Override
+                public void onTranscribed(String text) {
+                    if (messageEditText == null) {
+                        return;
+                    }
+                    setLuckgramTalkMode(false, false);
+                    final Editable editable = messageEditText.getText();
+                    if (editable == null || editable.length() == 0) {
+                        setFieldText(text);
+                    } else {
+                        final int at = Math.max(0, Math.min(editable.length(), messageEditText.getSelectionEnd()));
+                        editable.insert(at, text);
+                    }
+                    messageEditText.setSelection(messageEditText.length());
+                    messageEditText.requestFocus();
+                    openKeyboardInternal();
+                }
+
+                @Override
+                public void showHint(String text) {
+                    if (parentFragment != null) {
+                        BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.info, text).show();
+                    }
+                }
+            }, currentAccount);
+        }
+        return luckgramTalkController;
+    }
+
     private boolean isLuckgramPlusMode() {
         return parentFragment != null && !isStories && editingMessageObject == null
             && org.telegram.luckgram.compactinput.LuckgramCompactInput.isEnabled();
     }
 
     private void updateLuckgramAttachIcon() {
+        luckgramUpdateVoiceBar();
         if (attachButton == null) {
             return;
         }
@@ -7281,6 +7526,10 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (aiWritingController != null) {
             aiWritingController.destroy();
         }
+        if (luckgramTalkController != null) {
+            luckgramTalkController.destroy();
+            luckgramTalkController = null;
+        }
         if (audioTimelineView != null) {
             audioTimelineView.destroy();
         }
@@ -7463,6 +7712,7 @@ public class ChatActivityEnterView extends FrameLayout implements
     public void setDialogId(long id, int account) {
         dialog_id = id;
         AndroidUtilities.runOnUIThread(this::updateTranslateOutButton); // Luckgram specs#104: this chat's capsule
+        AndroidUtilities.runOnUIThread(this::luckgramUpdateVoiceBar); // Luckgram specs#145
         if (currentAccount != account) {
             notificationsLocker.unlock();
             NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.recordStarted);
@@ -9615,6 +9865,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (oldRightMargin != layoutParams.rightMargin) {
             messageEditText.setLayoutParams(layoutParams);
         }
+        luckgramSyncTalkBarMargin(); // Luckgram specs#145
         if (recordedAudioPanel != null) {
             FrameLayout.LayoutParams layoutParams2 = (FrameLayout.LayoutParams) recordedAudioPanel.getLayoutParams();
             layoutParams2.rightMargin = editingMessageObject == null ? Math.max(0, sendButton.width() - dp(DEFAULT_HEIGHT)) : 0;
@@ -14496,6 +14747,9 @@ public class ChatActivityEnterView extends FrameLayout implements
                 updateSlowModeText();
             }
         } else if (id == NotificationCenter.audioRecordTooShort) {
+            if (args.length > 0 && args[0] instanceof Integer && (Integer) args[0] != recordingGuid) {
+                return; // Luckgram specs#145: a 「按住 说话」 recording, handled by its own controller
+            }
             audioToSend = null;
             videoToSendMessageObject = null;
             updateRecordInterface(RECORD_STATE_CANCEL_BY_TIME, true);
