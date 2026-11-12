@@ -128,7 +128,7 @@ public class LuckgramTalkOverlay extends View {
         final boolean send = !cancel && !text;
 
         // targets for this zone
-        final float pillCy = h - dp(160);
+        final float pillCy = h - dp(168);
         final float pillH = dp(72);
         final float bubbleBottom = Math.min(h * 0.613f, pillCy - pillH / 2f - dp(96));
         final float tLeft, tRight, tTop, tTail;
