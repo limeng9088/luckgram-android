@@ -423,7 +423,7 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
                 items.add(SettingsActivity.AccountCell.Factory.of(i, accountNumbers.get(i)));
             }
             if (true) {
-                // Luckgram 32: free 20 / Pro 50 (remote config)
+                // Luckgram 32/135: free 5 (remote config) / Pro = all slots
                 final int moreAccounts = Math.max(0, org.telegram.luckgram.accounts.LuckgramAccounts.maxAccounts() - UserConfig.getActivatedAccountsCount());
                 items.add(UItem.asShadow(moreAccounts > 0 ? LocaleController.formatPluralStringComma("AddAccountInfo1", moreAccounts) : org.telegram.luckgram.accounts.LuckgramAccounts.limitReachedText()));
             } else {
@@ -456,7 +456,7 @@ public class UserInfoActivity extends UniversalFragment implements NotificationC
     @Override
     protected void onClick(UItem item, View view, int position, float x, float y) {
         if (item.id == BUTTON_ADD_ACCOUNT) {
-            // Luckgram 32: free 20 / Pro 50 (remote config); free users at the limit get the Pro upgrade
+            // Luckgram 32/135: free 5 (remote config) / Pro = all slots; free users at the limit get the Pro upgrade
             org.telegram.luckgram.accounts.LuckgramAccounts.addAccount(this);
         } else if (item.instanceOf(SettingsActivity.AccountCell.Factory.class)) {
             final int account = item.intValue;

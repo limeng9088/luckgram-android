@@ -28,8 +28,9 @@ public final class ProState {
     public static final String PERK_NO_ADS = "no_ads";
 
     /** Defaults when the server sends no {@code limits} (S12 §5). */
-    public static final int ACCOUNTS_MAX_FREE = 20;
-    public static final int ACCOUNTS_MAX_PRO = 50;
+    // 135: free 5, Pro only bound by the compiled slots
+    public static final int ACCOUNTS_MAX_FREE = org.telegram.luckgram.account.AccountLimit.DEFAULT_MAX_FREE;
+    public static final int ACCOUNTS_MAX_PRO = org.telegram.luckgram.account.AccountLimit.SLOT_CAPACITY;
     public static final int SUMMARY_MAX_FREE = 100;
     public static final int SUMMARY_MAX_PRO = 1000;
 

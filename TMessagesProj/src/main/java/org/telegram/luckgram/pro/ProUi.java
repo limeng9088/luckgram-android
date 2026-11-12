@@ -45,7 +45,8 @@ public final class ProUi {
         ProPerks.Numbers n = new ProPerks.Numbers();
         ProState s = LuckgramPro.getInstance().state();
         long now = System.currentTimeMillis();
-        n.accountsMaxPro = (int) LuckgramSettings.remoteLong(ProPerks.CFG_ACCOUNTS_MAX_PRO, ProState.ACCOUNTS_MAX_PRO);
+        n.accountsMaxFree = org.telegram.luckgram.account.AccountLimit.maxFree(
+            LuckgramSettings.remoteLong(ProPerks.CFG_ACCOUNTS_MAX_FREE, org.telegram.luckgram.account.AccountLimit.DEFAULT_MAX_FREE));
         n.chatPro = (int) LuckgramSettings.remoteLong(ProPerks.CFG_CHAT_PRO, 0);
         n.chatFree = (int) LuckgramSettings.remoteLong(ProPerks.CFG_CHAT_FREE, 0);
         n.monthlyCredits = (int) LuckgramSettings.remoteLong(ProPerks.CFG_MONTHLY_CREDITS,

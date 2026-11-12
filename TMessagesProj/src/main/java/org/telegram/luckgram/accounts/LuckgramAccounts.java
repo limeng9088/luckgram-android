@@ -41,7 +41,7 @@ public final class LuckgramAccounts {
 
     /**
      * Account slots compiled into the app (UserConfig.MAX_ACCOUNT_COUNT, tgnet Defines.h). The
-     * number of accounts a user may log in is {@link #maxAccounts()} (32: 20 free / 50 Pro).
+     * number of accounts a user may log in is {@link #maxAccounts()} (135: 5 free / Pro only bound by these slots).
      */
     public static final int MAX_ACCOUNTS = AccountLimit.SLOT_CAPACITY;
     /** The settings account list shows this many accounts before it collapses. */
@@ -67,13 +67,9 @@ public final class LuckgramAccounts {
         return LuckgramSettings.remoteLong(AccountLimit.KEY_MAX_FREE, AccountLimit.DEFAULT_MAX_FREE);
     }
 
-    private static long remoteMaxPro() {
-        return LuckgramSettings.remoteLong(AccountLimit.KEY_MAX_PRO, AccountLimit.DEFAULT_MAX_PRO);
-    }
-
-    /** How many accounts this user may have logged in at once (free 20 / Pro 50, remote config). */
+    /** How many accounts this user may have logged in at once (free 5 via remote config / Pro = all slots). */
     public static int maxAccounts() {
-        return AccountLimit.limit(isPro(), remoteMaxFree(), remoteMaxPro());
+        return AccountLimit.limit(isPro(), remoteMaxFree());
     }
 
     public static boolean canAddAccount() {
@@ -95,12 +91,12 @@ public final class LuckgramAccounts {
 
     public static String limitReachedText() {
         int max = maxAccounts();
-        String text = LuckgramStrings.get("最多可登录 " + max + " 个账号", "You can log in to at most " + max + " accounts");
-        if (AccountLimit.offerUpgrade(isPro(), remoteMaxFree(), remoteMaxPro())) {
-            int pro = AccountLimit.maxPro(remoteMaxFree(), remoteMaxPro());
-            text += LuckgramStrings.get("。升级 Pro 可登录 " + pro + " 个账号", ". Upgrade to Pro to log in to " + pro + " accounts");
+        if (AccountLimit.offerUpgrade(isPro(), remoteMaxFree())) {
+            return LuckgramStrings.get("免费版最多可登录 " + max + " 个账号。升级 Pro 可登录的账号数量不限",
+                    "Free accounts can log in to at most " + max + " accounts. Upgrade to Pro for unlimited accounts");
         }
-        return text;
+        // Pro (or a free limit as high as the slots): only the device's compiled slots are left
+        return LuckgramStrings.get("这台设备最多可登录 " + max + " 个账号", "This device can log in to at most " + max + " accounts");
     }
 
     public static String upgradeText() {
@@ -166,7 +162,7 @@ public final class LuckgramAccounts {
             showLimitReached();
             return;
         }
-        if (!AccountLimit.offerUpgrade(isPro(), remoteMaxFree(), remoteMaxPro())) {
+        if (!AccountLimit.offerUpgrade(isPro(), remoteMaxFree())) {
             showLimitReached();
             return;
         }

@@ -10,36 +10,42 @@ public class AccountLimitTest {
 
     @Test
     public void defaults() {
-        assertEquals(20, AccountLimit.limit(false, 20, 50));
-        assertEquals(50, AccountLimit.limit(true, 20, 50));
+        assertEquals(5, AccountLimit.DEFAULT_MAX_FREE);
+        assertEquals(5, AccountLimit.limit(false, AccountLimit.DEFAULT_MAX_FREE));
+        assertEquals(AccountLimit.SLOT_CAPACITY, AccountLimit.limit(true, AccountLimit.DEFAULT_MAX_FREE));
     }
 
     @Test
-    public void freeNeverBelowTwentyNorAboveSlots() {
-        assertEquals(20, AccountLimit.maxFree(5));
-        assertEquals(30, AccountLimit.maxFree(30));
+    public void freeFollowsRemoteWithinSlots() {
+        assertEquals(1, AccountLimit.maxFree(0));
+        assertEquals(1, AccountLimit.maxFree(-3));
+        assertEquals(3, AccountLimit.maxFree(3));
+        assertEquals(20, AccountLimit.maxFree(20));
         assertEquals(50, AccountLimit.maxFree(500));
     }
 
     @Test
-    public void proNeverBelowFree() {
-        assertEquals(22, AccountLimit.maxPro(20, 22));
-        assertEquals(30, AccountLimit.maxPro(30, 22));
-        assertEquals(50, AccountLimit.maxPro(20, 999));
+    public void proOnlyBoundBySlots() {
+        assertEquals(AccountLimit.SLOT_CAPACITY, AccountLimit.maxPro());
+        assertEquals(AccountLimit.SLOT_CAPACITY, AccountLimit.limit(true, 3));
+        assertEquals(AccountLimit.SLOT_CAPACITY, AccountLimit.limit(true, 500));
     }
 
     @Test
-    public void expiredProKeepsAccountsButCannotAdd() {
-        int free = AccountLimit.limit(false, 20, 50);
-        assertFalse(AccountLimit.canAdd(35, free));
-        assertFalse(AccountLimit.canAdd(20, free));
-        assertTrue(AccountLimit.canAdd(19, free));
+    public void freeAboveLimitKeepsAccountsButCannotAdd() {
+        int free = AccountLimit.limit(false, 5);
+        assertFalse(AccountLimit.canAdd(12, free));
+        assertFalse(AccountLimit.canAdd(5, free));
+        assertTrue(AccountLimit.canAdd(4, free));
+        int pro = AccountLimit.limit(true, 5);
+        assertTrue(AccountLimit.canAdd(12, pro));
+        assertFalse(AccountLimit.canAdd(AccountLimit.SLOT_CAPACITY, pro));
     }
 
     @Test
     public void upgradeOfferedOnlyWhenProRaisesTheLimit() {
-        assertTrue(AccountLimit.offerUpgrade(false, 20, 50));
-        assertFalse(AccountLimit.offerUpgrade(true, 20, 50));
-        assertFalse(AccountLimit.offerUpgrade(false, 50, 50));
+        assertTrue(AccountLimit.offerUpgrade(false, 5));
+        assertFalse(AccountLimit.offerUpgrade(true, 5));
+        assertFalse(AccountLimit.offerUpgrade(false, AccountLimit.SLOT_CAPACITY));
     }
 }
