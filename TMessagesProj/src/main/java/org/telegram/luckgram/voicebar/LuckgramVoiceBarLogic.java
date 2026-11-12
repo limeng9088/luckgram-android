@@ -32,15 +32,15 @@ public final class LuckgramVoiceBarLogic {
     }
 
     /** Loudest {@code recordProgressChanged} amplitude (16-bit RMS) below which nothing was said at all. */
-    public static final double SILENCE_AMPLITUDE = 30;
+    public static final double SILENCE_AMPLITUDE = 60;
 
     public static boolean isSilent(double peakAmplitude) {
         return peakAmplitude < SILENCE_AMPLITUDE;
     }
 
-    /** What speech-to-text models make up for recordings with no speech in them. Whole-text matches only. */
+    /** What speech-to-text models make up for recordings with no speech in them. */
     private static final String[] SILENCE_PHRASES = {
-        "thankyousomuchforwatching", "thankyouforwatching", "thanksforwatching", "subtitlesbytheamaraorgcommunity",
+        "thankyousomuchforwatching", "thankyouforwatching", "thanksforwatching", "メッセージなし", "subtitlesbytheamaraorgcommunity",
         "ご視聴ありがとうございました", "私のビデオを見てくれてありがとう", "谢谢观看", "謝謝觀看", "字幕由amaraorg社区提供",
     };
 
@@ -57,8 +57,12 @@ public final class LuckgramVoiceBarLogic {
             }
         }
         final String normalized = b.toString();
+        if (normalized.codePointCount(0, normalized.length()) > 40) {
+            return false;
+        }
+        // short text built around a stock phrase (「メッセージなし。ご視聴ありがとうございました。」) counts too
         for (String phrase : SILENCE_PHRASES) {
-            if (phrase.equals(normalized)) {
+            if (normalized.contains(phrase)) {
                 return true;
             }
         }
