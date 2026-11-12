@@ -60,6 +60,7 @@ jobs:
             translateout/TranslateFallbackLogic.java \
             translateout/TranslateCache.java \
             translatein/TranslateInLogic.java \
+            voicebar/LuckgramVoiceBarLogic.java \
             imagetranslate/ImageTranslateLogic.java \
             scan/ScanLogic.java \
             profileinfo/ProfileInfoLogic.java \
