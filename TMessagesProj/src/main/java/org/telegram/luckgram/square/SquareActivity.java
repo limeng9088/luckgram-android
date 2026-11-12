@@ -8,6 +8,7 @@ import org.telegram.luckgram.LuckgramAI;
 import org.telegram.luckgram.LuckgramAIError;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.R;
+import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -54,6 +55,24 @@ public class SquareActivity extends UniversalFragment {
     private SquareLogic.Feed feed = feedFor(SquareLogic.TAB_LATEST);
     private final HashMap<SquareLogic.Feed, LuckgramAI.Request> refreshRequests = new HashMap<>();
     private final HashMap<SquareLogic.Feed, LuckgramAI.Request> moreRequests = new HashMap<>();
+    /** Gives up on a page that does not come ({@link SquareLogic.Feed#REQUEST_TIMEOUT_MS}); one per running request. */
+    private final HashMap<LuckgramAI.Request, Runnable> timeouts = new HashMap<>();
+
+    private void startTimeout(LuckgramAI.Request request, Runnable onTimeout) {
+        if (request == null) return;
+        Runnable r = () -> {
+            if (timeouts.remove(request) == null || request.isCancelled()) return;
+            request.cancel();
+            onTimeout.run();
+        };
+        timeouts.put(request, r);
+        AndroidUtilities.runOnUIThread(r, SquareLogic.Feed.REQUEST_TIMEOUT_MS);
+    }
+
+    private void stopTimeout(LuckgramAI.Request request) {
+        Runnable r = request == null ? null : timeouts.remove(request);
+        if (r != null) AndroidUtilities.cancelRunOnUIThread(r);
+    }
     private SquareTabsView tabs;
     private SquareRefreshView refreshView;
     private SquareSkeletonView skeleton;
@@ -214,12 +233,18 @@ public class SquareActivity extends UniversalFragment {
         cards.clear();
         View v = super.createView(context);
         actionBar.setAllowOverlayTitle(false); // keep our title; the chat list shows the connection state
+        // The tab row stays at the top while the list scrolls under it, so any tab is one tap away
+        // from anywhere in the list (and each tab's position is worth keeping).
+        android.widget.FrameLayout root = (android.widget.FrameLayout) v;
+        ((android.widget.FrameLayout.LayoutParams) listView.getLayoutParams()).topMargin = AndroidUtilities.dp(44);
+        root.addView(tabsView(), org.telegram.ui.Components.LayoutHelper.createFrame(org.telegram.ui.Components.LayoutHelper.MATCH_PARENT, 44, android.view.Gravity.TOP));
         // Pull down at the top of the list to refresh (spec 26 item 2); the menu button does the same.
         refreshView = new SquareRefreshView(context, this::refreshByUser, getResourceProvider());
-        // below the tab row, which is on screen whenever the list is at the top
-        ((android.widget.FrameLayout) v).addView(refreshView, org.telegram.ui.Components.LayoutHelper.createFrame(
+        // below the tab row
+        root.addView(refreshView, org.telegram.ui.Components.LayoutHelper.createFrame(
             org.telegram.ui.Components.LayoutHelper.MATCH_PARENT, SquareRefreshView.heightDp(), android.view.Gravity.TOP, 0, 44, 0, 0));
         refreshView.attach(listView);
+        installSideSwipeGuard();
         // back where the reader was (the list of the last visit)
         if (feed.scrollIndex > 0 || feed.scrollOffset != 0) listView.layoutManager.scrollToPositionWithOffset(feed.scrollIndex, feed.scrollOffset);
         if (feed.refreshing && !feed.posts.isEmpty()) refreshView.showRefreshing(tx.refreshing());
@@ -300,6 +325,31 @@ public class SquareActivity extends UniversalFragment {
         SquareEventReporter.add(tracker(feed).hideAll(System.currentTimeMillis()));
         SquareEventReporter.flush(true);
         saveScroll();
+        feed.markSeen(System.currentTimeMillis());
+    }
+
+    /**
+     * A sideways drag on a post is not a tap: without this the card under the finger opened its
+     * post when the finger was lifted (a drag to the right is the system's "back" gesture already).
+     */
+    private void installSideSwipeGuard() {
+        final int slop = android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop();
+        listView.addOnItemTouchListener(new androidx.recyclerview.widget.RecyclerView.SimpleOnItemTouchListener() {
+            private float downX, downY;
+
+            @Override
+            public boolean onInterceptTouchEvent(androidx.recyclerview.widget.RecyclerView rv, android.view.MotionEvent e) {
+                if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+                    downX = e.getX();
+                    downY = e.getY();
+                } else if (e.getActionMasked() == android.view.MotionEvent.ACTION_MOVE) {
+                    float dx = Math.abs(e.getX() - downX), dy = Math.abs(e.getY() - downY);
+                    // taking the gesture sends "cancel" to the card; the rest of it does nothing
+                    return dx > slop && dx > dy * 1.5f;
+                }
+                return false;
+            }
+        });
     }
 
     /** Remembers where the reader is in the open tab. */
@@ -317,6 +367,8 @@ public class SquareActivity extends UniversalFragment {
         for (LuckgramAI.Request r : moreRequests.values()) r.cancel();
         refreshRequests.clear();
         moreRequests.clear();
+        for (Runnable r : timeouts.values()) AndroidUtilities.cancelRunOnUIThread(r);
+        timeouts.clear();
         for (SquareLogic.Feed f : feeds.values()) f.cancelLoading();
         AndroidUtilities.cancelRunOnUIThread(checkVisible);
         super.onFragmentDestroy();
@@ -343,6 +395,7 @@ public class SquareActivity extends UniversalFragment {
         // leave the old tab as it is, position included
         SquareEventReporter.add(tracker(feed).hideAll(System.currentTimeMillis()));
         saveScroll();
+        feed.markSeen(System.currentTimeMillis());
         feed = feedFor(next);
         update(false);
         if (listView != null) listView.layoutManager.scrollToPositionWithOffset(feed.scrollIndex, feed.scrollOffset);
@@ -373,6 +426,7 @@ public class SquareActivity extends UniversalFragment {
         if (!f.beginRefresh()) return;
         LuckgramAI.Request more = moreRequests.remove(f);
         if (more != null) {
+            stopTimeout(more);
             more.cancel();
             f.loadingMore = false;
         }
@@ -385,11 +439,30 @@ public class SquareActivity extends UniversalFragment {
             }
             update();
         }
+        // The refresh failed (an error, no network, or no answer in time): the list is still
+        // there; say why it did not update.
+        final Utilities.Callback<LuckgramAIError> failed = error -> {
+            refreshRequests.remove(f);
+            f.failRefresh();
+            if (f != feed) return;
+            update();
+            if (refreshView != null) refreshView.finish(null);
+            if (error != null) SquareUi.showError(SquareActivity.this, error);
+            else SquareUi.bulletin(SquareActivity.this).createErrorBulletin(tx.loadFailed()).show();
+        };
+        if (!org.telegram.messenger.ApplicationLoader.isNetworkOnline()) {
+            // no connection at all: say so now instead of spinning; a moment later so the indicator is seen
+            AndroidUtilities.runOnUIThread(() -> {
+                if (f.refreshing && !refreshRequests.containsKey(f)) failed.run(null);
+            }, 600);
+            return;
+        }
         final LuckgramAI.Request[] self = new LuckgramAI.Request[1];
         self[0] = LuckgramAI.getInstance().requestJson("GET", SquareLogic.feedPath(f.tab, null), null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 if (self[0] != null && self[0].isCancelled()) return;
+                stopTimeout(self[0]);
                 refreshRequests.remove(f);
                 // a new load: impressions count again (contract: once per load)
                 SquareEventReporter.add(tracker(f).hideAll(System.currentTimeMillis()));
@@ -408,16 +481,14 @@ public class SquareActivity extends UniversalFragment {
             @Override
             public void onError(LuckgramAIError error) {
                 if (self[0] != null && self[0].isCancelled()) return;
-                refreshRequests.remove(f);
-                f.failRefresh();
-                if (f != feed) return;
-                update();
-                if (refreshView != null) refreshView.finish(null);
-                // the list (if any) is still there; say why it did not update
-                if (hadList || byUser || !f.loadedOnce) SquareUi.showError(SquareActivity.this, error);
+                stopTimeout(self[0]);
+                failed.run(error);
             }
         });
-        if (f.refreshing) refreshRequests.put(f, self[0]);
+        if (f.refreshing) {
+            refreshRequests.put(f, self[0]);
+            startTimeout(self[0], () -> failed.run(null));
+        }
     }
 
     /** The next page, requested a few posts before the end so the reader rarely sees it load. */
@@ -425,8 +496,8 @@ public class SquareActivity extends UniversalFragment {
         if (listView == null) return;
         int last = listView.layoutManager.findLastVisibleItemPosition();
         if (last < 0) return;
-        // rows: tabs, then (post, divider) pairs, then the footer
-        if (feed.shouldLoadMore((last - 1) / 2)) loadMore(feed);
+        // rows: (post, divider) pairs, then the footer
+        if (feed.shouldLoadMore(last / 2)) loadMore(feed);
     }
 
     private void loadMore(final SquareLogic.Feed f) {
@@ -438,6 +509,7 @@ public class SquareActivity extends UniversalFragment {
             @Override
             public void onResult(JSONObject result) {
                 if (self[0] != null && self[0].isCancelled()) return;
+                stopTimeout(self[0]);
                 moreRequests.remove(f);
                 if (f.applyMore(SquareLogic.parsePosts(result), generation) && f == feed) update();
             }
@@ -445,20 +517,27 @@ public class SquareActivity extends UniversalFragment {
             @Override
             public void onError(LuckgramAIError error) {
                 if (self[0] != null && self[0].isCancelled()) return;
+                stopTimeout(self[0]);
                 moreRequests.remove(f);
                 f.failMore(generation);
                 // quiet: the footer turns into "tap to retry"
                 if (f == feed) update();
             }
         });
-        if (f.loadingMore) moreRequests.put(f, self[0]);
+        if (f.loadingMore) {
+            moreRequests.put(f, self[0]);
+            startTimeout(self[0], () -> {
+                moreRequests.remove(f);
+                f.failMore(generation);
+                if (f == feed) update();
+            });
+        }
     }
 
     // ---------------------------------------------------------------- rows
 
     @Override
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        items.add(UItem.asCustom(ID_TABS, tabsView()));
         for (int i = 0; i < feed.posts.size(); i++) {
             Card c = cardFor(feed.posts.get(i));
             items.add(UItem.asCustom(c.itemId, c.view));

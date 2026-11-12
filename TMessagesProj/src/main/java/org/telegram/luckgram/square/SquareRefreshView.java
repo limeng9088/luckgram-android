@@ -41,7 +41,7 @@ public class SquareRefreshView extends FrameLayout {
     private static final int SIZE_DP = 40;
     /** Resting place of the indicator while refreshing, from the top of this view. */
     private static final int REST_DP = 14;
-    private static final long PILL_MS = 1600;
+    private static final long PILL_MS = 1300;
 
     private final Indicator indicator;
     private final TextView pill;
@@ -69,16 +69,16 @@ public class SquareRefreshView extends FrameLayout {
         addView(indicator, LayoutHelper.createFrame(SIZE_DP, SIZE_DP, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
 
         pill = new TextView(context);
-        pill.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+        pill.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
         pill.setTypeface(AndroidUtilities.bold());
         pill.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText, resourcesProvider));
         pill.setSingleLine(true);
         pill.setGravity(Gravity.CENTER);
-        pill.setPadding(dp(14), dp(7), dp(14), dp(7));
+        pill.setPadding(dp(12), dp(5), dp(12), dp(5));
         pill.setBackground(Theme.createRoundRectDrawable(dp(16), Theme.getColor(Theme.key_featuredStickers_addButton, resourcesProvider)));
         pill.setElevation(dp(2));
         pill.setVisibility(INVISIBLE);
-        addView(pill, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 16, 10, 16, 0));
+        addView(pill, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 16, 6, 16, 0));
     }
 
     /** Height this view needs: room for the indicator at rest, the pill and their shadows. */

@@ -325,6 +325,8 @@ public final class SquareLogic {
         public static final long STALE_MS = 5 * 60_000L;
         /** The next page is requested when this many posts are left below the last visible one. */
         public static final int PREFETCH = 4;
+        /** A page that has not come after this long counts as failed (the list stays, the reader is told). */
+        public static final long REQUEST_TIMEOUT_MS = 15_000L;
 
         public static final int FOOTER_SKELETON = 0;
         public static final int FOOTER_FIRST_ERROR = 1;
@@ -338,6 +340,8 @@ public final class SquareLogic {
         public String nextCursor;
         public boolean loadedOnce;
         public long loadedAtMs;
+        /** When the reader last had this tab on screen ({@link #markSeen}). */
+        public long seenAtMs;
         public boolean refreshing;
         public boolean refreshFailed;
         public boolean loadingMore;
@@ -446,8 +450,18 @@ public final class SquareLogic {
             moreFailed = true;
         }
 
+        /** The reader leaves the tab (another tab, another page, the app in the background). */
+        public void markSeen(long now) {
+            seenAtMs = now;
+        }
+
+        /**
+         * Whether to refresh when the tab is shown again: only when it was neither loaded nor
+         * looked at for {@link #STALE_MS}. Someone who steps out for a moment comes back to the
+         * same posts at the same place, however long they had been reading before.
+         */
         public boolean isStale(long now) {
-            return !loadedOnce || now - loadedAtMs >= STALE_MS;
+            return !loadedOnce || now - Math.max(loadedAtMs, seenAtMs) >= STALE_MS;
         }
 
         /**

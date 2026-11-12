@@ -333,6 +333,12 @@ public class SquareLogicTest {
         assertTrue(f.isStale(1000 + SquareLogic.Feed.STALE_MS));
         f.beginRefresh();
         assertEquals(SquareLogic.Feed.FOOTER_SKELETON, f.footer()); // empty and loading again
+
+        // read for a long time, stepped out for a moment: not refreshed under the reader
+        long left = 1000 + 3 * SquareLogic.Feed.STALE_MS;
+        f.markSeen(left);
+        assertFalse(f.isStale(left + 60_000));
+        assertTrue(f.isStale(left + SquareLogic.Feed.STALE_MS));
     }
 
     @Test
