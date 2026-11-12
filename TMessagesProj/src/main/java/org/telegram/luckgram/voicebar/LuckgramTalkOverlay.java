@@ -38,7 +38,7 @@ public class LuckgramTalkOverlay extends View {
     private final Path path = new Path();
 
     private final float[] levels = new float[BARS];
-    private int zone = LuckgramVoiceBar.ZONE_SEND;
+    private int zone = LuckgramVoiceBarLogic.ZONE_SEND;
     private long startedAt;
     private float appear;
     private long lastFrame;
@@ -92,8 +92,8 @@ public class LuckgramTalkOverlay extends View {
         final float dt = lastFrame == 0 ? 0.016f : Math.min(0.05f, (now - lastFrame) / 1000f);
         lastFrame = now;
         appear = Math.min(1f, appear + dt / 0.18f);
-        cancelScale = approach(cancelScale, zone == LuckgramVoiceBar.ZONE_CANCEL ? 1.25f : 1f, dt);
-        textScale = approach(textScale, zone == LuckgramVoiceBar.ZONE_TEXT ? 1.25f : 1f, dt);
+        cancelScale = approach(cancelScale, zone == LuckgramVoiceBarLogic.ZONE_CANCEL ? 1.25f : 1f, dt);
+        textScale = approach(textScale, zone == LuckgramVoiceBarLogic.ZONE_TEXT ? 1.25f : 1f, dt);
 
         final int w = getWidth(), h = getHeight();
         dimPaint.setAlpha((int) (0xB3 * appear));
@@ -103,16 +103,16 @@ public class LuckgramTalkOverlay extends View {
         final float arcTop = h - arcHeight();
 
         // bubble with the live waveform
-        final float bubbleW = zone == LuckgramVoiceBar.ZONE_SEND ? dp(180) : dp(110);
+        final float bubbleW = zone == LuckgramVoiceBarLogic.ZONE_SEND ? dp(180) : dp(110);
         final float bubbleH = dp(68);
         float bubbleCx = w / 2f;
-        if (zone == LuckgramVoiceBar.ZONE_CANCEL) {
+        if (zone == LuckgramVoiceBarLogic.ZONE_CANCEL) {
             bubbleCx = w * 0.28f;
-        } else if (zone == LuckgramVoiceBar.ZONE_TEXT) {
+        } else if (zone == LuckgramVoiceBarLogic.ZONE_TEXT) {
             bubbleCx = w * 0.72f;
         }
         final float bubbleCy = arcTop - dp(190);
-        bubblePaint.setColor(zone == LuckgramVoiceBar.ZONE_CANCEL ? COLOR_CANCEL : COLOR_BUBBLE);
+        bubblePaint.setColor(zone == LuckgramVoiceBarLogic.ZONE_CANCEL ? COLOR_CANCEL : COLOR_BUBBLE);
         bubblePaint.setAlpha(alpha);
         rect.set(bubbleCx - bubbleW / 2f, bubbleCy - bubbleH / 2f, bubbleCx + bubbleW / 2f, bubbleCy + bubbleH / 2f);
         canvas.drawRoundRect(rect, dp(14), dp(14), bubblePaint);
@@ -123,7 +123,7 @@ public class LuckgramTalkOverlay extends View {
         path.close();
         canvas.drawPath(path, bubblePaint);
 
-        barPaint.setColor(zone == LuckgramVoiceBar.ZONE_CANCEL ? 0xFFFFFFFF : 0xE6000000);
+        barPaint.setColor(zone == LuckgramVoiceBarLogic.ZONE_CANCEL ? 0xFFFFFFFF : 0xE6000000);
         barPaint.setAlpha((int) (alpha * 0.9f));
         final float barW = dp(2.5f), gap = dp(2.5f);
         final int shown = Math.min(BARS, (int) ((bubbleW - dp(28)) / (barW + gap)));
@@ -135,19 +135,19 @@ public class LuckgramTalkOverlay extends View {
             canvas.drawRoundRect(rect, barW / 2f, barW / 2f, barPaint);
             x += barW + gap;
         }
-        if (zone == LuckgramVoiceBar.ZONE_SEND && startedAt != 0) {
-            canvas.drawText(LuckgramVoiceBar.formatDuration(now - startedAt), bubbleCx, bubbleCy + bubbleH / 2f + dp(30), whiteTimer(alpha));
+        if (zone == LuckgramVoiceBarLogic.ZONE_SEND && startedAt != 0) {
+            canvas.drawText(LuckgramVoiceBarLogic.formatDuration(now - startedAt), bubbleCx, bubbleCy + bubbleH / 2f + dp(30), whiteTimer(alpha));
         }
 
         // the two targets
         final float targetY = arcTop - dp(70);
-        drawTarget(canvas, w * 0.22f, targetY, cancelScale, zone == LuckgramVoiceBar.ZONE_CANCEL, COLOR_CANCEL, "✕",
+        drawTarget(canvas, w * 0.22f, targetY, cancelScale, zone == LuckgramVoiceBarLogic.ZONE_CANCEL, COLOR_CANCEL, "✕",
             LuckgramStrings.get("取消", "Cancel"), alpha, true);
-        drawTarget(canvas, w * 0.78f, targetY, textScale, zone == LuckgramVoiceBar.ZONE_TEXT, COLOR_TEXT_ZONE, LuckgramStrings.get("文", "Aa"),
+        drawTarget(canvas, w * 0.78f, targetY, textScale, zone == LuckgramVoiceBarLogic.ZONE_TEXT, COLOR_TEXT_ZONE, LuckgramStrings.get("文", "Aa"),
             LuckgramStrings.get("转文字", "To text"), alpha, false);
 
         // release area
-        final boolean send = zone == LuckgramVoiceBar.ZONE_SEND;
+        final boolean send = zone == LuckgramVoiceBarLogic.ZONE_SEND;
         arcPaint.setColor(send ? 0xFFE6E6E6 : 0xFF4C4C4C);
         arcPaint.setAlpha(alpha);
         path.rewind();
@@ -163,8 +163,8 @@ public class LuckgramTalkOverlay extends View {
             canvas.drawText(LuckgramStrings.get("松开 发送", "Release to send"), w / 2f, arcTop - dp(14), labelPaint);
         }
 
-        if (appear < 1f || Math.abs(cancelScale - (zone == LuckgramVoiceBar.ZONE_CANCEL ? 1.25f : 1f)) > 0.005f
-                || Math.abs(textScale - (zone == LuckgramVoiceBar.ZONE_TEXT ? 1.25f : 1f)) > 0.005f || (send && startedAt != 0)) {
+        if (appear < 1f || Math.abs(cancelScale - (zone == LuckgramVoiceBarLogic.ZONE_CANCEL ? 1.25f : 1f)) > 0.005f
+                || Math.abs(textScale - (zone == LuckgramVoiceBarLogic.ZONE_TEXT ? 1.25f : 1f)) > 0.005f || (send && startedAt != 0)) {
             postInvalidateOnAnimation();
         }
     }

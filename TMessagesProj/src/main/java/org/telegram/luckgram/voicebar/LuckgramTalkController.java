@@ -109,7 +109,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 if (holding) {
-                    finish(LuckgramVoiceBar.ZONE_CANCEL);
+                    finish(LuckgramVoiceBarLogic.ZONE_CANCEL);
                 }
                 return true;
         }
@@ -118,11 +118,11 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
 
     private int zoneFor(MotionEvent event) {
         if (overlay == null || overlay.getWidth() == 0) {
-            return LuckgramVoiceBar.ZONE_SEND;
+            return LuckgramVoiceBarLogic.ZONE_SEND;
         }
         final int[] loc = new int[2];
         overlay.getLocationOnScreen(loc);
-        return LuckgramVoiceBar.zoneFor(event.getRawX() - loc[0], event.getRawY() - loc[1], overlay.getWidth(), overlay.actionLineY());
+        return LuckgramVoiceBarLogic.zoneFor(event.getRawX() - loc[0], event.getRawY() - loc[1], overlay.getWidth(), overlay.actionLineY());
     }
 
     private void setZone(View bar, int newZone) {
@@ -145,7 +145,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
         }
         holding = true;
         started = false;
-        zone = LuckgramVoiceBar.ZONE_SEND;
+        zone = LuckgramVoiceBarLogic.ZONE_SEND;
         downTime = SystemClock.elapsedRealtime();
         if (bar.getParent() != null) {
             bar.getParent().requestDisallowInterceptTouchEvent(true);
@@ -164,7 +164,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
         holding = false;
         removeOverlay();
         host.onRecordingChanged(false);
-        if (how == LuckgramVoiceBar.ZONE_CANCEL) {
+        if (how == LuckgramVoiceBarLogic.ZONE_CANCEL) {
             MediaController.getInstance().stopRecording(0, false, 0, false, 0);
             return;
         }
@@ -174,7 +174,7 @@ public class LuckgramTalkController implements NotificationCenter.NotificationCe
             host.showHint(tooShort());
             return;
         }
-        if (how == LuckgramVoiceBar.ZONE_TEXT) {
+        if (how == LuckgramVoiceBarLogic.ZONE_TEXT) {
             awaitingText = true;
             host.onTranscribing(true);
             MediaController.getInstance().stopRecording(2, false, 0, false, 0);
