@@ -33,14 +33,29 @@ public class UpdateLogicTest {
     }
 
     @Test
-    public void checkAtMostOncePerDay() {
+    public void checkAtMostOncePerHour() {
         long now = 1_000_000_000_000L;
         assertTrue(UpdateLogic.shouldCheck(now, 0, 0));
-        assertFalse(UpdateLogic.shouldCheck(now, now - 23 * H, 0));
-        assertTrue(UpdateLogic.shouldCheck(now, now - 24 * H, 0));
+        assertFalse(UpdateLogic.shouldCheck(now, now - 59 * 60_000L, 0));
+        assertTrue(UpdateLogic.shouldCheck(now, now - H, 0));
         assertTrue(UpdateLogic.shouldCheck(now, now + H, 0)); // clock went back
         assertFalse(UpdateLogic.shouldCheck(now, 0, now - H / 2)); // recent failure
         assertTrue(UpdateLogic.shouldCheck(now, 0, now - H));
+    }
+
+    @Test
+    public void checkAgainAfterTheInstalledBuildChanged() {
+        long now = 1_000_000_000_000L;
+        String b359 = UpdateLogic.appId("13.0.3", 359);
+        assertEquals("13.0.3+359", b359);
+        // the device found 345 at its last check, then 359 was installed: ask again now, not in an hour
+        assertTrue(UpdateLogic.shouldCheck(now, now - 60_000L, 0, UpdateLogic.appId("13.0.3", 345), b359));
+        assertFalse(UpdateLogic.shouldCheck(now, now - 60_000L, 0, b359, b359));
+        // first run after upgrading from a version that did not store it: check once
+        assertTrue(UpdateLogic.shouldCheck(now, now - 60_000L, 0, "", b359));
+        // never checked: the usual rules
+        assertTrue(UpdateLogic.shouldCheck(now, 0, 0, "", b359));
+        assertFalse(UpdateLogic.shouldCheck(now, 0, now - 60_000L, "", b359));
     }
 
     @Test

@@ -95,4 +95,30 @@ public class UpdateDownloadLogicTest {
         // a bad sha256 is dropped rather than failing every download
         assertEquals("", UpdateLogic.parse(new JSONObject("{\"sha256\":\"abc\"}")).sha256);
     }
+
+    @Test
+    public void textsCarryBuild() {
+        UpdateDownloadLogic.Texts zh = new UpdateDownloadLogic.Texts(true);
+        UpdateDownloadLogic.Texts en = new UpdateDownloadLogic.Texts(false);
+        // same version name as installed, only the build moved: the build must be visible
+        assertEquals("13.0.3（379）", zh.label("13.0.3", 379));
+        assertEquals("13.0.3 (379)", en.label("13.0.3", 379));
+        assertEquals("13.0.3", zh.label("13.0.3", 0));
+        assertEquals("有新版本 13.0.3（379） · 更新", zh.availableRow("13.0.3", 379));
+        assertEquals("New version 13.0.3 (379) · Update", en.availableRow("13.0.3", 379));
+        assertEquals("新版本 13.0.3（379） 已下载 · 安装", zh.readyRow("13.0.3", 379));
+        assertEquals("New version 13.0.3 (379) downloaded · Install", en.readyRow("13.0.3", 379));
+        assertEquals("正在下载新版本 13.0.3（379） · 45%", zh.downloadingRow("13.0.3", 379, 45));
+        assertEquals("正在下载新版本 13.0.3（379）", zh.downloadingRow("13.0.3", 379, -1));
+        assertEquals("正在下载 13.0.3（379）", zh.downloadingTitle("13.0.3", 379));
+        assertEquals("新版本 13.0.3（379）", zh.notesTitle("13.0.3", 379));
+        assertEquals("Version 13.0.3 (379)", en.notesTitle("13.0.3", 379));
+        assertEquals("当前版本 13.0.3（359） 已停止支持，请更新到 13.0.3（379） 后继续使用。",
+                zh.forceText("13.0.3", 359, "13.0.3", 379));
+        assertEquals("Version 13.0.3 (359) is no longer supported. Update to 13.1.0 (400) to continue.",
+                en.forceText("13.0.3", 359, "13.1.0", 400));
+        // unknown builds (local build, server without build): version only, as before
+        assertEquals("有新版本 13.1.0 · 更新", zh.availableRow("13.1.0", 0));
+        assertEquals("当前版本 13.0.3 已停止支持，请更新到 13.1.0 后继续使用。", zh.forceText("13.0.3", 0, "13.1.0", 0));
+    }
 }

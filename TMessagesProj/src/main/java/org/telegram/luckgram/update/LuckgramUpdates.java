@@ -30,8 +30,9 @@ import org.telegram.ui.ActionBar.Theme;
 /**
  * Update check (task S5, luckgram-specs#30, specs/server/S5-version.md item 3):
  * <ul>
- *   <li>{@code GET /v1/version} when the app comes to the foreground, at most once a day (the
- *       last successful check is kept on the device, so restarts do not count);</li>
+ *   <li>{@code GET /v1/version} when the app comes to the foreground, at most once an hour (the
+ *       last successful check is kept on the device, so restarts do not count) and right away
+ *       after the installed version or build changed;</li>
  *   <li>a newer version shows "有新版本 x.y.z · 更新" on top of Settings
  *       ({@code SettingsActivity}), which opens the download link;</li>
  *   <li>below the minimum version a full-screen page with only the Update button covers the app
@@ -43,6 +44,8 @@ public final class LuckgramUpdates {
 
     private static final String KEY_INFO = "update_info";
     private static final String KEY_LAST_CHECK = "update_last_check";
+    /** UpdateLogic.appId of the app that made the last successful check. */
+    private static final String KEY_LAST_CHECK_APP = "update_last_check_app";
 
     private static long lastFailureMs;
     private static boolean inFlight;
@@ -64,7 +67,9 @@ public final class LuckgramUpdates {
         LuckgramUpdateDownloader.maybeAutoDownload(current);
         long now = System.currentTimeMillis();
         long last = LuckgramSettings.prefs().getLong(KEY_LAST_CHECK, 0);
-        if (inFlight || !UpdateLogic.shouldCheck(now, last, lastFailureMs)) {
+        String checkedBy = LuckgramSettings.prefs().getString(KEY_LAST_CHECK_APP, "");
+        String running = UpdateLogic.appId(BuildConfig.BUILD_VERSION_STRING, currentBuild());
+        if (inFlight || !UpdateLogic.shouldCheck(now, last, lastFailureMs, checkedBy, running)) {
             return;
         }
         inFlight = true;
@@ -78,6 +83,7 @@ public final class LuckgramUpdates {
                 LuckgramSettings.prefs().edit()
                         .putString(KEY_INFO, UpdateLogic.serialize(info))
                         .putLong(KEY_LAST_CHECK, System.currentTimeMillis())
+                        .putString(KEY_LAST_CHECK_APP, running)
                         .apply();
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.luckgramUpdateChanged);
                 LuckgramUpdateDownloader.maybeAutoDownload(state()); // specs#124
@@ -96,16 +102,16 @@ public final class LuckgramUpdates {
         return UpdateLogic.evaluate(info, BuildConfig.BUILD_VERSION_STRING, currentBuild(), LuckgramStrings.isChinese());
     }
 
-    /** "有新版本 x.y.z · 更新" / "正在下载… · 45%" / "新版本 x.y.z 已下载 · 安装". */
+    /** "有新版本 x.y.z（build） · 更新" / "正在下载… · 45%" / "新版本 x.y.z（build） 已下载 · 安装". */
     public static String rowText(UpdateLogic.State s) {
         UpdateDownloadLogic.Texts t = LuckgramUpdateDownloader.texts();
         if (LuckgramUpdateDownloader.readyFile(s) != null) {
-            return t.readyRow(s.latest);
+            return t.readyRow(s.latest, s.build);
         }
         if (LuckgramUpdateDownloader.isDownloading(s)) {
-            return t.downloadingRow(s.latest, LuckgramUpdateDownloader.percent());
+            return t.downloadingRow(s.latest, s.build, LuckgramUpdateDownloader.percent());
         }
-        return t.availableRow(s.latest);
+        return t.availableRow(s.latest, s.build);
     }
 
     /**
@@ -124,7 +130,7 @@ public final class LuckgramUpdates {
         UpdateDownloadLogic.Texts t = LuckgramUpdateDownloader.texts();
         if (!force && !TextUtils.isEmpty(s.notes)) {
             AlertDialog.Builder b = new AlertDialog.Builder(activity);
-            b.setTitle(t.notesTitle(s.latest));
+            b.setTitle(t.notesTitle(s.latest, s.build));
             b.setMessage(s.notes);
             b.setPositiveButton(t.updateNow(), (d, w) -> downloadAndInstall(activity, s));
             b.setNegativeButton(t.later(), null);
@@ -142,7 +148,7 @@ public final class LuckgramUpdates {
         }
         UpdateDownloadLogic.Texts t = LuckgramUpdateDownloader.texts();
         AlertDialog progress = new AlertDialog(activity, AlertDialog.ALERT_TYPE_LOADING);
-        progress.setTitle(t.downloadingTitle(s.latest));
+        progress.setTitle(t.downloadingTitle(s.latest, s.build));
         progress.setMessage(s.size > 0 ? AndroidUtilities.formatFileSize(s.size) : " ");
         progress.setCanceledOnTouchOutside(false);
         progress.setCancelable(false);
@@ -245,9 +251,7 @@ public final class LuckgramUpdates {
         text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
         text.setGravity(Gravity.CENTER);
         text.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
-        String body = LuckgramStrings.get(
-                "当前版本 " + BuildConfig.BUILD_VERSION_STRING + " 已停止支持，请更新到 " + s.latest + " 后继续使用。",
-                "Version " + BuildConfig.BUILD_VERSION_STRING + " is no longer supported. Update to " + s.latest + " to continue.");
+        String body = LuckgramUpdateDownloader.texts().forceText(BuildConfig.BUILD_VERSION_STRING, currentBuild(), s.latest, s.build);
         if (!TextUtils.isEmpty(s.notes)) {
             body += "\n\n" + s.notes;
         }

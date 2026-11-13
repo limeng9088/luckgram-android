@@ -12,8 +12,13 @@ public final class UpdateLogic {
     private UpdateLogic() {
     }
 
-    /** Check at most once a day (spec: "启动时（每天最多一次）"). */
-    public static final long CHECK_INTERVAL_MS = 24 * 60 * 60_000L;
+    /**
+     * Check at most once an hour. Was once a day (spec: "启动时（每天最多一次）"), but releases now
+     * ship several times a day with the same version name and only a new build, so a day-old answer
+     * hid newer builds (a device that checked right after build 345 still knew nothing of 379 22 h
+     * later). Same TTL as the remote config; the request is a few hundred bytes.
+     */
+    public static final long CHECK_INTERVAL_MS = 60 * 60_000L;
     /** After a failed check try again on a later launch, but not more often than this. */
     public static final long RETRY_AFTER_FAILURE_MS = 60 * 60_000L;
 
@@ -74,11 +79,29 @@ public final class UpdateLogic {
     }
 
     public static boolean shouldCheck(long nowMs, long lastSuccessMs, long lastFailureMs) {
+        return shouldCheck(nowMs, lastSuccessMs, lastFailureMs, "", "");
+    }
+
+    /**
+     * @param checkedBy {@link #appId} of the app that made the last successful check ("" = unknown)
+     * @param running   {@link #appId} of the running app
+     * A different app than the one that made the last check (installed an update, or an older
+     * package) checks right away: the cached answer was judged against another build.
+     */
+    public static boolean shouldCheck(long nowMs, long lastSuccessMs, long lastFailureMs, String checkedBy, String running) {
+        if (lastSuccessMs > 0 && running != null && !running.isEmpty() && !running.equals(checkedBy)) {
+            return true;
+        }
         if (lastFailureMs > 0 && nowMs >= lastFailureMs && nowMs - lastFailureMs < RETRY_AFTER_FAILURE_MS) {
             return false;
         }
         // nowMs < lastSuccessMs: the clock went back; check rather than wait for a day that may never come
         return lastSuccessMs <= 0 || nowMs < lastSuccessMs || nowMs - lastSuccessMs >= CHECK_INTERVAL_MS;
+    }
+
+    /** "13.0.3+379": identifies the installed package for {@link #shouldCheck}. */
+    public static String appId(String version, long build) {
+        return (version == null ? "" : version) + "+" + Math.max(0, build);
     }
 
     /** {@code /v1/version?platform=android&app_version=..[&build=..]}; build 0 = unknown (local build). */

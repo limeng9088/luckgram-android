@@ -142,13 +142,27 @@ public final class UpdateDownloadLogic {
 
         public String failedTitle() { return t("下载失败", "Download failed"); }
         public String verifyFailedTitle() { return t("安装包校验失败", "Package verification failed"); }
-        public String availableRow(String v) { return t("有新版本 " + v + " · 更新", "New version " + v + " · Update"); }
-        public String readyRow(String v) { return t("新版本 " + v + " 已下载 · 安装", "New version " + v + " downloaded · Install"); }
-        public String downloadingRow(String v, int percent) {
-            return t("正在下载新版本 " + v + (percent >= 0 ? " · " + percent + "%" : ""), "Downloading version " + v + (percent >= 0 ? " · " + percent + "%" : ""));
+        /**
+         * "13.0.3（379）" / "13.0.3 (379)": releases often keep the version name and only raise the
+         * build, so every update text carries the build when it is known (0 = unknown: version only).
+         */
+        public String label(String v, long build) {
+            String name = v == null ? "" : v;
+            return build > 0 ? name + t("（" + build + "）", " (" + build + ")") : name;
         }
-        public String downloadingTitle(String v) { return t("正在下载 " + v, "Downloading " + v); }
-        public String notesTitle(String v) { return t("新版本 " + v, "Version " + v); }
+        public String availableRow(String v, long build) { return t("有新版本 " + label(v, build) + " · 更新", "New version " + label(v, build) + " · Update"); }
+        public String readyRow(String v, long build) { return t("新版本 " + label(v, build) + " 已下载 · 安装", "New version " + label(v, build) + " downloaded · Install"); }
+        public String downloadingRow(String v, long build, int percent) {
+            String l = label(v, build);
+            return t("正在下载新版本 " + l + (percent >= 0 ? " · " + percent + "%" : ""), "Downloading version " + l + (percent >= 0 ? " · " + percent + "%" : ""));
+        }
+        public String downloadingTitle(String v, long build) { return t("正在下载 " + label(v, build), "Downloading " + label(v, build)); }
+        public String notesTitle(String v, long build) { return t("新版本 " + label(v, build), "Version " + label(v, build)); }
+        /** Force page body: installed version and the one to update to, both with their builds. */
+        public String forceText(String current, long currentBuild, String target, long targetBuild) {
+            return t("当前版本 " + label(current, currentBuild) + " 已停止支持，请更新到 " + label(target, targetBuild) + " 后继续使用。",
+                    "Version " + label(current, currentBuild) + " is no longer supported. Update to " + label(target, targetBuild) + " to continue.");
+        }
         public String updateNow() { return t("立即更新", "Update now"); }
         public String later() { return t("以后再说", "Later"); }
         public String cancel() { return t("取消", "Cancel"); }

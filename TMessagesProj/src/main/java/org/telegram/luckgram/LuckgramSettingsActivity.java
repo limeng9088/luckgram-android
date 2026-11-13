@@ -85,7 +85,9 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
     private static String versionString() {
         try {
             PackageInfo pi = ApplicationLoader.applicationContext.getPackageManager().getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
-            return pi.versionName + " (" + (pi.versionCode / 10) + ")";
+            // same build as the Settings version line and the update hint (CI run number), not versionCode/10
+            int build = org.telegram.messenger.BuildConfig.LUCKGRAM_BUILD > 0 ? org.telegram.messenger.BuildConfig.LUCKGRAM_BUILD : pi.versionCode / 10;
+            return pi.versionName + " (" + build + ")";
         } catch (Exception e) {
             return BuildVars.BUILD_VERSION_STRING;
         }
