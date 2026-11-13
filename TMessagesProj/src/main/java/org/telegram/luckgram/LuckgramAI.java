@@ -325,6 +325,26 @@ public final class LuckgramAI {
         }
     }
 
+    private static volatile org.telegram.luckgram.diag.LuckgramMirrors mirrors;
+
+    /** specs#160: backup hosts of luckgram.cc / wiki / dl. */
+    public static org.telegram.luckgram.diag.LuckgramMirrors mirrors() {
+        org.telegram.luckgram.diag.LuckgramMirrors m = mirrors;
+        if (m == null) {
+            mirrors = m = org.telegram.luckgram.diag.LuckgramMirrors.parse(BuildConfig.LUCKGRAM_SITE_MIRRORS);
+        }
+        return m;
+    }
+
+    /** specs#160: a luckgram.cc / wiki / dl link moved to its backup host while the API uses a backup entry. */
+    public static String siteUrl(String url) {
+        try {
+            return mirrors().forSite(url, endpoints().usingBackup());
+        } catch (Throwable t) {
+            return url;
+        }
+    }
+
     /** A URL from the server pointing at another API entry is moved to the one in use. */
     public static String rewriteApiUrl(String url) {
         return url == null ? null : endpoints().rewrite(url);

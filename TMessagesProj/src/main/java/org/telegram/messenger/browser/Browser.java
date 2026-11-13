@@ -292,6 +292,11 @@ public class Browser {
         if (context == null || uri == null) {
             return;
         }
+        // Luckgram specs#160: luckgram.cc / wiki / dl on the backup host while the API uses its backup entry
+        String luckgramSite = org.telegram.luckgram.LuckgramAI.siteUrl(uri.toString());
+        if (!luckgramSite.equals(uri.toString())) {
+            uri = Uri.parse(luckgramSite);
+        }
         final int currentAccount = UserConfig.selectedAccount;
         boolean[] forceBrowser = new boolean[]{false};
         boolean internalUri = isInternalUri(uri, forceBrowser);
