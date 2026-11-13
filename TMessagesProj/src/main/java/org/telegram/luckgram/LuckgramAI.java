@@ -200,6 +200,26 @@ public final class LuckgramAI {
         HttpResponse execute(String method, String path, Map<String, String> headers, byte[] body) throws IOException;
     }
 
+    private static volatile Map<String, String> appHeaders;
+
+    /** {@link LuckgramAppHeaders} for the installed app, computed once. */
+    static Map<String, String> appHeaders() {
+        Map<String, String> result = appHeaders;
+        if (result == null) {
+            String versionName = BuildConfig.BUILD_VERSION_STRING;
+            int versionCode = 0;
+            try {
+                android.content.pm.PackageInfo info = org.telegram.messenger.ApplicationLoader.applicationContext.getPackageManager().getPackageInfo(org.telegram.messenger.ApplicationLoader.applicationContext.getPackageName(), 0);
+                versionCode = info.versionCode;
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            result = java.util.Collections.unmodifiableMap(LuckgramAppHeaders.headers(versionName, BuildConfig.LUCKGRAM_BUILD, versionCode));
+            appHeaders = result;
+        }
+        return result;
+    }
+
     private static final class HttpTransport implements Transport {
         @Override
         public HttpResponse execute(String method, String path, Map<String, String> headers, byte[] body) throws IOException {
@@ -245,6 +265,14 @@ public final class LuckgramAI {
             c.setUseCaches(false);
             for (Map.Entry<String, String> h : headers.entrySet()) {
                 c.setRequestProperty(h.getKey(), h.getValue());
+            }
+            if (base != null) {
+                // specs#164: every API request carries the app version and build number.
+                for (Map.Entry<String, String> h : appHeaders().entrySet()) {
+                    if (!headers.containsKey(h.getKey())) {
+                        c.setRequestProperty(h.getKey(), h.getValue());
+                    }
+                }
             }
             if (body != null) {
                 c.setDoOutput(true);
@@ -527,11 +555,7 @@ public final class LuckgramAI {
         executor.execute(() -> {
             try {
                 byte[] payload = body != null ? body.toString().getBytes(StandardCharsets.UTF_8) : null;
-                Map<String, String> extra = new LinkedHashMap<>();
-                if (BuildConfig.BUILD_VERSION_STRING != null && BuildConfig.BUILD_VERSION_STRING.matches("\\d+(\\.\\d+){0,3}")) {
-                    extra.put("X-Luckgram-App-Version", BuildConfig.BUILD_VERSION_STRING);
-                }
-                try (HttpResponse res = authorized(req, method, path, payload != null ? "application/json" : null, payload, "application/json", extra)) {
+                try (HttpResponse res = authorized(req, method, path, payload != null ? "application/json" : null, payload, "application/json", new LinkedHashMap<>())) {
                     if (res.status >= 300) {
                         throw new ApiException(errorFrom(res));
                     }

@@ -1,7 +1,6 @@
 package org.telegram.luckgram;
 
 import org.json.JSONObject;
-import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.FileLog;
 
 import java.util.HashMap;
@@ -23,8 +22,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * </ul>
  */
 public final class LuckgramRemoteConfigFetcher {
-
-    private static final String APP_VERSION_HEADER = "X-Luckgram-App-Version";
 
     private static final AtomicBoolean inFlight = new AtomicBoolean();
     private static volatile long lastFailureMs;
@@ -81,7 +78,7 @@ public final class LuckgramRemoteConfigFetcher {
 
     private static void fetch() throws Exception {
         Map<String, String> headers = new HashMap<>();
-        headers.put(APP_VERSION_HEADER, BuildConfig.BUILD_VERSION_STRING);
+        // the version headers are added to every API request (LuckgramAppHeaders)
         String version = LuckgramSettings.remoteConfigVersion();
         if (version != null && !version.isEmpty()) {
             headers.put("If-None-Match", "\"" + version + "\"");
