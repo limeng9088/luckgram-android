@@ -2702,7 +2702,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
             @Override
             protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
-                if (luckgramTalkMode && child != luckgramTalkBar && child != luckgramTalkEmoji && child != attachButton && child != attachLayout) {
+                if (luckgramTalkMode && child != luckgramTalkBar && child != attachButton && child != attachLayout) {
                     return false; // Luckgram specs#145: only 「按住 说话」 and the 「+」 show in talk mode (the field and its hint too)
                 }
                 if (child != null && child == messageEditText) {
@@ -2718,6 +2718,13 @@ public class ChatActivityEnterView extends FrameLayout implements
         textFieldContainer.addView(frameLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM, 0, 0, DEFAULT_HEIGHT, 0));
 
         emojiButton = new ChatActivityEnterViewAnimatedIconView(context) {
+            @Override
+            public void setVisibility(int visibility) {
+                luckgramEmojiButtonWanted = visibility;
+                // Luckgram: with the 「+」 panel the emoji entry is a tile in it, not a button in the bar
+                super.setVisibility(isLuckgramPlusMode() ? GONE : visibility);
+            }
+
             @Override
             protected void onDraw(Canvas canvas) {
                 super.onDraw(canvas);
@@ -6721,6 +6728,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     private static final int PLUS_DICTATION = 8;
     private static final int PLUS_AI_WRITING = 9;
     private static final int PLUS_TRANSLATE = 10;
+    private static final int PLUS_EMOJI = 11;
+    /** What Telegram asked for; the button itself stays hidden while the 「+」 panel holds the emoji tile. */
+    private int luckgramEmojiButtonWanted = VISIBLE;
 
     private org.telegram.luckgram.compactinput.LuckgramPlusPanel luckgramPlusPanel;
     private boolean luckgramPlusVisible;
@@ -6736,7 +6746,6 @@ public class ChatActivityEnterView extends FrameLayout implements
     private boolean luckgramTalkMode;
     private ImageView luckgramVoiceToggle;
     private TextView luckgramTalkBar;
-    private ImageView luckgramTalkEmoji;
     private boolean luckgramTranscribing;
     private org.telegram.luckgram.voicebar.LuckgramTalkController luckgramTalkController;
 
@@ -6811,24 +6820,6 @@ public class ChatActivityEnterView extends FrameLayout implements
         });
         messageEditTextContainer.addView(luckgramTalkBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.BOTTOM));
 
-        // the emoji button stays right of the bar; it leads back to the field with the emoji panel
-        luckgramTalkEmoji = new ImageView(context);
-        luckgramTalkEmoji.setScaleType(ImageView.ScaleType.CENTER);
-        luckgramTalkEmoji.setImageResource(R.drawable.input_smile);
-        luckgramTalkEmoji.setColorFilter(new PorterDuffColorFilter(getThemedColor(Theme.key_glass_defaultIcon), PorterDuff.Mode.MULTIPLY));
-        luckgramTalkEmoji.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector), Theme.RIPPLE_MASK_CIRCLE_20DP, dp(18)));
-        luckgramTalkEmoji.setContentDescription(getString(R.string.AccDescrEmojiButton));
-        luckgramTalkEmoji.setVisibility(GONE);
-        luckgramTalkEmoji.setOnClickListener(v -> {
-            if (luckgramTalkController != null && luckgramTalkController.isBusy()) {
-                return;
-            }
-            setLuckgramTalkMode(false, false);
-            if (emojiButton != null) {
-                emojiButton.performClick();
-            }
-        });
-        messageEditTextContainer.addView(luckgramTalkEmoji, LayoutHelper.createFrame(40, DEFAULT_HEIGHT, Gravity.BOTTOM | Gravity.RIGHT));
         luckgramSyncTalkBarMargin();
         luckgramUpdateTalkBarText();
     }
@@ -6840,16 +6831,9 @@ public class ChatActivityEnterView extends FrameLayout implements
         // leave the 「+」 (and whatever else sits right of the field) visible and tappable
         final int right = ((FrameLayout.LayoutParams) messageEditText.getLayoutParams()).rightMargin;
         final FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) luckgramTalkBar.getLayoutParams();
-        if (lp.rightMargin != right + dp(40)) {
-            lp.rightMargin = right + dp(40);
+        if (lp.rightMargin != right) {
+            lp.rightMargin = right;
             luckgramTalkBar.setLayoutParams(lp);
-        }
-        if (luckgramTalkEmoji != null) {
-            final FrameLayout.LayoutParams elp = (FrameLayout.LayoutParams) luckgramTalkEmoji.getLayoutParams();
-            if (elp.rightMargin != right) {
-                elp.rightMargin = right;
-                luckgramTalkEmoji.setLayoutParams(elp);
-            }
         }
     }
 
@@ -6887,9 +6871,6 @@ public class ChatActivityEnterView extends FrameLayout implements
             ? org.telegram.luckgram.LuckgramStrings.get("切换到键盘", "Switch to keyboard")
             : org.telegram.luckgram.LuckgramStrings.get("切换到按住说话", "Switch to hold to talk"));
         luckgramTalkBar.setVisibility(talk ? VISIBLE : GONE);
-        if (luckgramTalkEmoji != null) {
-            luckgramTalkEmoji.setVisibility(talk ? VISIBLE : GONE);
-        }
         luckgramUpdateTalkBarText();
         messageEditTextContainer.invalidate();
         if (talk) {
@@ -7002,6 +6983,9 @@ public class ChatActivityEnterView extends FrameLayout implements
             return;
         }
         final boolean plus = isLuckgramPlusMode();
+        if (emojiButton != null) {
+            emojiButton.setVisibility(luckgramEmojiButtonWanted);
+        }
         if (luckgramAttachIsPlus == null || luckgramAttachIsPlus != plus) {
             luckgramAttachIsPlus = plus;
             attachButton.setImageResource(plus ? R.drawable.luckgram_header_plus : R.drawable.msg_input_attach2);
@@ -7017,9 +7001,6 @@ public class ChatActivityEnterView extends FrameLayout implements
         }
         if (luckgramVoiceToggle != null) {
             luckgramVoiceToggle.setColorFilter(iconFilter);
-        }
-        if (luckgramTalkEmoji != null) {
-            luckgramTalkEmoji.setColorFilter(iconFilter);
         }
         if (luckgramTalkBar != null) {
             luckgramTalkBar.setTextColor(getThemedColor(Theme.key_glass_defaultIcon));
@@ -7081,6 +7062,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         final boolean media = chat == null || ChatObject.canSendPhoto(chat) || ChatObject.canSendVideo(chat);
         final boolean documents = chat == null || ChatObject.canSendDocument(chat);
         final boolean plain = chat == null || ChatObject.canSendPlain(chat);
+        items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_EMOJI, R.drawable.input_smile, org.telegram.luckgram.LuckgramStrings.get("表情", "Emoji"), emojiButtonRestricted));
         items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_GALLERY, R.drawable.msg_photos, org.telegram.luckgram.LuckgramStrings.get("相册", "Gallery"), !media));
         items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_CAMERA, R.drawable.msg_camera, org.telegram.luckgram.LuckgramStrings.get("拍摄", "Camera"), !media));
         items.add(new org.telegram.luckgram.compactinput.LuckgramPlusPanel.Item(PLUS_FILE, R.drawable.msg_sendfile, org.telegram.luckgram.LuckgramStrings.get("文件", "File"), !documents));
@@ -7110,6 +7092,15 @@ public class ChatActivityEnterView extends FrameLayout implements
             return;
         }
         switch (id) {
+            case PLUS_EMOJI:
+                if (luckgramTalkController != null && luckgramTalkController.isBusy()) {
+                    break;
+                }
+                setLuckgramTalkMode(false, false); // the emoji panel types into the field
+                if (emojiButton != null) {
+                    emojiButton.performClick(); // Telegram's own handler: restricted hint, or the emoji panel
+                }
+                break;
             case PLUS_GALLERY:
             case PLUS_CAMERA:
             case PLUS_FILE:
@@ -11487,6 +11478,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public View getEmojiButton() {
+        if (isLuckgramPlusMode() && attachButton != null) {
+            return attachButton; // Luckgram: emoji lives in the 「+」 panel, hints point at the 「+」
+        }
         return emojiButton;
     }
 
@@ -15810,6 +15804,10 @@ public class ChatActivityEnterView extends FrameLayout implements
             if (richDraftPreview != null) {
                 ((MarginLayoutParams) richDraftPreview.getLayoutParams()).leftMargin = dp(50);
             }
+        }
+        if (messageEditText != null && !richDraftActive && isLuckgramPlusMode()) {
+            // Luckgram: no emoji button left of the text, the field starts where the button was
+            ((MarginLayoutParams) messageEditText.getLayoutParams()).leftMargin -= dp(38);
         }
         updateBotCommandsMenuContainerTopPadding();
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
