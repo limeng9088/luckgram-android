@@ -104,7 +104,9 @@ public class LuckgramProActivity extends UniversalFragment {
     protected void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         items.add(UItem.asHeader(tx.proTitle()));
         fillBillingItems(items);
-        fillCloudBackupItems(items);
+        if (org.telegram.luckgram.backup.CloudBackup.ENABLED) {
+            fillCloudBackupItems(items);
+        }
         if (org.telegram.luckgram.procommunity.LuckgramProCommunity.showRow()) {
             // specs#89 (31): Pro community, its own section below cloud backup (same as iOS);
             // free users get the upgrade prompt on tap
