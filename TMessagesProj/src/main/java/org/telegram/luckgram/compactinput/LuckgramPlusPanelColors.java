@@ -38,7 +38,7 @@ public final class LuckgramPlusPanelColors {
     private LuckgramPlusPanelColors() {
     }
 
-    /** Entry order: gallery, camera, file, location, contact, poll, quick replies, voice input, AI writing, translate. */
+    /** Entry order: gallery, camera, file, location, contact, poll, quick replies, voice input, AI writing, translate, emoji. */
     private static final int[][] SQUARES = {
             {0xFF5EB5F7, 0xFF2A82E4},
             {0xFFFF7A85, 0xFFE8415A},
@@ -50,6 +50,7 @@ public final class LuckgramPlusPanelColors {
             {0xFFC18CFF, 0xFF8E4FE8},
             {0xFFF58AE0, 0xFFB04CF0},
             {0xFF5CCBF5, 0xFF1E9BD6},
+            {0xFFFF8FB8, 0xFFE8478A},
     };
 
     public static int icon(boolean dark) {
