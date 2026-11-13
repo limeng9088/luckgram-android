@@ -581,8 +581,8 @@ public class CloudBackupActivity extends UniversalFragment {
             AlertDialog progress = showProgress(getParentActivity());
             LuckgramBackup.restore(chosen, preferredSlot, result -> {
                 dismiss(progress);
-                String text = result.noRoom > 0 && result.restored == 0 ? LuckgramBackup.noRoomText()
-                        : LuckgramBackup.resultText(result.restored, result.skipped + alreadyLoggedIn, result.failed + result.noRoom);
+                // Accounts left out by the account limit are told apart from real failures.
+                String text = LuckgramBackup.resultText(result.restored, result.skipped + alreadyLoggedIn, result.failed, result.noRoom);
                 Activity a = getParentActivity();
                 if (a != null) {
                     Toast.makeText(a, text, Toast.LENGTH_LONG).show();
