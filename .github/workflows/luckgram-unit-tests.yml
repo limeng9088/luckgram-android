@@ -78,6 +78,7 @@ jobs:
             diag/LuckgramDiagLog.java \
             diag/TelegramErrorKind.java \
             diag/LuckgramEndpoints.java \
+            diag/LuckgramMirrors.java \
             account/AccountLogic.java \
             pro/ProState.java \
             ocr/OcrResult.java \
