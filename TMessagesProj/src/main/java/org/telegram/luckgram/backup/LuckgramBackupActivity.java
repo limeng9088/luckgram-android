@@ -67,10 +67,10 @@ public class LuckgramBackupActivity extends UniversalFragment {
             }
             items.add(UItem.asShadow(null));
             items.add(UItem.asButton(ID_EXPORT, R.drawable.msg_share, LuckgramBackup.exportText()).accent());
-            items.add(UItem.asShadow(LuckgramBackup.warningText()));
+            items.add(UItem.asShadow(LuckgramBackup.exportHintText() + "\n\n" + LuckgramBackup.warningText()));
         }
         items.add(UItem.asButton(ID_RESTORE, R.drawable.msg_download, LuckgramBackup.restoreText()).accent());
-        items.add(UItem.asShadow(LuckgramBackup.infoText()));
+        items.add(UItem.asShadow(LuckgramBackup.restoreHintText() + "\n\n" + LuckgramBackup.infoText()));
     }
 
     @Override
