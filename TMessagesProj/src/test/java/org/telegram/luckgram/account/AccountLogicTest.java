@@ -75,6 +75,8 @@ public class AccountLogicTest {
             assertFalse(en.error(code).isEmpty());
         }
         assertEquals("Pro，到期 2026-12-01", zh.proUntil("2026-12-01"));
+        assertEquals("Pro", zh.proUntil(""));
+        assertEquals("Pro", en.proUntil(null));
     }
 
     @Test
