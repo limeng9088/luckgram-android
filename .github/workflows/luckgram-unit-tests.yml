@@ -50,6 +50,7 @@ jobs:
             LuckgramRemoteConfig.java \
             LuckgramRemoteConfigLogic.java \
             LuckgramAudioSplitter.java \
+            LuckgramAppHeaders.java \
             quickreplies/QuickRepliesLogic.java \
             roundvideo/RoundVideoGeometry.java \
             unblock/StoreRestrictions.java \
