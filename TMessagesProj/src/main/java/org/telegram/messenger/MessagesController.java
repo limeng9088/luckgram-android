@@ -20512,8 +20512,10 @@ public class MessagesController extends BaseController implements NotificationCe
                                 }
                                 continue;
                             }
+                            // Luckgram 11: in the second space a hidden account must not ring; decline as busy (same as desktop).
+                            final boolean luckgramHiddenAccount = org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.isHidden(currentAccount);
                             boolean notificationsDisabled = false;
-                            if (!NotificationManagerCompat.from(ApplicationLoader.applicationContext).areNotificationsEnabled()) {
+                            if (!luckgramHiddenAccount && !NotificationManagerCompat.from(ApplicationLoader.applicationContext).areNotificationsEnabled()) {
                                 notificationsDisabled = true;
                                 if (ApplicationLoader.mainInterfacePaused || !ApplicationLoader.isScreenOn) {
                                     if (BuildVars.LOGS_ENABLED) {
@@ -20542,8 +20544,6 @@ public class MessagesController extends BaseController implements NotificationCe
 //                                svc.answerToRequestForConference((TL_phone.phoneCallRequested) call);
 //                                continue;
 //                            }
-                            // Luckgram 11: in the second space a hidden account must not ring; decline as busy (same as desktop).
-                            final boolean luckgramHiddenAccount = org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.isHidden(currentAccount);
                             if (luckgramHiddenAccount || svc != null || VoIPService.callIShouldHavePutIntoIntent != null || !callStateIsIdle) {
                                 if (!luckgramHiddenAccount && svc != null && svc.getAccount() != currentAccount && svc.getUser() != null && svc.getUser().id == getUserConfig().getClientUserId()) {
                                     // calling from the same device, don't discard
