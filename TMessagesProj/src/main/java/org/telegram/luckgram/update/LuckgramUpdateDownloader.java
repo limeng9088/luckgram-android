@@ -215,7 +215,29 @@ public final class LuckgramUpdateDownloader {
         }
     }
 
+    /**
+     * specs#160: the server's URL, then its backup host (lg-dl.cat158.com) when the first one could
+     * not be reached at all (DNS, connect, TLS, reset before a response; same rule as the API
+     * entries of specs#81). An HTTP status or a failure after the response started does not switch.
+     */
     private static void run(String name, String url, String sha, long size, AtomicBoolean cancelled) {
+        boolean apiOnBackup;
+        try {
+            apiOnBackup = org.telegram.luckgram.LuckgramAI.endpoints().usingBackup();
+        } catch (Throwable t) {
+            apiOnBackup = false;
+        }
+        java.util.List<String> urls = org.telegram.luckgram.LuckgramAI.mirrors().downloadUrls(url, apiOnBackup);
+        for (int i = 0; i < urls.size(); i++) {
+            boolean last = i == urls.size() - 1;
+            if (!runOnce(name, urls.get(i), sha, size, cancelled, last) || cancelled.get()) {
+                return;
+            }
+        }
+    }
+
+    /** One try; returns true when it failed at the network level and {@code last} is false (try the next host). */
+    private static boolean runOnce(String name, String url, String sha, long size, AtomicBoolean cancelled, boolean last) {
         long start = System.currentTimeMillis();
         File d = dir();
         File part = new File(d, name + UpdateDownloadLogic.PART);
@@ -227,7 +249,7 @@ public final class LuckgramUpdateDownloader {
         try {
             if (!UpdateDownloadLogic.enoughSpace(d.getUsableSpace(), size)) {
                 post(name, () -> finishFailed(UpdateDownloadLogic.Failure.SPACE, null, downloadingAuto));
-                return;
+                return false;
             }
             conn = LuckgramNet.open(new URL(url), route);
             conn.setConnectTimeout(15_000);
@@ -237,16 +259,16 @@ public final class LuckgramUpdateDownloader {
             if (status != 200) {
                 final String detail = "HTTP " + status;
                 post(name, () -> finishFailed(UpdateDownloadLogic.Failure.NETWORK, detail, downloadingAuto));
-                return;
+                return false;
             }
             if (!conn.getURL().getProtocol().equalsIgnoreCase("https")) {
                 post(name, () -> finishFailed(UpdateDownloadLogic.Failure.NOT_HTTPS, null, downloadingAuto));
-                return;
+                return false;
             }
             long total = size > 0 ? size : conn.getContentLength();
             if (total > 0 && !UpdateDownloadLogic.enoughSpace(d.getUsableSpace(), total)) {
                 post(name, () -> finishFailed(UpdateDownloadLogic.Failure.SPACE, null, downloadingAuto));
-                return;
+                return false;
             }
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             long read = 0;
@@ -276,7 +298,7 @@ public final class LuckgramUpdateDownloader {
             if (cancelled.get()) {
                 //noinspection ResultOfMethodCallIgnored
                 part.delete();
-                return;
+                return false;
             }
             UpdateDownloadLogic.Verdict v = UpdateDownloadLogic.verify(sha, size, UpdateDownloadLogic.hex(md.digest()), read);
             if (!UpdateDownloadLogic.accepted(v)) {
@@ -284,7 +306,7 @@ public final class LuckgramUpdateDownloader {
                 part.delete();
                 logNote("verify:" + v.name().toLowerCase());
                 post(name, () -> finishFailed(UpdateDownloadLogic.Failure.VERIFY, null, downloadingAuto));
-                return;
+                return false;
             }
             if (v == UpdateDownloadLogic.Verdict.NOT_CHECKED) {
                 logNote("verify:skipped, server sent no sha256");
@@ -299,6 +321,9 @@ public final class LuckgramUpdateDownloader {
             failure = t;
             //noinspection ResultOfMethodCallIgnored
             part.delete();
+            if (!last && status == 0 && !cancelled.get() && org.telegram.luckgram.diag.LuckgramEndpoints.isNetworkFailure(t)) {
+                return true; // logged in finally; the caller tries the backup host
+            }
             String msg = String.valueOf(t.getMessage());
             boolean space = msg.contains("ENOSPC") || msg.toLowerCase().contains("no space");
             final String detail = t.getClass().getSimpleName();
@@ -317,6 +342,7 @@ public final class LuckgramUpdateDownloader {
             }
             LuckgramNet.logHttp("update", "GET", target, status, failure, start, route.label, null);
         }
+        return false;
     }
 
     private static void logNote(String text) {
