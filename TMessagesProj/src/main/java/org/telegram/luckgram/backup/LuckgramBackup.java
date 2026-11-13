@@ -86,6 +86,18 @@ public final class LuckgramBackup {
         return LuckgramStrings.get("导出失败", "Export failed");
     }
 
+    /** specs#150: where the exported file is and what it is called. */
+    public static String exportHintText() {
+        return LuckgramStrings.get("导出的文件以 ." + LuckgramBackupFormat.FILE_EXTENSION + " 结尾，例如 luckgram-20261113-0930." + LuckgramBackupFormat.FILE_EXTENSION + "。请存到你之后能找到的地方（如「下载」或「文件」）。",
+                "The exported file ends in ." + LuckgramBackupFormat.FILE_EXTENSION + ", e.g. luckgram-20261113-0930." + LuckgramBackupFormat.FILE_EXTENSION + ". Keep it somewhere you can find it later (e.g. Downloads or Files).");
+    }
+
+    /** specs#150: which file to pick when restoring. */
+    public static String restoreHintText() {
+        return LuckgramStrings.get("恢复时选择以 ." + LuckgramBackupFormat.FILE_EXTENSION + " 结尾的备份文件（一般在「下载」或「文件」里）。",
+                "To restore, pick the backup file ending in ." + LuckgramBackupFormat.FILE_EXTENSION + " (usually in Downloads or Files).");
+    }
+
     public static String infoText() {
         return LuckgramStrings.get("备份文件里只有登录信息和备注名，不包含消息、联系人或媒体。文件用你设置的密码加密，iPhone 和 Android 通用。",
                 "The file holds only the logins and the local names, no messages, contacts or media. It is encrypted with your password and works on both iPhone and Android.");

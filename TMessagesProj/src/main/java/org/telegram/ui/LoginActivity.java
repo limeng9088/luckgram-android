@@ -362,7 +362,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     private ImageView proxyButtonView;
     // Luckgram 10: "Restore from backup" on the phone number page
-    private TextView luckgramRestoreView;
+    private ImageView luckgramRestoreView;
     /** Luckgram 97: "OK" on the code card hides it for the rest of this login. */
     private boolean luckgramCodeCardDismissed;
     private ProxyDrawable proxyDrawable;
@@ -588,6 +588,11 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 marginLayoutParams = (MarginLayoutParams) proxyButtonView.getLayoutParams();
                 marginLayoutParams.topMargin = AndroidUtilities.dp(16) + statusBarHeight;
 
+                if (luckgramRestoreView != null) {
+                    marginLayoutParams = (MarginLayoutParams) luckgramRestoreView.getLayoutParams();
+                    marginLayoutParams.topMargin = AndroidUtilities.dp(16) + statusBarHeight;
+                }
+
                 marginLayoutParams = (MarginLayoutParams) radialProgressView.getLayoutParams();
                 marginLayoutParams.topMargin = AndroidUtilities.dp(16) + statusBarHeight;
 
@@ -777,14 +782,17 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         sizeNotifierFrameLayout.addView(proxyButtonView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 16, 16));
         updateProxyButton(false, true);
 
-        luckgramRestoreView = new TextView(context);
-        luckgramRestoreView.setText(org.telegram.luckgram.backup.LuckgramBackup.restoreText());
-        luckgramRestoreView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        luckgramRestoreView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
-        luckgramRestoreView.setGravity(Gravity.CENTER_VERTICAL);
-        luckgramRestoreView.setPadding(dp(8), 0, dp(8), 0);
+        // Luckgram specs#150: "Restore from backup" is an icon button left of the proxy button, same size and row.
+        luckgramRestoreView = new ImageView(context);
+        luckgramRestoreView.setImageResource(R.drawable.msg_unarchive);
+        luckgramRestoreView.setScaleType(ImageView.ScaleType.CENTER);
+        luckgramRestoreView.setContentDescription(org.telegram.luckgram.backup.LuckgramBackup.restoreText());
         luckgramRestoreView.setOnClickListener(v -> presentFragment(new org.telegram.luckgram.backup.LuckgramBackupActivity(true, getCurrentAccount())));
-        sizeNotifierFrameLayout.addView(luckgramRestoreView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 56, 16));
+        luckgramRestoreView.setOnLongClickListener(v -> {
+            org.telegram.ui.Components.BulletinFactory.of(this).createSimpleBulletin(R.drawable.msg_unarchive, org.telegram.luckgram.backup.LuckgramBackup.restoreText()).show();
+            return true;
+        });
+        sizeNotifierFrameLayout.addView(luckgramRestoreView, LayoutHelper.createFrame(32, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 56, 16));
         luckgramUpdateRestoreButton();
 
         radialProgressView = new RadialProgressView(context);
@@ -8551,6 +8559,10 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
         updateProxyButton(false, true);
         proxyButtonView.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector)));
+        if (luckgramRestoreView != null) {
+            luckgramRestoreView.setColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            luckgramRestoreView.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector)));
+        }
 
         radialProgressView.setProgressColor(Theme.getColor(Theme.key_chats_actionBackground));
 
