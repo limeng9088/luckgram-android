@@ -164,6 +164,28 @@ public final class LuckgramBackup {
         return LuckgramStrings.get("已达到账号上限，无法恢复更多账号", "The account limit is reached; no more accounts can be restored");
     }
 
+    /**
+     * Like {@link #resultText(int, int, int)}, plus the accounts left out because the account
+     * limit was reached: told apart from real failures, with the limit and, for free users,
+     * that Pro has no limit.
+     */
+    public static String resultText(int restored, int skipped, int failed, int noRoom) {
+        StringBuilder sb = new StringBuilder(resultText(restored, skipped, failed));
+        if (noRoom > 0) {
+            int max = LuckgramAccounts.maxAccounts();
+            if (LuckgramAccounts.offerUpgrade()) {
+                sb.append(LuckgramStrings.get(
+                        "，" + noRoom + " 个因达到免费版上限（" + max + " 个）未恢复，升级 Pro 可登录的账号数量不限",
+                        ", " + noRoom + " not restored: free accounts can log in to at most " + max + " accounts. Upgrade to Pro for unlimited accounts"));
+            } else {
+                sb.append(LuckgramStrings.get(
+                        "，" + noRoom + " 个因达到账号上限（" + max + " 个）未恢复",
+                        ", " + noRoom + " not restored: the limit of " + max + " accounts is reached"));
+            }
+        }
+        return sb.toString();
+    }
+
     public static String resultText(int restored, int skipped, int failed) {
         StringBuilder sb = new StringBuilder();
         sb.append(LuckgramStrings.get("已恢复 " + restored + " 个账号", restored + " account(s) restored"));

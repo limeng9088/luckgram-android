@@ -72,6 +72,11 @@ public final class LuckgramAccounts {
         return AccountLimit.limit(isPro(), remoteMaxFree());
     }
 
+    /** Whether Pro would raise the limit for this user (free, and the free limit is below the slots). */
+    public static boolean offerUpgrade() {
+        return AccountLimit.offerUpgrade(isPro(), remoteMaxFree());
+    }
+
     public static boolean canAddAccount() {
         return AccountLimit.canAdd(activatedCount(), maxAccounts());
     }
