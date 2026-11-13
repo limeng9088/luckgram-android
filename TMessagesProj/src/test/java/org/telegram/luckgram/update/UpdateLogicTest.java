@@ -56,6 +56,9 @@ public class UpdateLogicTest {
         // never checked: the usual rules
         assertTrue(UpdateLogic.shouldCheck(now, 0, 0, "", b359));
         assertFalse(UpdateLogic.shouldCheck(now, 0, now - 60_000L, "", b359));
+        // review P3: a changed build still waits out a recent failure (no retry on every foreground)
+        assertFalse(UpdateLogic.shouldCheck(now, now - 60_000L, now - 60_000L, UpdateLogic.appId("13.0.3", 345), b359));
+        assertTrue(UpdateLogic.shouldCheck(now, now - 60_000L, now - H, UpdateLogic.appId("13.0.3", 345), b359));
     }
 
     @Test
