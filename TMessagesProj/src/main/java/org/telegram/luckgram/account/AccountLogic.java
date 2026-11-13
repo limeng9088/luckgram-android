@@ -214,7 +214,11 @@ public final class AccountLogic {
 
         public String proTitle() { return "Luckgram Pro"; }
         public String free() { return t("免费版", "Free"); }
-        public String proUntil(String date) { return t("Pro，到期 " + date, "Pro until " + date); }
+        /** "Pro" alone without an end date (server pro.free_for_all). */
+        public String proUntil(String date) {
+            if (date == null || date.isEmpty()) return "Pro";
+            return t("Pro，到期 " + date, "Pro until " + date);
+        }
         public String plan(Plan p) { return t(p.days + " 天", p.days + " days"); }
         public String stars(int n) { return n + " ⭐"; }
         public String proInfo() {
