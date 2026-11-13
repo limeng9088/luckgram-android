@@ -1,8 +1,15 @@
 package org.telegram.luckgram.backup;
 
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
+
+import androidx.core.content.FileProvider;
+
 import org.telegram.luckgram.LuckgramStrings;
 import org.telegram.luckgram.accounts.LuckgramAccounts;
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessagesController;
@@ -13,36 +20,80 @@ import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.tgnet.Vector;
 
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * Luckgram 32 (cloud backup): reads the auth keys of the chosen accounts for the encrypted backup
- * ({@link LuckgramBackupFormat}) and restores accounts from a decrypted one. Auth keys are only ever
- * held in memory and wiped as soon as they are used; nothing about them is logged or written.
- * (The file export / import of the deleted task 10 is gone: backups only go to the cloud.)
+ * Luckgram account backup: exports the chosen accounts to an encrypted {@code .luckgram-backup} file
+ * ({@link LuckgramBackupFormat}) and restores accounts from one (user 2026-11-13: local file backup;
+ * the cloud backup of 32 is on hold, {@link CloudBackup#ENABLED}). Auth keys are only ever held in
+ * memory and wiped as soon as they are used; nothing about them is logged. Only the ciphertext is
+ * written to disk.
  */
 public final class LuckgramBackup {
 
     private LuckgramBackup() {
     }
 
+    public static final String FEATURE_KEY = "account_backup";
+    private static final long MAX_FILE_SIZE = 1024 * 1024;
+
     // ---------------------------------------------------------------- strings
 
+    public static String titleText() {
+        return LuckgramStrings.get("账号备份", "Account backup");
+    }
+
+    public static String subtitleText() {
+        return LuckgramStrings.get("把账号导出为加密文件，换手机后导入", "Export accounts to an encrypted file and import them on a new phone");
+    }
+
     public static String selectHeaderText() {
-        return LuckgramStrings.get("选择要备份的账号", "Accounts to back up");
+        return LuckgramStrings.get("选择要导出的账号", "Accounts to export");
+    }
+
+    public static String exportText() {
+        return LuckgramStrings.get("导出为文件", "Export to file");
+    }
+
+    public static String restoreText() {
+        return LuckgramStrings.get("从备份恢复", "Restore from backup");
+    }
+
+    public static String saveToDeviceText() {
+        return LuckgramStrings.get("保存到手机", "Save to device");
+    }
+
+    public static String shareText() {
+        return LuckgramStrings.get("分享…", "Share…");
+    }
+
+    public static String savedText() {
+        return LuckgramStrings.get("备份文件已保存", "Backup file saved");
+    }
+
+    public static String exportFailedText() {
+        return LuckgramStrings.get("导出失败", "Export failed");
     }
 
     public static String infoText() {
-        return LuckgramStrings.get("备份里只有登录信息和备注名，不包含消息、联系人或媒体。用你设置的密码在本机加密，iPhone 和 Android 通用。",
-                "The backup holds only the logins and the local names, no messages, contacts or media. It is encrypted on this device with your password and works on both iPhone and Android.");
+        return LuckgramStrings.get("备份文件里只有登录信息和备注名，不包含消息、联系人或媒体。文件用你设置的密码加密，iPhone 和 Android 通用。",
+                "The file holds only the logins and the local names, no messages, contacts or media. It is encrypted with your password and works on both iPhone and Android.");
     }
 
     public static String warningText() {
-        return LuckgramStrings.get("这份备份等于你账号的钥匙。任何人拿到备份和密码就能登录你的账号。",
-                "This backup is the key to your accounts. Anyone with the backup and the password can log in to them.");
+        return LuckgramStrings.get("这个文件等于你账号的钥匙。任何人拿到文件和密码就能登录你的账号。不要发给别人，不要存到不信任的地方。",
+                "This file is the key to your accounts. Anyone with the file and the password can log in to them. Don't send it to anyone and don't keep it anywhere you don't trust.");
     }
 
     public static String passwordTitleText() {
@@ -78,7 +129,7 @@ public final class LuckgramBackup {
     }
 
     public static String notBackupText() {
-        return LuckgramStrings.get("云备份已损坏或来自更新版本的 Luckgram", "The cloud backup is damaged or was made by a newer Luckgram");
+        return LuckgramStrings.get("这不是 Luckgram 备份文件，或文件已损坏", "This isn't a Luckgram backup file, or the file is damaged");
     }
 
     public static String chooseAccountsText() {
@@ -145,6 +196,104 @@ public final class LuckgramBackup {
             result.add(new LuckgramBackupFormat.Account(userConfig.getClientUserId(), dcId, key, salt, alias));
         }
         return result;
+    }
+
+    // ---------------------------------------------------------------- export
+
+    /** Reads the keys and encrypts them on a background thread; {@code done} gets the file bytes (null on failure) on the UI thread. */
+    public static void encrypt(List<Integer> accounts, String password, Utilities.Callback<byte[]> done) {
+        Utilities.globalQueue.postRunnable(() -> {
+            ArrayList<LuckgramBackupFormat.Account> items = collect(accounts);
+            byte[] data = null;
+            try {
+                if (!items.isEmpty()) {
+                    data = LuckgramBackupFormat.encrypt(items, password);
+                }
+            } catch (Throwable e) {
+                FileLog.e("luckgram backup: export failed " + e.getClass().getSimpleName());
+            } finally {
+                for (LuckgramBackupFormat.Account item : items) {
+                    item.wipe();
+                }
+            }
+            final byte[] result = data;
+            AndroidUtilities.runOnUIThread(() -> done.run(result));
+        });
+    }
+
+    public static String fileName() {
+        return "luckgram-" + new SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(new Date()) + "." + LuckgramBackupFormat.FILE_EXTENSION;
+    }
+
+    /** "Save to device": writes the (already encrypted) file to the document the user created. */
+    public static boolean writeTo(Uri uri, byte[] data) {
+        try (OutputStream out = ApplicationLoader.applicationContext.getContentResolver().openOutputStream(uri, "wt")) {
+            if (out == null) {
+                return false;
+            }
+            out.write(data);
+            return true;
+        } catch (Throwable e) {
+            FileLog.e("luckgram backup: save failed " + e.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    /** "Share…": writes the encrypted file to the app's private cache and opens the share sheet. */
+    public static boolean share(Activity activity, byte[] data) {
+        try {
+            File dir = new File(ApplicationLoader.applicationContext.getFilesDir(), "cache/luckgram-backup");
+            deleteOldFiles(dir);
+            if (!dir.exists() && !dir.mkdirs()) {
+                return false;
+            }
+            File file = new File(dir, fileName());
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                out.write(data);
+            }
+            Uri uri = FileProvider.getUriForFile(activity, ApplicationLoader.getApplicationId() + ".provider", file);
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.setType("application/octet-stream");
+            intent.putExtra(Intent.EXTRA_STREAM, uri);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            activity.startActivity(Intent.createChooser(intent, exportText()));
+            return true;
+        } catch (Throwable e) {
+            FileLog.e(e);
+            return false;
+        }
+    }
+
+    /** Files from earlier shares are only kept until the next one. */
+    private static void deleteOldFiles(File dir) {
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File f : files) {
+            //noinspection ResultOfMethodCallIgnored
+            f.delete();
+        }
+    }
+
+    // ---------------------------------------------------------------- import
+
+    public static byte[] readFile(Uri uri) throws Exception {
+        try (InputStream in = ApplicationLoader.applicationContext.getContentResolver().openInputStream(uri)) {
+            if (in == null) {
+                throw new IllegalStateException("no stream");
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int n;
+            while ((n = in.read(buffer)) > 0) {
+                out.write(buffer, 0, n);
+                if (out.size() > MAX_FILE_SIZE) {
+                    throw new IllegalStateException("too large");
+                }
+            }
+            return out.toByteArray();
+        }
     }
 
     // ---------------------------------------------------------------- restore

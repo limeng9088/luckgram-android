@@ -38,6 +38,13 @@ public final class CloudBackup {
     /** Keystore-encrypted, see {@link LuckgramSecureStore}. Never uploaded. */
     private static final String SECRET_PASSWORD = "cloud_backup.password";
 
+    /**
+     * Cloud backup is on hold (user 2026-11-13: local file backup only for now). While false the Pro
+     * page and the login screen show no cloud entry and the weekly upload never runs; the code and
+     * S15 stay so it can be switched back on.
+     */
+    public static final boolean ENABLED = false;
+
     private static boolean autoRunning;
 
     private CloudBackup() {
@@ -321,7 +328,7 @@ public final class CloudBackup {
 
     /** Called when the app comes to the foreground; uploads at most once a week, Pro only. */
     public static void runAutoIfDue() {
-        if (autoRunning || !LuckgramAccounts.isPro()) {
+        if (!ENABLED || autoRunning || !LuckgramAccounts.isPro()) {
             return;
         }
         boolean enabled = LuckgramSettings.prefs().getBoolean(KEY_AUTO, false);

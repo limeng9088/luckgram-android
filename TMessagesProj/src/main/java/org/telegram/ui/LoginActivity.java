@@ -778,12 +778,12 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         updateProxyButton(false, true);
 
         luckgramRestoreView = new TextView(context);
-        luckgramRestoreView.setText(org.telegram.luckgram.backup.CloudBackup.restoreText());
+        luckgramRestoreView.setText(org.telegram.luckgram.backup.LuckgramBackup.restoreText());
         luckgramRestoreView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
         luckgramRestoreView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
         luckgramRestoreView.setGravity(Gravity.CENTER_VERTICAL);
         luckgramRestoreView.setPadding(dp(8), 0, dp(8), 0);
-        luckgramRestoreView.setOnClickListener(v -> org.telegram.luckgram.backup.CloudBackupActivity.startRestoreFromLogin(this));
+        luckgramRestoreView.setOnClickListener(v -> presentFragment(new org.telegram.luckgram.backup.LuckgramBackupActivity(true, getCurrentAccount())));
         sizeNotifierFrameLayout.addView(luckgramRestoreView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 32, Gravity.RIGHT | Gravity.TOP, 16, 16, 56, 16));
         luckgramUpdateRestoreButton();
 
@@ -1660,12 +1660,13 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         onAuthSuccess(res);
     }
 
-    /** Luckgram 32: "Restore from cloud" on the phone number page of a normal login (no switch). */
+    /** Luckgram account backup: "Restore from backup" (file) on the phone number page of a normal login. */
     private void luckgramUpdateRestoreButton() {
         if (luckgramRestoreView == null) {
             return;
         }
-        boolean show = activityMode == MODE_LOGIN && currentViewNum == VIEW_PHONE_INPUT;
+        boolean show = activityMode == MODE_LOGIN && currentViewNum == VIEW_PHONE_INPUT
+                && org.telegram.luckgram.LuckgramSettings.isEnabled(org.telegram.luckgram.backup.LuckgramBackup.FEATURE_KEY);
         luckgramRestoreView.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 

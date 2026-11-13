@@ -352,7 +352,8 @@ public class CloudBackupActivity extends UniversalFragment {
         startRestore(loginFragment, CloudBackup.anyLoggedInAccount(), loginFragment.getCurrentAccount());
     }
 
-    private static void askPassword(BaseFragment host, byte[] file, int preferredSlot) {
+    /** Password → decrypt → choose accounts → restore; shared by the file backup page ({@link LuckgramBackupActivity}). */
+    static void askPassword(BaseFragment host, byte[] file, int preferredSlot) {
         Context context = host.getParentActivity();
         if (context == null) {
             return;
@@ -433,7 +434,7 @@ public class CloudBackupActivity extends UniversalFragment {
         toast(host.getParentActivity(), CloudBackup.errorText(error));
     }
 
-    private static AlertDialog showProgress(Activity activity) {
+    static AlertDialog showProgress(Activity activity) {
         if (activity == null) {
             return null;
         }
@@ -443,19 +444,19 @@ public class CloudBackupActivity extends UniversalFragment {
         return progress;
     }
 
-    private static void dismiss(AlertDialog dialog) {
+    static void dismiss(AlertDialog dialog) {
         if (dialog != null) {
             dialog.dismiss();
         }
     }
 
-    private static void toast(Context context, String text) {
+    static void toast(Context context, String text) {
         if (context != null && text != null) {
             Toast.makeText(context, text, Toast.LENGTH_SHORT).show();
         }
     }
 
-    private static EditTextBoldCursor passwordField(Context context, BaseFragment host, String hint) {
+    static EditTextBoldCursor passwordField(Context context, BaseFragment host, String hint) {
         Theme.ResourcesProvider rp = host.getResourceProvider();
         EditTextBoldCursor editText = new EditTextBoldCursor(context);
         editText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
@@ -510,7 +511,7 @@ public class CloudBackupActivity extends UniversalFragment {
 
         @Override
         protected CharSequence getTitle() {
-            return CloudBackup.restoreText();
+            return LuckgramBackup.restoreText();
         }
 
         @Override
