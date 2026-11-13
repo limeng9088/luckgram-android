@@ -89,11 +89,12 @@ public final class UpdateLogic {
      * package) checks right away: the cached answer was judged against another build.
      */
     public static boolean shouldCheck(long nowMs, long lastSuccessMs, long lastFailureMs, String checkedBy, String running) {
-        if (lastSuccessMs > 0 && running != null && !running.isEmpty() && !running.equals(checkedBy)) {
-            return true;
-        }
+        // a recent failure waits first, also after an update: otherwise every foreground would retry
         if (lastFailureMs > 0 && nowMs >= lastFailureMs && nowMs - lastFailureMs < RETRY_AFTER_FAILURE_MS) {
             return false;
+        }
+        if (lastSuccessMs > 0 && running != null && !running.isEmpty() && !running.equals(checkedBy)) {
+            return true;
         }
         // nowMs < lastSuccessMs: the clock went back; check rather than wait for a day that may never come
         return lastSuccessMs <= 0 || nowMs < lastSuccessMs || nowMs - lastSuccessMs >= CHECK_INTERVAL_MS;
