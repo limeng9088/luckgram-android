@@ -16,13 +16,14 @@ import org.junit.Test;
 public class LuckgramMirrorsTest {
 
     private static final String LIST = "luckgram.cc=lg-www.cat158.com,www.luckgram.cc=lg-www.cat158.com,"
-            + "wiki.luckgram.cc=lg-wiki.cat158.com,dl.luckgram.cc=lg-dl.cat158.com";
+            + "wiki.luckgram.cc=lg-wiki.cat158.com,dl.luckgram.cc=lg-dl.cat158.com,web.luckgram.cc=lgweb.cat158.com";
 
     private static final LuckgramMirrors M = LuckgramMirrors.parse(LIST);
 
     @Test
     public void parse() {
-        assertEquals(4, M.hosts().size());
+        assertEquals(5, M.hosts().size());
+        assertEquals("lgweb.cat158.com", M.hosts().get("web.luckgram.cc"));
         assertEquals("lg-dl.cat158.com", M.hosts().get("dl.luckgram.cc"));
         // junk is skipped, case folded, whitespace allowed
         LuckgramMirrors j = LuckgramMirrors.parse(" WIKI.Luckgram.cc=LG-WIKI.cat158.com  x=, =y, a.b=a.b, bad host=x.y, https://a.b=c.d ");
@@ -51,6 +52,9 @@ public class LuckgramMirrorsTest {
         assertEquals("https://lg-www.cat158.com/privacy-policy/", M.mirror("https://luckgram.cc/privacy-policy/"));
         assertEquals("https://lg-www.cat158.com/en/?a=1#top", M.mirror("https://www.luckgram.cc/en/?a=1#top"));
         assertEquals("https://lg-wiki.cat158.com/getting-started/install.html", M.mirror("https://WIKI.luckgram.cc/getting-started/install.html"));
+        // web version (specs#160 follow-up): deep links keep path, query and fragment
+        assertEquals("https://lgweb.cat158.com/#@luckgram", M.mirror("https://web.luckgram.cc/#@luckgram"));
+        assertEquals("https://lgweb.cat158.com/k/?tgaddr=x", M.mirror("https://web.luckgram.cc/k/?tgaddr=x"));
         assertEquals("https://lg-www.cat158.com", M.mirror("https://luckgram.cc"));
         assertEquals("https://lg-www.cat158.com?x", M.mirror("https://luckgram.cc?x"));
         assertEquals("https://lg-www.cat158.com/", M.mirror("HTTPS://luckgram.cc./"));
@@ -72,6 +76,8 @@ public class LuckgramMirrorsTest {
         assertEquals(wiki, M.forSite(wiki, false));
         assertEquals("https://lg-wiki.cat158.com/faq/", M.forSite(wiki, true));
         assertEquals("https://t.me/luckgram", M.forSite("https://t.me/luckgram", true));
+        assertEquals("https://web.luckgram.cc/", M.forSite("https://web.luckgram.cc/", false));
+        assertEquals("https://lgweb.cat158.com/", M.forSite("https://web.luckgram.cc/", true));
         assertNull(M.forSite(null, true));
     }
 

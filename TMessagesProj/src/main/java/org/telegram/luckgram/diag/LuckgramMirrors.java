@@ -8,7 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * specs#160: luckgram.cc, wiki and dl are blocked by name on some networks while cat158.com is not,
+ * specs#160: luckgram.cc, wiki, dl and web (the web version) are blocked by name on some networks while cat158.com is not,
  * so each has a backup host with the same content (BuildConfig.LUCKGRAM_SITE_MIRRORS, next to the
  * API entries of specs#81):
  * <ul>
