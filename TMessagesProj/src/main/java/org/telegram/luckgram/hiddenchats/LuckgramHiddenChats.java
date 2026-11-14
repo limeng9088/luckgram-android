@@ -177,6 +177,14 @@ public final class LuckgramHiddenChats {
             }
             cache[account] = set;
         }
+        // Migration: older builds could hide Saved Messages. Drop it from the stored list as soon as
+        // the account's user id is known, so hasHidden() and the pull-down entry don't see it.
+        long self = UserConfig.getInstance(account).getClientUserId();
+        if (self != 0 && set.contains(self)) {
+            set = new HashSet<>(set);
+            set.remove(self);
+            save(account, set);
+        }
         return set;
     }
 
@@ -189,11 +197,23 @@ public final class LuckgramHiddenChats {
         return isEnabled() && !ids(account).isEmpty();
     }
 
+    /**
+     * Saved Messages can't be hidden: only the user sees it, and upstream shows it in many places of
+     * its own (share and forward targets, menus). Same on iOS and desktop. A Saved Messages id saved
+     * by an older build is ignored, so it comes back on its own.
+     */
+    public static boolean canHide(int account, long dialogId) {
+        return dialogId != UserConfig.getInstance(account).getClientUserId();
+    }
+
     public static boolean isHidden(int account, long dialogId) {
-        return isEnabled() && ids(account).contains(dialogId);
+        return isEnabled() && canHide(account, dialogId) && ids(account).contains(dialogId);
     }
 
     public static void setHidden(int account, long dialogId, boolean hidden) {
+        if (hidden && !canHide(account, dialogId)) {
+            return;
+        }
         HashSet<Long> set = new HashSet<>(ids(account));
         if (hidden ? !set.add(dialogId) : !set.remove(dialogId)) {
             return;
@@ -227,7 +247,7 @@ public final class LuckgramHiddenChats {
         boolean any = false;
         for (int i = 0, n = dialogs.size(); i < n; i++) {
             TLRPC.Dialog dialog = dialogs.get(i);
-            if (dialog != null && set.contains(dialog.id)) {
+            if (dialog != null && set.contains(dialog.id) && canHide(account, dialog.id)) {
                 any = true;
                 break;
             }
@@ -238,7 +258,7 @@ public final class LuckgramHiddenChats {
         ArrayList<TLRPC.Dialog> result = new ArrayList<>(dialogs.size());
         for (int i = 0, n = dialogs.size(); i < n; i++) {
             TLRPC.Dialog dialog = dialogs.get(i);
-            if (dialog == null || !set.contains(dialog.id)) {
+            if (dialog == null || !set.contains(dialog.id) || !canHide(account, dialog.id)) {
                 result.add(dialog);
             }
         }
@@ -255,7 +275,7 @@ public final class LuckgramHiddenChats {
         List<TLRPC.Dialog> all = MessagesController.getInstance(account).getAllDialogs();
         for (int i = 0, n = all.size(); i < n; i++) {
             TLRPC.Dialog dialog = all.get(i);
-            if (dialog != null && set.contains(dialog.id)) {
+            if (dialog != null && set.contains(dialog.id) && canHide(account, dialog.id)) {
                 result.add(dialog);
             }
         }
