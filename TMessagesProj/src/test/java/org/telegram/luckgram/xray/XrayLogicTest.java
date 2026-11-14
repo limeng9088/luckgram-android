@@ -188,4 +188,53 @@ public class XrayLogicTest {
         assertFalse(XrayLogic.looksLikeLink("socks5://h:1"));
         assertTrue(XrayLogic.looksLikeLink(" VLESS://x"));
     }
+
+    // Desktop #125 / #126: what libXray builds for a plain VLESS link (flat settings, libXray 26).
+    private static String vlessOutbound(String address, String security, String encryption) throws Exception {
+        JSONObject o = new JSONObject().put("protocol", "vless")
+                .put("settings", new JSONObject().put("address", address).put("port", 443).put("id", UUID).put("encryption", encryption));
+        if (security != null) o.put("streamSettings", new JSONObject().put("network", "tcp").put("security", security));
+        return o.toString();
+    }
+
+    @Test
+    public void coreRefusesPlainVlessToPublicAddress() throws Exception {
+        assertTrue(XrayLogic.refusedByCore(vlessOutbound("5.6.7.8", "none", "none")));
+        assertTrue(XrayLogic.refusedByCore(vlessOutbound("example.com", null, "none")));
+        assertTrue(XrayLogic.refusedByCore(vlessOutbound("5.6.7.8", "", "")));
+        // vnext form too.
+        JSONObject vnext = new JSONObject().put("protocol", "vless").put("settings", new JSONObject().put("vnext", new JSONArray().put(
+                new JSONObject().put("address", "5.6.7.8").put("port", 443).put("users", new JSONArray().put(new JSONObject().put("id", UUID).put("encryption", "none"))))));
+        assertTrue(XrayLogic.refusedByCore(vnext.toString()));
+        JSONObject trojan = new JSONObject().put("protocol", "trojan")
+                .put("settings", new JSONObject().put("servers", new JSONArray().put(new JSONObject().put("address", "5.6.7.8").put("port", 443).put("password", "p"))))
+                .put("streamSettings", new JSONObject().put("security", "none"));
+        assertTrue(XrayLogic.refusedByCore(trojan.toString()));
+    }
+
+    @Test
+    public void coreRunsEncryptedOrPrivateNodes() throws Exception {
+        assertFalse(XrayLogic.refusedByCore(vlessOutbound("5.6.7.8", "tls", "none")));
+        assertFalse(XrayLogic.refusedByCore(vlessOutbound("5.6.7.8", "reality", "none")));
+        assertFalse(XrayLogic.refusedByCore(vlessOutbound("5.6.7.8", "none", "mlkem768x25519plus.native.0rtt.x")));
+        assertFalse(XrayLogic.refusedByCore(vlessOutbound("192.168.1.5", "none", "none")));
+        JSONObject vmess = new JSONObject().put("protocol", "vmess").put("settings", new JSONObject().put("address", "5.6.7.8"))
+                .put("streamSettings", new JSONObject().put("security", "none"));
+        assertFalse(XrayLogic.refusedByCore(vmess.toString()));
+        JSONObject trojanTls = new JSONObject().put("protocol", "trojan").put("settings", new JSONObject().put("address", "5.6.7.8"))
+                .put("streamSettings", new JSONObject().put("security", "tls"));
+        assertFalse(XrayLogic.refusedByCore(trojanTls.toString()));
+        assertFalse(XrayLogic.refusedByCore("not json"));
+    }
+
+    @Test
+    public void privateAddresses() {
+        for (String h : new String[]{"10.1.1.1", "172.16.0.1", "172.31.255.1", "192.168.0.1", "127.0.0.1", "169.254.1.1",
+                "fd00::1", "fe80::1", "[fe80::1]", "::1", "localhost", "LocalHost"}) {
+            assertTrue(h, XrayLogic.isPrivateAddress(h));
+        }
+        for (String h : new String[]{"5.6.7.8", "172.32.0.1", "100.64.0.1", "300.1.1.1", "2001:db8::1", "::", "example.com", "a.lan", ""}) {
+            assertFalse(h, XrayLogic.isPrivateAddress(h));
+        }
+    }
 }

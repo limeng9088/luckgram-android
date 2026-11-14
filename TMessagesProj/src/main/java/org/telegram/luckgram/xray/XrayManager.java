@@ -113,6 +113,19 @@ public final class XrayManager {
         return lastError == null ? T.starting() : T.notRunning(lastError);
     }
 
+    /** {@link #problem()} for one node; first that the core refuses it. */
+    public static String problem(SharedConfig.ProxyInfo info) {
+        Rec r = info == null ? null : forSettings(info.settings);
+        if (r != null && XrayLogic.refusedByCore(r.outbound)) return T.unencrypted();
+        return problem();
+    }
+
+    /** Why {@link #register} gave nothing for this node. */
+    public static String refusedText(XrayLogic.Node node) {
+        String outbound = node == null ? null : XrayCore.outboundFor(node.link);
+        return outbound != null && XrayLogic.refusedByCore(outbound) ? T.unencrypted() : T.unavailable();
+    }
+
     public static synchronized List<Rec> list() {
         load();
         return new ArrayList<>(nodes);
@@ -143,7 +156,8 @@ public final class XrayManager {
         for (Rec r : nodes) if (r.key().equals(key)) rec = r;
         if (rec == null) {
             String outbound = XrayCore.outboundFor(node.link);
-            if (outbound == null) return null;
+            if (outbound == null || XrayLogic.refusedByCore(outbound)) return null; // refusedText() says why
+
             Set<Integer> used = new HashSet<>();
             for (Rec r : nodes) used.add(r.localPort);
             List<Integer> ports = XrayLogic.pickPorts(portBase, used, 1);
@@ -211,7 +225,9 @@ public final class XrayManager {
         String pass;
         synchronized (XrayManager.class) {
             load();
-            for (Rec r : nodes) runs.add(new XrayLogic.Run(r.localPort, r.outbound));
+            // A node the core refuses (added before #125) stays in the list, marked, but isn't
+            // run: one such outbound would stop every node.
+            for (Rec r : nodes) if (!XrayLogic.refusedByCore(r.outbound)) runs.add(new XrayLogic.Run(r.localPort, r.outbound));
             pass = password;
         }
         XrayCore.stop();
@@ -374,5 +390,6 @@ public final class XrayManager {
         public static String linkCopied() { return t("链接已复制", "Link copied"); }
         public static String delete() { return t("删除代理", "Delete Proxy"); }
         public static String unavailable() { return t("这个节点现在用不了", "This node can't be used now"); }
+        public static String unencrypted() { return t("未加密的 VLESS / Trojan 节点内核不支持，需要 TLS 或 Reality", "The core doesn't run unencrypted VLESS / Trojan nodes: TLS or Reality is needed"); }
     }
 }
