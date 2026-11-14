@@ -8,7 +8,9 @@ import android.content.DialogInterface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
 import android.text.method.PasswordTransformationMethod;
 import android.util.TypedValue;
 import android.view.View;
@@ -209,6 +211,8 @@ public class CloudBackupActivity extends UniversalFragment {
         EditTextBoldCursor second = passwordField(context, this, LuckgramBackup.passwordRepeatHintText());
         container.addView(first, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 6, 20, 6));
         container.addView(second, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 6, 20, 6));
+        TextView error = passwordError(context, this, first, second);
+        container.addView(error, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 24, 2, 24, 2));
         CheckBoxCell remember = new CheckBoxCell(context, CheckBoxCell.TYPE_CHECK_BOX_DEFAULT, getResourceProvider());
         remember.setBackground(Theme.getSelectorDrawable(false));
         remember.setText(CloudBackup.rememberText(), "", autoOnly || CloudBackup.isAutoEnabled(), false);
@@ -221,13 +225,11 @@ public class CloudBackupActivity extends UniversalFragment {
         builder.setPositiveButton(CloudBackup.uploadText(), (d, w) -> {
             String password = first.getText().toString();
             if (password.length() < LuckgramBackupFormat.MIN_PASSWORD_LENGTH) {
-                AndroidUtilities.shakeView(first);
-                toast(context, LuckgramBackup.passwordTooShortText());
+                showPasswordError(error, first, LuckgramBackup.passwordTooShortText());
                 return;
             }
             if (!password.equals(second.getText().toString())) {
-                AndroidUtilities.shakeView(second);
-                toast(context, LuckgramBackup.passwordMismatchText());
+                showPasswordError(error, second, LuckgramBackup.passwordMismatchText());
                 return;
             }
             boolean keep = remember.isChecked();
@@ -246,6 +248,7 @@ public class CloudBackupActivity extends UniversalFragment {
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), (d, w) -> d.dismiss());
         AlertDialog dialog = builder.create();
         dialog.setDismissDialogByButtons(false);
+        dialog.setCanceledOnTouchOutside(false);
         dialog.setOnShowListener(d -> {
             first.requestFocus();
             AndroidUtilities.showKeyboard(first);
@@ -454,6 +457,41 @@ public class CloudBackupActivity extends UniversalFragment {
         if (context != null && text != null) {
             Toast.makeText(context, text, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * Red line under the password fields (specs#172). A toast is easy to miss while the keyboard is
+     * up, so password errors are shown inside the dialog; it hides again as soon as the user types.
+     */
+    static TextView passwordError(Context context, BaseFragment host, EditTextBoldCursor... fields) {
+        TextView error = new TextView(context);
+        error.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        error.setTextColor(Theme.getColor(Theme.key_text_RedRegular, host.getResourceProvider()));
+        error.setVisibility(View.GONE);
+        TextWatcher watcher = new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                error.setVisibility(View.GONE);
+            }
+        };
+        for (EditTextBoldCursor field : fields) {
+            field.addTextChangedListener(watcher);
+        }
+        return error;
+    }
+
+    static void showPasswordError(TextView error, View field, String text) {
+        error.setText(text);
+        error.setVisibility(View.VISIBLE);
+        AndroidUtilities.shakeView(field);
     }
 
     static EditTextBoldCursor passwordField(Context context, BaseFragment host, String hint) {
