@@ -145,6 +145,8 @@ public class VoIPGroupNotification {
             return;
         }
         if (MessagesController.getInstance(account).callRequestsDisabled) return;
+        // Luckgram 11: no group / conference call invites for accounts hidden in the second space.
+        if (org.telegram.luckgram.doublebottom.LuckgramDoubleBottom.isHidden(account)) return;
         if (ignoreCalls != null && ignoreCalls.contains(msg_id))
             return;
 
