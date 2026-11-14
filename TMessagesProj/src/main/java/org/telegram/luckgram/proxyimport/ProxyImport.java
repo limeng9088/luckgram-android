@@ -202,7 +202,7 @@ public final class ProxyImport {
                 boolean existed = existingKeys().contains(e.key());
                 ProxySettings settings = toSettings(e);
                 if (settings == null) {
-                    alert(fragment, T.inputTitle(), XrayManager.T.unavailable());
+                    alert(fragment, T.inputTitle(), xray ? XrayManager.refusedText(XrayLogic.parse(e.link)) : XrayManager.T.unavailable());
                     break;
                 }
                 SharedConfig.addProxy(new SharedConfig.ProxyInfo(settings));
@@ -393,8 +393,8 @@ public final class ProxyImport {
             if (skipped > 0) {
                 b.append("\n\n").append(coreOff
                         ? t("跳过 " + skipped + " 个节点：" + XrayManager.problem() + "。", "Skipped " + skipped + " " + (skipped == 1 ? "entry" : "entries") + ": " + XrayManager.problem() + ".")
-                        : t("跳过 " + skipped + " 个不支持的节点（支持 SOCKS5、MTProto、VLESS、VMess、Trojan、Shadowsocks；Hysteria、TUIC 等用不了）。",
-                        "Skipped " + skipped + " unsupported " + (skipped == 1 ? "entry" : "entries") + " (supported: SOCKS5, MTProto, VLESS, VMess, Trojan, Shadowsocks; not Hysteria, TUIC and others)."));
+                        : t("跳过 " + skipped + " 个不支持的节点（支持 SOCKS5、MTProto、VLESS、VMess、Trojan、Shadowsocks；Hysteria、TUIC 等用不了，未加密的 VLESS / Trojan 内核也不支持）。",
+                        "Skipped " + skipped + " unsupported " + (skipped == 1 ? "entry" : "entries") + " (supported: SOCKS5, MTProto, VLESS, VMess, Trojan, Shadowsocks; not Hysteria, TUIC and others, nor unencrypted VLESS / Trojan)."));
             }
             return b.toString();
         }

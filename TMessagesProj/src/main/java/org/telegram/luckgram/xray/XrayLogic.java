@@ -376,6 +376,73 @@ public final class XrayLogic {
         }
     }
 
+    /**
+     * Desktop#125 / #126: Xray 26 refuses VLESS / Trojan without TLS, Reality or VLESS encryption
+     * unless the server is a private address ("... is prohibited unless the server address is a
+     * private IP or domain"), and one such outbound makes the whole config fail: no node works.
+     * True for such an outbound (as libXray built it: libXray already makes every Trojan TLS, so
+     * in practice plain VLESS). Never given to the core; the list says why.
+     */
+    public static boolean refusedByCore(String outboundJson) {
+        try {
+            JSONObject o = new JSONObject(outboundJson);
+            String protocol = o.optString("protocol");
+            if (!VLESS.equals(protocol) && !TROJAN.equals(protocol)) return false;
+            JSONObject stream = o.optJSONObject("streamSettings");
+            String security = stream == null ? "" : stream.optString("security").trim().toLowerCase(Locale.ROOT);
+            if (!security.isEmpty() && !"none".equals(security)) return false;
+            JSONObject settings = o.optJSONObject("settings");
+            if (settings == null) return false;
+            // Flat (libXray 26: address / port / id / encryption) or vnext / servers.
+            JSONObject server = settings;
+            JSONArray list = settings.optJSONArray(VLESS.equals(protocol) ? "vnext" : "servers");
+            if (!settings.has("address") && list != null && list.length() > 0) server = list.getJSONObject(0);
+            if (VLESS.equals(protocol)) {
+                String encryption = server.optString("encryption", settings.optString("encryption"));
+                JSONArray users = server.optJSONArray("users");
+                if (users != null && users.length() > 0) encryption = users.getJSONObject(0).optString("encryption", encryption);
+                encryption = encryption.trim().toLowerCase(Locale.ROOT);
+                if (!encryption.isEmpty() && !"none".equals(encryption)) return false;
+            }
+            return !isPrivateAddress(server.optString("address"));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Loopback, private (10/8, 172.16/12, 192.168/16), link-local, IPv6 ULA / link-local / ::1,
+     * localhost (checked against xray 26.10.31 {@code run -test}). Other names count as public:
+     * xray accepts .local / .lan too, missing one only leaves a node unused.
+     */
+    public static boolean isPrivateAddress(String host) {
+        String h = host == null ? "" : host.trim().toLowerCase(Locale.ROOT);
+        if (h.startsWith("[") && h.endsWith("]")) h = h.substring(1, h.length() - 1);
+        if ("localhost".equals(h)) return true;
+        if (h.matches("\\d{1,3}(\\.\\d{1,3}){3}")) {
+            String[] p = h.split("\\.");
+            int[] b = new int[4];
+            for (int i = 0; i < 4; i++) {
+                b[i] = Integer.parseInt(p[i]);
+                if (b[i] > 255) return false;
+            }
+            return b[0] == 10 || b[0] == 127
+                    || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
+                    || (b[0] == 192 && b[1] == 168)
+                    || (b[0] == 169 && b[1] == 254);
+        }
+        if (!h.contains(":")) return false;
+        if ("::1".equals(h)) return true;
+        String first = h.substring(0, h.indexOf(':'));
+        if (first.length() != 4) return false;
+        try {
+            int v = Integer.parseInt(first, 16);
+            return (v & 0xFE00) == 0xFC00 || (v & 0xFFC0) == 0xFE80;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
     /** {@code n} free ports counting up from {@code base} (wrapping inside 20000–59999), skipping {@code used}. */
     public static List<Integer> pickPorts(int base, Set<Integer> used, int n) {
         List<Integer> out = new ArrayList<>();

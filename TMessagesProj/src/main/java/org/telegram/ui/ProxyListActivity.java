@@ -234,7 +234,7 @@ public class ProxyListActivity extends BaseFragment implements NotificationCente
 
         public void updateStatus() {
             int colorKey;
-            String xrayProblem = org.telegram.luckgram.xray.XrayManager.isXray(currentInfo) ? org.telegram.luckgram.xray.XrayManager.problem() : null;
+            String xrayProblem = org.telegram.luckgram.xray.XrayManager.isXray(currentInfo) ? org.telegram.luckgram.xray.XrayManager.problem(currentInfo) : null;
             if (xrayProblem != null) {
                 // Luckgram 119: the core is off, missing, starting or failed
                 valueTextView.setText(xrayProblem);
