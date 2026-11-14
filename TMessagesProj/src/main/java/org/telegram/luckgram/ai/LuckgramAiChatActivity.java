@@ -44,9 +44,7 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.ActionBarMenu;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BulletinFactory;
-import org.telegram.ui.Components.ChatAvatarContainer;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.ItemOptions;
 import org.telegram.ui.Components.LayoutHelper;
@@ -66,7 +64,7 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
 
     private static final String ARG_CONVERSATION = "conversation";
     private static final String ARG_PREFILL = "prefill";
-    private static final int MENU_NEW = 1, MENU_HISTORY = 2;
+    private static final int MENU_NEW = 1, MENU_HISTORY = 2, MENU_MORE = 3, MENU_ENTRY_BASE = 100;
 
     private LuckgramAiConversation conversation;
     private String prefill;
@@ -78,7 +76,14 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
     private View emptyView;
     private EditTextBoldCursor input;
     private ImageView sendButton;
-    private ChatAvatarContainer avatarContainer;
+    /** specs#171: the header entries (agents, …) of the "more" menu, in menu order. */
+    private List<LuckgramAiRegistry.HeaderEntry> menuEntries = new ArrayList<>();
+
+    // specs#171: 「按住 说话」
+    private ImageView voiceToggle;
+    private TextView talkBar;
+    private boolean talkMode;
+    private org.telegram.luckgram.voice.LuckgramAiTalk talk;
 
     private LuckgramAiConversation.Message streaming;
     private LuckgramAI.Request request;
@@ -138,6 +143,9 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
     @Override
     public void onFragmentDestroy() {
         stopStreaming();
+        if (talk != null) {
+            talk.cancel();
+        }
         super.onFragmentDestroy();
     }
 
@@ -154,19 +162,31 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
                     switchTo(store().create(LuckgramAI.TASK_CHAT, null, null));
                 } else if (id == MENU_HISTORY) {
                     presentFragment(new LuckgramAiHistoryActivity(LuckgramAiChatActivity.this::switchTo));
+                } else if (id >= MENU_ENTRY_BASE && id - MENU_ENTRY_BASE < menuEntries.size()) {
+                    menuEntries.get(id - MENU_ENTRY_BASE).callback.run(LuckgramAiChatActivity.this);
                 }
             }
         });
-        avatarContainer = new ChatAvatarContainer(context, this, false, getResourceProvider());
-        AvatarDrawable avatar = new AvatarDrawable();
-        avatar.setInfo(0x4c47414cL, "Luckgram", "AI", "AI");
-        avatarContainer.getAvatarImageView().setImageDrawable(avatar);
+        // specs#171: just the name in the bar; the header entries live in a "more" menu next to "new chat"
         updateHeader();
-        avatarContainer.setOnClickListener(null);
-        actionBar.addView(avatarContainer, 0, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT, 56, 0, 96, 0));
         ActionBarMenu menu = actionBar.createMenu();
         menu.addItem(MENU_NEW, R.drawable.msg_add).setContentDescription(LuckgramStrings.get("新对话", "New chat"));
-        menu.addItem(MENU_HISTORY, R.drawable.msg_recent).setContentDescription(LuckgramStrings.get("历史对话", "Chat history"));
+        menuEntries = new ArrayList<>(LuckgramAiRegistry.headerEntries());
+        if (menuEntries.isEmpty()) {
+            menu.addItem(MENU_HISTORY, R.drawable.msg_recent).setContentDescription(LuckgramStrings.get("历史对话", "Chat history"));
+        } else {
+            org.telegram.ui.ActionBar.ActionBarMenuItem more = menu.addItem(MENU_MORE, R.drawable.ic_ab_other);
+            more.setContentDescription(LuckgramStrings.get("更多", "More"));
+            more.addSubItem(MENU_HISTORY, R.drawable.msg_recent, LuckgramStrings.get("历史对话", "Chat history"));
+            for (int i = 0; i < menuEntries.size(); i++) {
+                final LuckgramAiRegistry.HeaderEntry entry = menuEntries.get(i);
+                if (entry.icon != 0) {
+                    more.addSubItem(MENU_ENTRY_BASE + i, entry.icon, entry.title());
+                } else {
+                    more.addSubItem(MENU_ENTRY_BASE + i, entry.title());
+                }
+            }
+        }
 
         // specs#96: this view starts below the action bar (no overlay), so the wallpaper must not
         // skip an action bar + status bar height at its top (that left a white block).
@@ -181,17 +201,14 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
                 return false;
             }
         };
-        content.setBackgroundImage(Theme.getCachedWallpaper(), Theme.isWallpaperMotion());
+        // specs#171: a plain page (no chat wallpaper), like other assistants
+        final int pageColor = getThemedColor(Theme.key_windowBackgroundWhite);
+        content.setBackgroundColor(pageColor);
         fragmentView = content;
 
         LinearLayout column = new LinearLayout(context);
         column.setOrientation(LinearLayout.VERTICAL);
         content.addView(column, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
-
-        // extension point 3: entries at the top of the page, as Telegram pinned bars (specs#101)
-        for (LuckgramAiRegistry.HeaderEntry entry : LuckgramAiRegistry.headerEntries()) {
-            column.addView(pinnedBar(context, entry), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48));
-        }
 
         FrameLayout listFrame = new FrameLayout(context);
         column.addView(listFrame, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 0, 1f));
@@ -215,18 +232,11 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         emptyView = emptyScroll;
         listFrame.addView(emptyView, LayoutHelper.createFrame(Math.min(388, (int) (AndroidUtilities.displaySize.x / AndroidUtilities.density)), LayoutHelper.MATCH_PARENT, Gravity.CENTER_HORIZONTAL));
 
-        // specs#96: the same top shadow as Telegram's message panel (ChatActivityEnterView)
-        View composeShadow = new View(context);
-        android.graphics.drawable.Drawable shadow = context.getResources().getDrawable(R.drawable.compose_panel_shadow).mutate();
-        shadow.setColorFilter(new android.graphics.PorterDuffColorFilter(getThemedColor(Theme.key_chat_messagePanelShadow), android.graphics.PorterDuff.Mode.SRC_IN));
-        composeShadow.setBackground(shadow);
-        column.addView(composeShadow, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 3));
-
         // spec 18 需求 3 + extension point 1: quick buttons, a scrollable row at the top of the
         // message panel (specs#101), on the panel's own background
         HorizontalScrollView quickScroll = new HorizontalScrollView(context);
         quickScroll.setHorizontalScrollBarEnabled(false);
-        quickScroll.setBackgroundColor(getThemedColor(Theme.key_chat_messagePanelBackground));
+        quickScroll.setBackgroundColor(pageColor);
         LinearLayout quickRow = new LinearLayout(context);
         quickRow.setOrientation(LinearLayout.HORIZONTAL);
         quickRow.setPadding(dp(7), dp(8), dp(7), dp(2));
@@ -238,7 +248,7 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         column.addView(quickScroll, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         FrameLayout inputPanel = new FrameLayout(context);
-        inputPanel.setBackgroundColor(getThemedColor(Theme.key_chat_messagePanelBackground));
+        inputPanel.setBackgroundColor(pageColor);
         column.addView(inputPanel, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         input = new EditTextBoldCursor(context);
@@ -247,13 +257,77 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         input.setHintTextColor(getThemedColor(Theme.key_chat_messagePanelHint));
         input.setCursorColor(getThemedColor(Theme.key_chat_messagePanelCursor));
         input.setHint(LuckgramStrings.get("给 Luckgram AI 发消息", "Message Luckgram AI"));
-        input.setBackground(null);
+        final int fieldColor = getThemedColor(Theme.key_windowBackgroundGray);
+        GradientDrawable fieldBg = new GradientDrawable();
+        fieldBg.setCornerRadius(dp(20));
+        fieldBg.setColor(fieldColor);
+        input.setBackground(fieldBg);
         input.setMaxLines(6);
-        input.setMinHeight(dp(48));
-        input.setPadding(dp(14), dp(11), dp(4), dp(11));
+        input.setMinHeight(dp(40));
+        input.setPadding(dp(14), dp(8), dp(12), dp(8));
         input.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
         input.setInputType(input.getInputType() | EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES | EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE);
-        inputPanel.addView(input, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM, 0, 0, 52, 0));
+        inputPanel.addView(input, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM, 48, 6, 52, 8));
+
+        // specs#171: the toggle left of the field switches between the keyboard and 「按住 说话」
+        voiceToggle = new ImageView(context);
+        voiceToggle.setScaleType(ImageView.ScaleType.CENTER);
+        voiceToggle.setColorFilter(new android.graphics.PorterDuffColorFilter(getThemedColor(Theme.key_chat_messagePanelIcons), android.graphics.PorterDuff.Mode.SRC_IN));
+        voiceToggle.setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_listSelector)));
+        voiceToggle.setOnClickListener(v -> onVoiceToggle());
+        inputPanel.addView(voiceToggle, LayoutHelper.createFrame(48, 48, Gravity.BOTTOM | Gravity.LEFT, 0, 0, 0, 4));
+
+        talk = new org.telegram.luckgram.voice.LuckgramAiTalk(new org.telegram.luckgram.voice.LuckgramAiTalk.Host() {
+            @Override
+            public android.app.Activity activity() {
+                return getParentActivity();
+            }
+
+            @Override
+            public boolean canStart() {
+                return streaming == null;
+            }
+
+            @Override
+            public void onStateChanged() {
+                updateTalkBar();
+            }
+
+            @Override
+            public void onSend(String text) {
+                // 「松开 发送」: what was said goes to the assistant right away
+                if (streaming != null || LuckgramAiRegistry.intercept(LuckgramAiChatActivity.this, text)) {
+                    return;
+                }
+                addMessage(LuckgramAiConversation.Message.create(LuckgramAiConversation.Message.ROLE_USER, LuckgramAiConversation.Message.TYPE_TEXT, text));
+                requestReply();
+            }
+
+            @Override
+            public void onText(String text) {
+                // 「转文字」: into the field, to be edited before sending
+                setTalkMode(false, false);
+                setInput(text);
+                AndroidUtilities.showKeyboard(input);
+            }
+
+            @Override
+            public void showHint(String text) {
+                BulletinFactory.of(LuckgramAiChatActivity.this).createSimpleBulletin(R.raw.error, text).show();
+            }
+        });
+        talkBar = new TextView(context);
+        talkBar.setGravity(Gravity.CENTER);
+        talkBar.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
+        talkBar.setTypeface(AndroidUtilities.bold());
+        talkBar.setTextColor(getThemedColor(Theme.key_chat_messagePanelText));
+        GradientDrawable talkBg = new GradientDrawable();
+        talkBg.setCornerRadius(dp(20));
+        talkBg.setColor(fieldColor);
+        talkBar.setBackground(talkBg);
+        talkBar.setVisibility(View.GONE);
+        talkBar.setOnTouchListener((v, event) -> talk.onTouch(v, event));
+        inputPanel.addView(talkBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 40, Gravity.BOTTOM, 48, 6, 52, 8));
 
         sendButton = new ImageView(context);
         sendButton.setScaleType(ImageView.ScaleType.CENTER);
@@ -265,7 +339,7 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
                 send();
             }
         });
-        inputPanel.addView(sendButton, LayoutHelper.createFrame(48, 48, Gravity.BOTTOM | Gravity.RIGHT, 0, 0, 2, 0));
+        inputPanel.addView(sendButton, LayoutHelper.createFrame(48, 48, Gravity.BOTTOM | Gravity.RIGHT, 0, 0, 2, 4));
         input.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -302,6 +376,14 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         AndroidUtilities.requestAdjustResize(getParentActivity(), classGuid);
     }
 
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (talk != null) {
+            talk.cancel();
+        }
+    }
+
     /** specs#101: quick buttons — accent text on a light accent tint with an accent outline. */
     private View chip(Context context, String title, int icon, View.OnClickListener click) {
         TextView chip = new TextView(context);
@@ -323,7 +405,6 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(dp(15));
         bg.setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x1A));
-        bg.setStroke(Math.max(1, dp(1)), androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x80));
         chip.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x30)), bg, null));
         chip.setOnClickListener(click);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(30));
@@ -386,62 +467,24 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
 
     /** specs#101: centered card — accent icon, title, one line, 4 tappable examples; readable in both themes. */
     private View welcomeCard(Context context) {
-        int accent = getThemedColor(Theme.key_chat_messagePanelSend);
+        // specs#171: the empty page says one thing. What the assistant can do is the row of quick buttons above the field.
         LinearLayout card = new LinearLayout(context);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setGravity(Gravity.CENTER_HORIZONTAL);
-        card.setPadding(dp(16), dp(20), dp(16), dp(16));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(18));
-        bg.setColor(getThemedColor(Theme.key_chat_inBubble));
-        card.setBackground(bg);
-        card.setElevation(dp(2));
 
         ImageView badge = new ImageView(context);
-        badge.setScaleType(ImageView.ScaleType.CENTER);
-        badge.setImageResource(R.drawable.msg_bots);
-        badge.setColorFilter(new android.graphics.PorterDuffColorFilter(0xFFFFFFFF, android.graphics.PorterDuff.Mode.SRC_IN));
-        GradientDrawable badgeBg = new GradientDrawable();
-        badgeBg.setShape(GradientDrawable.OVAL);
-        badgeBg.setColor(accent);
-        badge.setBackground(badgeBg);
-        card.addView(badge, LayoutHelper.createLinear(48, 48));
+        badge.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        badge.setImageResource(R.drawable.luckgram_ai);
+        badge.setColorFilter(new android.graphics.PorterDuffColorFilter(getThemedColor(Theme.key_chat_messagePanelSend), android.graphics.PorterDuff.Mode.SRC_IN));
+        card.addView(badge, LayoutHelper.createLinear(40, 40));
 
         TextView title = new TextView(context);
         title.setText(LuckgramStrings.get("有什么可以帮你？", "How can I help?"));
-        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24);
         title.setTypeface(AndroidUtilities.bold());
-        title.setTextColor(getThemedColor(Theme.key_chat_messageTextIn));
+        title.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
         title.setGravity(Gravity.CENTER);
-        card.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 12, 0, 0));
-
-        TextView sub = new TextView(context);
-        sub.setText(LuckgramStrings.get("可以提问、总结或改写长文、讲解、解题。", "Ask anything, summarize or rewrite text, explain, solve problems."));
-        sub.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        sub.setTextColor(getThemedColor(Theme.key_chat_inTimeText));
-        sub.setGravity(Gravity.CENTER);
-        card.addView(sub, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 6, 0, 14));
-
-        for (String[] example : WELCOME_EXAMPLES) {
-            String text = LuckgramStrings.get(example[0], example[1]);
-            TextView row = new TextView(context);
-            row.setText(text);
-            row.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-            row.setTextColor(accent);
-            row.setPadding(dp(12), dp(9), dp(12), dp(9));
-            GradientDrawable rowBg = new GradientDrawable();
-            rowBg.setCornerRadius(dp(12));
-            rowBg.setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x1A));
-            row.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 0x30)), rowBg, null));
-            row.setOnClickListener(v -> {
-                setInput(text);
-                if (input != null) {
-                    input.requestFocus();
-                    AndroidUtilities.showKeyboard(input);
-                }
-            });
-            card.addView(row, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 8));
-        }
+        card.addView(title, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 14, 0, 0));
         return card;
     }
 
@@ -453,6 +496,57 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         int color = getThemedColor(enabled ? Theme.key_chat_messagePanelSend : Theme.key_chat_messagePanelIcons);
         sendButton.setColorFilter(new android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN));
         sendButton.setContentDescription(stop ? LuckgramStrings.get("停止", "Stop") : LuckgramStrings.get("发送", "Send"));
+        // while 「按住 说话」 is shown the field is hidden: nothing to send by button, only a reply to stop
+        sendButton.setVisibility(talkMode && !stop ? View.INVISIBLE : View.VISIBLE);
+        updateTalkBar();
+    }
+
+    // ---------------------------------------------------------------- 「按住 说话」 (specs#171)
+
+    private void updateTalkBar() {
+        if (talkBar == null || voiceToggle == null || input == null) return;
+        voiceToggle.setImageResource(talkMode ? R.drawable.input_keyboard : R.drawable.input_mic);
+        voiceToggle.setContentDescription(talkMode ? LuckgramStrings.get("切换到键盘", "Switch to keyboard") : LuckgramStrings.get("切换到按住说话", "Switch to hold to talk"));
+        talkBar.setVisibility(talkMode ? View.VISIBLE : View.GONE);
+        input.setVisibility(talkMode ? View.INVISIBLE : View.VISIBLE);
+        final String text = talk == null ? "" : talk.barText();
+        talkBar.setText(text);
+        talkBar.setContentDescription(text);
+        talkBar.setAlpha(talk != null && talk.isConverting() ? 0.5f : (talk != null && talk.isHolding() ? 0.6f : 1f));
+    }
+
+    private void onVoiceToggle() {
+        if (talk == null || talk.isHolding() || talk.isConverting()) return;
+        if (talkMode) {
+            setTalkMode(false, true);
+            return;
+        }
+        final android.app.Activity activity = getParentActivity();
+        if (activity == null) return;
+        // the first switch asks for what a recording needs: the microphone and AI consent (speech goes to the AI gateway)
+        if (android.os.Build.VERSION.SDK_INT >= 23 && activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            activity.requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, 3);
+            return;
+        }
+        LuckgramAI.getInstance().requestConsent(activity, agreed -> {
+            if (agreed && fragmentView != null) {
+                setTalkMode(true, false);
+            }
+        });
+    }
+
+    private void setTalkMode(boolean on, boolean focus) {
+        talkMode = on;
+        if (input != null) {
+            if (on) {
+                AndroidUtilities.hideKeyboard(input);
+                input.clearFocus();
+            } else if (focus) {
+                input.requestFocus();
+                AndroidUtilities.showKeyboard(input);
+            }
+        }
+        updateSendButton();
     }
 
     private void updateEmpty() {
@@ -462,18 +556,12 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
     }
 
     /**
-     * "Luckgram AI / 助手"; a conversation opened by a feature with its own key (e.g. an agent,
-     * spec 22) shows its title instead, with "Luckgram AI" below.
+     * specs#171: just "Luckgram AI"; a conversation opened by a feature with its own key (e.g. an agent,
+     * spec 22) shows its title instead.
      */
     private void updateHeader() {
-        if (avatarContainer == null) return;
-        if (conversation.key != null && !TextUtils.isEmpty(conversation.title)) {
-            avatarContainer.setTitle(conversation.title);
-            avatarContainer.setSubtitle("Luckgram AI");
-        } else {
-            avatarContainer.setTitle("Luckgram AI");
-            avatarContainer.setSubtitle(LuckgramStrings.get("助手", "Assistant"));
-        }
+        if (actionBar == null) return;
+        actionBar.setTitle(conversation.key != null && !TextUtils.isEmpty(conversation.title) ? conversation.title : "Luckgram AI");
     }
 
     private void switchTo(LuckgramAiConversation c) {
@@ -502,7 +590,7 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
 
     private void send() {
         String text = input.getText().toString().trim();
-        if (text.isEmpty() || streaming != null) {
+        if (text.isEmpty() || streaming != null || talkMode) {
             return;
         }
         input.setText("");
@@ -770,7 +858,7 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         void bind(LuckgramAiConversation.Message m, int viewType) {
             message = m;
             boolean out = m.isUser();
-            background.setColor(getThemedColor(out ? Theme.key_chat_outBubble : Theme.key_chat_inBubble));
+            background.setColor(getThemedColor(out ? Theme.key_chat_outBubble : Theme.key_windowBackgroundGray)); // specs#171: on a plain page the incoming bubble needs its own tone
             int textColor = getThemedColor(out ? Theme.key_chat_messageTextOut : Theme.key_chat_messageTextIn);
             if (renderer != null) {
                 renderer.bind(content, m, out);
