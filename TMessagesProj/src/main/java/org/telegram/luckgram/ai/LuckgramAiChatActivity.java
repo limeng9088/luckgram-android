@@ -83,6 +83,9 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
     private ImageView voiceToggle;
     private TextView talkBar;
     private boolean talkMode;
+    private boolean talkPermissionAsked;
+    /** Not one of the codes BasePermissionsActivity answers itself (3 = its own microphone alert). */
+    private static final int TALK_PERMISSION_REQUEST = 1171;
     private org.telegram.luckgram.voice.LuckgramAiTalk talk;
 
     private LuckgramAiConversation.Message streaming;
@@ -525,14 +528,46 @@ public class LuckgramAiChatActivity extends BaseFragment implements LuckgramAiRe
         if (activity == null) return;
         // the first switch asks for what a recording needs: the microphone and AI consent (speech goes to the AI gateway)
         if (android.os.Build.VERSION.SDK_INT >= 23 && activity.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            activity.requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, 3);
+            talkPermissionAsked = true;
+            activity.requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, TALK_PERMISSION_REQUEST);
             return;
         }
+        enterTalkModeWithConsent(activity);
+    }
+
+    private void enterTalkModeWithConsent(android.app.Activity activity) {
         LuckgramAI.getInstance().requestConsent(activity, agreed -> {
             if (agreed && fragmentView != null) {
                 setTalkMode(true, false);
             }
         });
+    }
+
+    @Override
+    public void onRequestPermissionsResultFragment(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResultFragment(requestCode, permissions, grantResults);
+        if (requestCode != TALK_PERMISSION_REQUEST || !talkPermissionAsked) {
+            return;
+        }
+        talkPermissionAsked = false;
+        final android.app.Activity activity = getParentActivity();
+        if (activity == null || fragmentView == null) {
+            return;
+        }
+        if (grantResults != null && grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            enterTalkModeWithConsent(activity);
+            return;
+        }
+        // denied, also when "don't ask again" was chosen earlier and the system answers at once
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.error, LuckgramStrings.get("请在系统设置中允许 Luckgram 使用麦克风。", "Please allow Luckgram to use the microphone in Settings."), LuckgramStrings.get("去设置", "Settings"), () -> {
+            try {
+                android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(android.net.Uri.parse("package:" + activity.getPackageName()));
+                activity.startActivity(intent);
+            } catch (Throwable e) {
+                org.telegram.messenger.FileLog.e(e);
+            }
+        }).show();
     }
 
     private void setTalkMode(boolean on, boolean focus) {

@@ -154,7 +154,17 @@ public class LuckgramAiTalk {
             try {
                 while (recording) {
                     final int n = record.read(buf, 0, buf.length);
-                    if (n <= 0) {
+                    if (n < 0) {
+                        // the microphone is gone (taken by a call, another app…): stop instead of spinning
+                        AndroidUtilities.runOnUIThread(() -> {
+                            if (holding) {
+                                finish(LuckgramVoiceBarLogic.ZONE_CANCEL);
+                                host.showHint(LuckgramStrings.get("无法使用麦克风", "Can't use the microphone"));
+                            }
+                        });
+                        break;
+                    }
+                    if (n == 0) {
                         continue;
                     }
                     synchronized (pcm) {
