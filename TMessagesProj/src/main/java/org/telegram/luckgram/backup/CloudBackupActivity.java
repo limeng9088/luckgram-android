@@ -357,6 +357,11 @@ public class CloudBackupActivity extends UniversalFragment {
 
     /** Password → decrypt → choose accounts → restore; shared by the file backup page ({@link LuckgramBackupActivity}). */
     static void askPassword(BaseFragment host, byte[] file, int preferredSlot) {
+        askPassword(host, file, preferredSlot, null);
+    }
+
+    /** {@code initialError}: shown in the dialog right away, e.g. after a wrong password. */
+    private static void askPassword(BaseFragment host, byte[] file, int preferredSlot, String initialError) {
         Context context = host.getParentActivity();
         if (context == null) {
             return;
@@ -365,6 +370,12 @@ public class CloudBackupActivity extends UniversalFragment {
         LinearLayout container = new LinearLayout(context);
         container.setOrientation(LinearLayout.VERTICAL);
         container.addView(field, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 9, 20, 9));
+        TextView error = passwordError(context, host, field);
+        container.addView(error, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 24, 0, 24, 4));
+        if (initialError != null) {
+            error.setText(initialError);
+            error.setVisibility(View.VISIBLE);
+        }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(context, host.getResourceProvider());
         builder.setTitle(LuckgramBackup.enterPasswordTitleText());
@@ -372,8 +383,7 @@ public class CloudBackupActivity extends UniversalFragment {
         builder.setPositiveButton(LocaleController.getString(R.string.OK), (d, w) -> {
             long wait = nextAttemptAt - SystemClock.elapsedRealtime();
             if (wait > 0) {
-                AndroidUtilities.shakeView(field);
-                toast(context, LuckgramBackup.waitText((int) ((wait + 999) / 1000)));
+                showPasswordError(error, field, LuckgramBackup.waitText((int) ((wait + 999) / 1000)));
                 return;
             }
             String password = field.getText().toString();
@@ -388,6 +398,8 @@ public class CloudBackupActivity extends UniversalFragment {
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), (d, w) -> d.dismiss());
         AlertDialog dialog = builder.create();
         dialog.setDismissDialogByButtons(false);
+        // Same as the new-password dialogs (specs#172): a tap outside doesn't throw the input away.
+        dialog.setCanceledOnTouchOutside(false);
         dialog.setOnShowListener(d -> {
             field.requestFocus();
             AndroidUtilities.showKeyboard(field);
@@ -414,8 +426,7 @@ public class CloudBackupActivity extends UniversalFragment {
                 if (errorCode == 1) {
                     failedAttempts++;
                     nextAttemptAt = SystemClock.elapsedRealtime() + (1000L << Math.min(failedAttempts - 1, 10));
-                    toast(host.getParentActivity(), LuckgramBackup.wrongPasswordText());
-                    askPassword(host, file, preferredSlot);
+                    askPassword(host, file, preferredSlot, LuckgramBackup.wrongPasswordText());
                 } else if (errorCode == 2 || result == null) {
                     toast(host.getParentActivity(), LuckgramBackup.notBackupText());
                 } else {
