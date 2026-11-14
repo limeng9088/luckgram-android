@@ -9042,7 +9042,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
 
         // Luckgram 12 (hidden chats): hide / unhide
-        if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isEnabled() && !isCommunityCell && !DialogObject.isFolderDialogId(dialogId)) {
+        if (org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isEnabled() && !isCommunityCell && !DialogObject.isFolderDialogId(dialogId) && org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.canHide(currentAccount, dialogId)) {
             final boolean luckgramHidden = org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, dialogId);
             ActionBarMenuSubItem hideItem = new ActionBarMenuSubItem(getParentActivity(), false, false);
             hideItem.setTextAndIcon(luckgramHidden ? org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.unhideText() : org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.hideText(), luckgramHidden ? R.drawable.msg_archive_show : R.drawable.msg_archive_hide);
@@ -10214,7 +10214,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             boolean allHidden = true;
             for (int a = 0; a < selectedDialogs.size(); a++) {
                 long id = selectedDialogs.get(a);
-                if (DialogObject.isFolderDialogId(id) || id == getUserConfig().clientUserId) {
+                if (DialogObject.isFolderDialogId(id) || !org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.canHide(currentAccount, id)) {
                     show = false;
                 }
                 if (!org.telegram.luckgram.hiddenchats.LuckgramHiddenChats.isHidden(currentAccount, id)) {
