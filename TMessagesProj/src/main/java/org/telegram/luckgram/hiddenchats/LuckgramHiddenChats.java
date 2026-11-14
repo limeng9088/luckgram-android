@@ -177,6 +177,14 @@ public final class LuckgramHiddenChats {
             }
             cache[account] = set;
         }
+        // Migration: older builds could hide Saved Messages. Drop it from the stored list as soon as
+        // the account's user id is known, so hasHidden() and the pull-down entry don't see it.
+        long self = UserConfig.getInstance(account).getClientUserId();
+        if (self != 0 && set.contains(self)) {
+            set = new HashSet<>(set);
+            set.remove(self);
+            save(account, set);
+        }
         return set;
     }
 
