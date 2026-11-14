@@ -123,6 +123,8 @@ public class LuckgramBackupActivity extends UniversalFragment {
         EditTextBoldCursor second = CloudBackupActivity.passwordField(context, this, LuckgramBackup.passwordRepeatHintText());
         container.addView(first, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 6, 20, 6));
         container.addView(second, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 20, 6, 20, 6));
+        TextView error = CloudBackupActivity.passwordError(context, this, first, second);
+        container.addView(error, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 24, 2, 24, 2));
 
         AlertDialog.Builder builder = new AlertDialog.Builder(context, getResourceProvider());
         builder.setTitle(LuckgramBackup.passwordTitleText());
@@ -130,13 +132,11 @@ public class LuckgramBackupActivity extends UniversalFragment {
         builder.setPositiveButton(LuckgramBackup.exportText(), (d, w) -> {
             String password = first.getText().toString();
             if (password.length() < LuckgramBackupFormat.MIN_PASSWORD_LENGTH) {
-                AndroidUtilities.shakeView(first);
-                CloudBackupActivity.toast(context, LuckgramBackup.passwordTooShortText());
+                CloudBackupActivity.showPasswordError(error, first, LuckgramBackup.passwordTooShortText());
                 return;
             }
             if (!password.equals(second.getText().toString())) {
-                AndroidUtilities.shakeView(second);
-                CloudBackupActivity.toast(context, LuckgramBackup.passwordMismatchText());
+                CloudBackupActivity.showPasswordError(error, second, LuckgramBackup.passwordMismatchText());
                 return;
             }
             d.dismiss();
@@ -147,6 +147,8 @@ public class LuckgramBackupActivity extends UniversalFragment {
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), (d, w) -> d.dismiss());
         AlertDialog dialog = builder.create();
         dialog.setDismissDialogByButtons(false);
+        // Keep what was typed: a stray tap outside must not throw the passwords away (specs#172).
+        dialog.setCanceledOnTouchOutside(false);
         dialog.setOnShowListener(d -> {
             first.requestFocus();
             AndroidUtilities.showKeyboard(first);
