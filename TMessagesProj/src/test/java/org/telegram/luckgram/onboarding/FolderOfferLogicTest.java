@@ -19,7 +19,7 @@ public class FolderOfferLogicTest {
         assertNull(FolderOfferLogic.slug("https://t.me/luckgram"));
         assertNull(FolderOfferLogic.slug("https://t.me/addlist/ab"));
         assertNull(FolderOfferLogic.slug("https://t.me/addlist/abcd?x=1"));
-        assertNull(FolderOfferLogic.slug("https://evil.com/addlist/abcd"));
+        assertNull(FolderOfferLogic.slug("https://telegram.me/addlist/abcd"));
     }
 
     @Test
