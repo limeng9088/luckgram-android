@@ -1725,6 +1725,11 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     last.presentFragment(new org.telegram.luckgram.account.LuckgramProActivity());
                 }
             }, 1500);
+        } else {
+            // Luckgram specs#98: offer the "Luckgram picks" chat folder once per account.
+            final int account = currentAccount;
+            final long userId = res.user != null ? res.user.id : 0;
+            AndroidUtilities.runOnUIThread(() -> org.telegram.luckgram.onboarding.FolderOffer.afterLogin(account, userId), 1500);
         }
     }
 
