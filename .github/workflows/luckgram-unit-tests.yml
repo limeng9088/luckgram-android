@@ -75,6 +75,7 @@ jobs:
             callrec/CallRecText.java \
             writing/AiWritingEntities.java \
             onboarding/WelcomeLogic.java \
+            onboarding/FolderOfferLogic.java \
             diag/LuckgramProxyRoute.java \
             diag/LuckgramDiagLog.java \
             diag/TelegramErrorKind.java \
