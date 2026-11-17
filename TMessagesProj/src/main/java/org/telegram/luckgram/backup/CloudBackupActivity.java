@@ -248,12 +248,11 @@ public class CloudBackupActivity extends UniversalFragment {
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), (d, w) -> d.dismiss());
         AlertDialog dialog = builder.create();
         dialog.setDismissDialogByButtons(false);
-        dialog.setCanceledOnTouchOutside(false);
         dialog.setOnShowListener(d -> {
             first.requestFocus();
             AndroidUtilities.showKeyboard(first);
         });
-        showDialog(dialog);
+        showKeepingInput(this, dialog);
     }
 
     /** Encrypts on this device and uploads only the ciphertext. {@code remember}: keep the password for the weekly backup. */
@@ -398,13 +397,21 @@ public class CloudBackupActivity extends UniversalFragment {
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), (d, w) -> d.dismiss());
         AlertDialog dialog = builder.create();
         dialog.setDismissDialogByButtons(false);
-        // Same as the new-password dialogs (specs#172): a tap outside doesn't throw the input away.
-        dialog.setCanceledOnTouchOutside(false);
         dialog.setOnShowListener(d -> {
             field.requestFocus();
             AndroidUtilities.showKeyboard(field);
         });
-        host.showDialog(dialog);
+        showKeepingInput(host, dialog);
+    }
+
+    /**
+     * Shows a password dialog that a tap outside does not close, so what was typed is kept (specs#172).
+     * {@link BaseFragment#showDialog} turns closing on an outside tap back on, so it is switched off after it.
+     */
+    static void showKeepingInput(BaseFragment host, AlertDialog dialog) {
+        if (host.showDialog(dialog) != null) {
+            dialog.setCanceledOnTouchOutside(false);
+        }
     }
 
     private static void decrypt(BaseFragment host, byte[] file, String password, int preferredSlot) {
