@@ -147,13 +147,11 @@ public class LuckgramBackupActivity extends UniversalFragment {
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), (d, w) -> d.dismiss());
         AlertDialog dialog = builder.create();
         dialog.setDismissDialogByButtons(false);
-        // Keep what was typed: a stray tap outside must not throw the passwords away (specs#172).
-        dialog.setCanceledOnTouchOutside(false);
         dialog.setOnShowListener(d -> {
             first.requestFocus();
             AndroidUtilities.showKeyboard(first);
         });
-        showDialog(dialog);
+        CloudBackupActivity.showKeepingInput(this, dialog);
     }
 
     private void runExport(ArrayList<Integer> accounts, String password) {
