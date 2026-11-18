@@ -292,11 +292,23 @@ jobs:
           sys.exit(1 if bad else 0)
           PY
 
+      # specs#205: the R8 mapping, to read the obfuscated stacks of crash reports
+      # (org.telegram.ui / luckgram are obfuscated). Attached to the release next to the APKs.
+      - name: Keep R8 mapping
+        run: |
+          M=TMessagesProj_App/build/outputs/mapping/afatRelease/mapping.txt
+          [ -f "$M" ] || { echo "::warning::$M missing"; exit 0; }
+          QA_SUFFIX=""; [ "$LUCKGRAM_QA" = true ] && QA_SUFFIX="-qa"
+          gzip -9c "$M" > "out/mapping-$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)-${GITHUB_RUN_NUMBER}-${ABIS// /_}${QA_SUFFIX}.txt.gz"
+          ls -l out
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: luckgram-android-${{ github.run_number }}-${{ strategy.job-index }}${{ env.LUCKGRAM_QA == 'true' && '-qa' || '' }}
-          path: out/*.apk
+          path: |
+            out/*.apk
+            out/*.txt.gz
           if-no-files-found: error
 
   # One release with every APK built above. The phone APK (arm64-v8a) is required; if only the
@@ -329,7 +341,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VER=$(grep APP_VERSION_NAME gradle.properties | cut -d= -f2)
-          gh release create "android-${VER}-${GITHUB_RUN_NUMBER}" out/*.apk \
+          gh release create "android-${VER}-${GITHUB_RUN_NUMBER}" out/*.apk $(ls out/*.txt.gz 2>/dev/null) \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "Luckgram Android ${VER} (${GITHUB_RUN_NUMBER})" \
             --notes "Signed release APKs built from ${GITHUB_SHA}. Phones: *-arm64-v8a.apk. x86 emulators (Windows): *-x86_64.apk."
