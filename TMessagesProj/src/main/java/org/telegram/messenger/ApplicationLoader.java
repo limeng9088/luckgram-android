@@ -312,6 +312,9 @@ public class ApplicationLoader extends Application {
 
         super.onCreate();
 
+        // Luckgram specs#205: crash reports; first, so crashes during start are caught too.
+        org.telegram.luckgram.crash.LuckgramCrash.install(applicationContext);
+
         // AndroidUtilities must be initialized before FileLog
         final String helloWorld = AndroidUtilities.getHelloWorld();
 
@@ -376,6 +379,8 @@ public class ApplicationLoader extends Application {
 
         LauncherIconController.tryFixLauncherIconIfNeeded();
         ProxyRotationController.init();
+        // Luckgram specs#205: earlier crashes / ANRs are uploaded some seconds after start.
+        org.telegram.luckgram.crash.LuckgramCrash.scheduleUpload();
 
         //if (BuildConfig.DEBUG_PRIVATE_VERSION) {
         //    Choreographer60FpsContent.getInstance().addFrameCallback(debugEverySecondChecks, 1);
