@@ -44,6 +44,11 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
     private static final int ID_DEBUG_SELFTEST = 31;
     private static final int ID_DEBUG_RESET_TOKEN = 32;
     private static final int ID_DEBUG_CONSENT_CHECK = 33;
+    private static final int ID_DEBUG_CRASH_JAVA = 34;
+    private static final int ID_DEBUG_CRASH_NATIVE = 35;
+    private static final int ID_DEBUG_FREEZE = 36;
+    private static final int ID_DEBUG_CRASH_UPLOAD = 37;
+    private static final int ID_CRASH_REPORTS = 15;
 
     private TextView footerView;
 
@@ -152,6 +157,11 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
             items.add(UItem.asButton(ID_DEBUG_SELFTEST, LuckgramStrings.get("AI 自检：注册、流式对话、转写、额度", "AI self-test: register, stream, transcribe, quota")));
             items.add(UItem.asButton(ID_DEBUG_CONSENT_CHECK, LuckgramStrings.get("AI 自检：拒绝同意时不发请求", "AI self-test: no request without consent")));
             items.add(UItem.asButton(ID_DEBUG_RESET_TOKEN, LuckgramStrings.get("清除设备令牌", "Clear device token")));
+            // specs#205 acceptance: each kind is uploaded on the next start (or with the last button).
+            items.add(UItem.asButton(ID_DEBUG_CRASH_JAVA, LuckgramStrings.get("测试崩溃（Java）", "Test crash (Java)")));
+            items.add(UItem.asButton(ID_DEBUG_CRASH_NATIVE, LuckgramStrings.get("测试崩溃（Native）", "Test crash (native)")));
+            items.add(UItem.asButton(ID_DEBUG_FREEZE, LuckgramStrings.get("模拟卡死 15 秒（期间点屏幕触发 ANR）", "Freeze 15 s (tap the screen to get an ANR)")));
+            items.add(UItem.asButton(ID_DEBUG_CRASH_UPLOAD, LuckgramStrings.get("立即上报崩溃报告", "Upload crash reports now")));
             items.add(UItem.asShadow(LuckgramStrings.get("服务器：", "Server: ") + (LuckgramAI.getInstance().isUsingMock() ? "mock" : LuckgramAI.apiBaseUrl())));
         }
 
@@ -159,6 +169,10 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
         org.telegram.luckgram.update.UpdateDownloadLogic.Texts updateTexts = org.telegram.luckgram.update.LuckgramUpdateDownloader.texts();
         items.add(UItem.asCheck(ID_UPDATE_AUTO, updateTexts.autoSwitch()).setChecked(org.telegram.luckgram.update.LuckgramUpdateDownloader.autoEnabled()));
         items.add(UItem.asShadow(updateTexts.autoSwitchInfo()));
+
+        // specs#205: crash / ANR reports (default on).
+        items.add(UItem.asCheck(ID_CRASH_REPORTS, org.telegram.luckgram.crash.LuckgramCrash.switchText()).setChecked(org.telegram.luckgram.crash.LuckgramCrash.isEnabled()));
+        items.add(UItem.asShadow(org.telegram.luckgram.crash.LuckgramCrash.switchInfoText()));
 
         // specs#72: local diagnostic log (metadata only), exported as .txt.
         items.add(UItem.asButton(ID_DIAG_EXPORT, LuckgramStrings.exportDiagLog()));
@@ -244,6 +258,25 @@ public class LuckgramSettingsActivity extends UniversalFragment implements Notif
                 ((TextCheckCell) view).setChecked(v);
                 break;
             }
+            case ID_CRASH_REPORTS: {
+                boolean v = !org.telegram.luckgram.crash.LuckgramCrash.isEnabled();
+                org.telegram.luckgram.crash.LuckgramCrash.setEnabled(v);
+                ((TextCheckCell) view).setChecked(v);
+                break;
+            }
+            case ID_DEBUG_CRASH_JAVA:
+                org.telegram.luckgram.crash.LuckgramCrash.testJavaCrash();
+                break;
+            case ID_DEBUG_CRASH_NATIVE:
+                org.telegram.luckgram.crash.LuckgramCrash.testNativeCrash();
+                break;
+            case ID_DEBUG_FREEZE:
+                org.telegram.luckgram.crash.LuckgramCrash.testFreeze();
+                break;
+            case ID_DEBUG_CRASH_UPLOAD:
+                org.telegram.luckgram.crash.LuckgramCrash.background(() -> org.telegram.luckgram.crash.LuckgramCrash.runNow(n ->
+                    toast(n < 0 ? LuckgramStrings.get("崩溃上报已关闭", "Crash reports are off") : LuckgramStrings.get("已上报 " + n + " 份", n + " sent"))));
+                break;
             case ID_DEBUG_RESET_TOKEN:
                 LuckgramAI.getInstance().resetLocalState();
                 toast("OK");

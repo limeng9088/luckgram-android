@@ -546,6 +546,19 @@ public final class LuckgramAI {
     }
 
     /**
+     * Blocking authenticated JSON POST for crash reports (specs#205); returns the HTTP status.
+     * Registers the device if needed but never asks for AI consent: no user content is sent.
+     * Call off the main thread.
+     */
+    public int postJsonBlocking(String path, byte[] json) throws Exception {
+        Request req = new Request();
+        req.feature = "crash";
+        try (HttpResponse res = authorized(req, "POST", path, "application/json", json, "application/json", null)) {
+            return res.status;
+        }
+    }
+
+    /**
      * Authenticated JSON request for the account endpoints (S6 link, S7 billing, S8 announcements).
      * Registers the device if needed but never asks for AI consent: nothing but the device's own
      * state is sent. {@code body} may be null. The callback runs on the UI thread.
