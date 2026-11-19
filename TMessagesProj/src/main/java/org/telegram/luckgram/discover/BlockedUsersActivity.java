@@ -64,7 +64,8 @@ public class BlockedUsersActivity extends UniversalFragment {
                 loading = false;
                 failed = true;
                 update();
-                if (getParentActivity() != null) BulletinFactory.of(this).createErrorBulletin(tx.connectFailed()).show();
+                String why = SilentLink.failureMessage(currentAccount); // specs#209
+                if (getParentActivity() != null) BulletinFactory.of(this).createErrorBulletin(why != null ? why : tx.connectFailed()).show();
             }
         });
     }

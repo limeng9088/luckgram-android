@@ -21,6 +21,7 @@ import org.telegram.luckgram.discover.DiscoverBlocks;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
+import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -96,8 +97,10 @@ public final class SquareUi {
     // ---------------------------------------------------------------- link (S6, silent)
 
     private static JSONObject profile;
-    /** Author id of this device's user in Square (from the profile response), if known. */
-    public static String myAuthorId;
+    /** Author id of the current account's user in Square (from the profile response), if known. */
+    private static String myAuthorId;
+    /** specs#209: the Telegram user {@link #profile} and {@link #myAuthorId} belong to. */
+    private static long cacheUid;
 
     /** Forget cached state (unlink, logout, "delete my Square data"). */
     public static void clearCache() {
@@ -108,11 +111,38 @@ public final class SquareUi {
     }
 
     /**
+     * specs#209: after switching accounts the profile, "my" author id and the feeds (likes,
+     * delete entries) of the previous account are dropped, never shown as the new one's.
+     */
+    private static void syncAccount() {
+        UserConfig uc = UserConfig.getInstance(UserConfig.selectedAccount);
+        long uid = uc.isClientActivated() ? uc.getClientUserId() : 0;
+        if (uid == cacheUid) return;
+        cacheUid = uid;
+        profile = null;
+        myAuthorId = null;
+        SquareActivity.clearFeeds();
+    }
+
+    /** Author id of the current account in Square, or null when not known yet. */
+    public static String myAuthorId() {
+        syncAccount();
+        return myAuthorId;
+    }
+
+    /** A post or comment just made by the current account tells its author id. */
+    public static void setMyAuthorId(String id) {
+        syncAccount();
+        if (id != null && !id.isEmpty()) myAuthorId = id;
+    }
+
+    /**
      * Learns who "I" am in Square (specs#68): when a page opens and the device is linked, the
      * profile is fetched quietly so own posts and comments get their delete entry. No profile
      * yet (404) is fine — nothing is shown.
      */
     public static void prefetchMe() {
+        syncAccount();
         if (myAuthorId != null) return;
         Runnable fetch = () -> {
             if (!Boolean.TRUE.equals(SilentLink.cached()) || myAuthorId != null) return;
@@ -151,6 +181,7 @@ public final class SquareUi {
      * locally. The user only sees a short "connecting" notice.
      */
     public static void requireLink(BaseFragment f, Runnable then) {
+        syncAccount();
         if (Boolean.TRUE.equals(SilentLink.cached())) {
             then.run();
             return;
@@ -174,7 +205,9 @@ public final class SquareUi {
             if (ok) {
                 then.run();
             } else if (f.getParentActivity() != null) {
-                bulletin(f).createErrorBulletin(tx.connectFailed()).show();
+                // specs#209: say why when the user can act on it (too many linked devices).
+                String why = SilentLink.failureMessage(f.getCurrentAccount());
+                bulletin(f).createErrorBulletin(why != null ? why : tx.connectFailed()).show();
             }
         });
     }
@@ -183,6 +216,7 @@ public final class SquareUi {
 
     /** Linked and has a Square profile: then {@code then}; otherwise fills in whatever is missing first. */
     public static void requireProfile(BaseFragment f, Runnable then) {
+        syncAccount();
         requireLink(f, () -> {
             if (profile != null) {
                 then.run();

@@ -291,7 +291,7 @@ public class SquarePostActivity extends UniversalFragment {
                         sending = false;
                         SquareLogic.Comment c = SquareLogic.parseComment(result);
                         if (!c.id.isEmpty()) {
-                            if (!c.author.id.isEmpty()) SquareUi.myAuthorId = c.author.id;
+                            SquareUi.setMyAuthorId(c.author.id);
                             comments.add(c);
                             rethread();
                         }
@@ -335,7 +335,7 @@ public class SquarePostActivity extends UniversalFragment {
                 AndroidUtilities.showKeyboard(input);
             }
         });
-        if (SquareLogic.canDeleteComment(c, post, SquareUi.myAuthorId)) {
+        if (SquareLogic.canDeleteComment(c, post, SquareUi.myAuthorId())) {
             labels.add(tx.delete());
             acts.add(() -> new AlertDialog.Builder(getParentActivity())
                 .setTitle(tx.delete())
@@ -344,7 +344,7 @@ public class SquarePostActivity extends UniversalFragment {
                 .setNegativeButton(tx.cancel(), null)
                 .show());
         }
-        if (!c.author.id.equals(SquareUi.myAuthorId)) {
+        if (!c.author.id.equals(SquareUi.myAuthorId())) {
             labels.add(tx.reportComment());
             acts.add(() -> SquareUi.report(this, "comment", c.id));
         }

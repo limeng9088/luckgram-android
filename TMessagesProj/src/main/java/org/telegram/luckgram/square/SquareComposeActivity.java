@@ -765,7 +765,7 @@ public class SquareComposeActivity extends UniversalFragment implements Notifica
                     publishing = false;
                     SquareActivity.posted = true;
                     SquareLogic.Post p = SquareLogic.parsePost(result);
-                    if (!p.author.id.isEmpty()) SquareUi.myAuthorId = p.author.id;
+                    SquareUi.setMyAuthorId(p.author.id);
                     if (video != null) {
                         video.delete();
                         video = null;

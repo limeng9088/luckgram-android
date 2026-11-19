@@ -88,6 +88,7 @@ jobs:
             ocr/OcrAi.java \
             pro/ProPerks.java \
             account/AccountLimit.java \
+            account/AccountTokens.java \
             procommunity/ProCommunityLogic.java \
             announce/AnnouncementLogic.java \
             update/UpdateLogic.java \
