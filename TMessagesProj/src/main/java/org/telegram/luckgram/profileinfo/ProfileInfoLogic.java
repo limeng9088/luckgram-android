@@ -43,10 +43,15 @@ public final class ProfileInfoLogic {
 
     // ---------------------------------------------------------------- registration date
 
-    /** Result of {@link #estimate}: {@code kind == BEFORE_2014} → "before 2014"; otherwise year / month (1–12). */
+    /**
+     * Result of {@link #estimate}: {@code kind == BEFORE_2014} → "before 2014"; {@code AFTER} →
+     * newer than the table, year / month of its last row; otherwise year / month (1–12).
+     */
     public static final class Estimate {
         public static final int MONTH = 0;
         public static final int BEFORE_2014 = 1;
+        /** android#140: newer than the last table row, shown as "after ~<last month>". */
+        public static final int AFTER = 2;
 
         public final int kind;
         public final int year;
@@ -110,8 +115,8 @@ public final class ProfileInfoLogic {
 
     /**
      * Approximate registration month of a user id by linear interpolation between table rows.
-     * Below the first row: "before 2014". Above the last row (newer than the table) or no table:
-     * null — the row is not shown rather than guessed.
+     * Below the first row: "before 2014". From the last row on (newer than the table): "after"
+     * that row's month, no month is extrapolated (android#140, same as Web). No table: null.
      */
     public static Estimate estimate(ArrayList<Point> points, long userId) {
         if (points == null || points.size() < 2 || userId <= 0) {
@@ -132,20 +137,29 @@ public final class ProfileInfoLogic {
                 return new Estimate(Estimate.MONTH, m / 12, m % 12 + 1);
             }
         }
-        return null;
+        Point last = points.get(points.size() - 1);
+        return new Estimate(Estimate.AFTER, last.monthIndex / 12, last.monthIndex % 12 + 1);
     }
 
     // ---------------------------------------------------------------- strings (zh / en)
 
     private static final String[] MONTHS_EN = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-    /** "约 2019 年 10 月" / "about Oct 2019"; "早于 2014 年" / "before 2014". */
+    /**
+     * "约 2019 年 10 月" / "about Oct 2019"; "早于 2014 年" / "before 2014";
+     * "约 2026 年 1 月之后" / "After ~Jan 2026" (android#140, same wording as Web).
+     */
     public static String formatEstimate(Estimate e, boolean chinese) {
         if (e == null) {
             return null;
         }
         if (e.kind == Estimate.BEFORE_2014) {
             return chinese ? "早于 2014 年" : "before 2014";
+        }
+        if (e.kind == Estimate.AFTER) {
+            return chinese
+                    ? String.format(Locale.ROOT, "约 %d 年 %d 月之后", e.year, e.month)
+                    : String.format(Locale.ROOT, "After ~%s %d", MONTHS_EN[e.month - 1], e.year);
         }
         return chinese
                 ? String.format(Locale.ROOT, "约 %d 年 %d 月", e.year, e.month)

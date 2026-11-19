@@ -94,8 +94,20 @@ class ProfileInfoLogicTest {
     }
 
     @Test
-    void idsNewerThanTheTableAreNotGuessed() throws Exception {
-        assertNull(ProfileInfoLogic.estimate(bundledTable(), 9_900_000_000L));
+    void idsNewerThanTheTableAreAfterItsLastMonth() throws Exception {
+        // android#140: no month is extrapolated past the table's last row (8700161147 → 2026-01).
+        for (long id : new long[]{8_700_161_147L, 8_700_161_148L, 9_900_000_000L}) {
+            ProfileInfoLogic.Estimate e = ProfileInfoLogic.estimate(bundledTable(), id);
+            assertEquals(ProfileInfoLogic.Estimate.AFTER, e.kind, "id " + id);
+            assertEquals("约 2026 年 1 月之后", ProfileInfoLogic.formatEstimate(e, true));
+            assertEquals("After ~Jan 2026", ProfileInfoLogic.formatEstimate(e, false));
+        }
+        // Just below the last row is still a month.
+        assertEquals(ProfileInfoLogic.Estimate.MONTH, ProfileInfoLogic.estimate(bundledTable(), 8_700_161_146L).kind);
+    }
+
+    @Test
+    void noTableOrNoIdIsNotGuessed() throws Exception {
         assertNull(ProfileInfoLogic.estimate(bundledTable(), 0));
         assertNull(ProfileInfoLogic.estimate(new ArrayList<>(), 805158066L));
     }
