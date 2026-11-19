@@ -51,6 +51,7 @@ jobs:
             LuckgramRemoteConfigLogic.java \
             LuckgramAudioSplitter.java \
             LuckgramAppHeaders.java \
+            LuckgramChineseScript.java \
             quickreplies/QuickRepliesLogic.java \
             roundvideo/RoundVideoGeometry.java \
             unblock/StoreRestrictions.java \

@@ -37,6 +37,24 @@ public final class LuckgramStrings {
         return system != null && isChineseCode(system.getLanguage());
     }
 
+    /**
+     * "Hans" / "Hant" for a Chinese UI (same sources as {@link #isChinese()}: Telegram UI language,
+     * then the system language), null otherwise. Sent as {@code ?script=} with transcription (#139).
+     */
+    public static String chineseScript() {
+        String code = null, base = null;
+        try {
+            LocaleController.LocaleInfo info = LocaleController.getInstance().getCurrentLocaleInfo();
+            if (info != null) {
+                code = info.getLangCode();
+                base = info.getBaseLangCode();
+            }
+        } catch (Throwable ignore) {
+        }
+        Locale system = Resources.getSystem().getConfiguration().locale;
+        return LuckgramChineseScript.pick(code, base, system != null ? system.toLanguageTag() : null);
+    }
+
     public static String get(String zh, String en) {
         return isChinese() ? zh : en;
     }
