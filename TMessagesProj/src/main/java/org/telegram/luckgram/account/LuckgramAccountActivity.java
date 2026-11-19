@@ -73,7 +73,7 @@ public class LuckgramAccountActivity extends UniversalFragment {
 
     private void load() {
         if (inFlight != null) inFlight.cancel();
-        inFlight = LuckgramAI.getInstance().requestJson("GET", "/v1/link", null, new LuckgramAI.Callback<JSONObject>() {
+        inFlight = LuckgramAI.getInstance().requestJson(currentAccount, "GET", "/v1/link", null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 status = AccountLogic.parseLink(result);
@@ -124,7 +124,7 @@ public class LuckgramAccountActivity extends UniversalFragment {
         org.telegram.luckgram.square.SquareLogic.Texts sq = org.telegram.luckgram.square.SquareUi.tx();
         busy = true;
         listView.adapter.update(true);
-        inFlight = LuckgramAI.getInstance().requestJson("DELETE", "/v1/square/me", null, new LuckgramAI.Callback<JSONObject>() {
+        inFlight = LuckgramAI.getInstance().requestJson(currentAccount, "DELETE", "/v1/square/me", null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 busy = false;
@@ -173,7 +173,7 @@ public class LuckgramAccountActivity extends UniversalFragment {
 
     private void startLink() {
         busy = true;
-        inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/link/start", null, new LuckgramAI.Callback<JSONObject>() {
+        inFlight = LuckgramAI.getInstance().requestJson(currentAccount, "POST", "/v1/link/start", null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 busy = false;
@@ -205,7 +205,7 @@ public class LuckgramAccountActivity extends UniversalFragment {
             finishLink("expired");
             return;
         }
-        inFlight = LuckgramAI.getInstance().requestJson("GET", "/v1/link?nonce=" + nonce, null, new LuckgramAI.Callback<JSONObject>() {
+        inFlight = LuckgramAI.getInstance().requestJson(currentAccount, "GET", "/v1/link?nonce=" + nonce, null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 AccountLogic.LinkStatus s = AccountLogic.parseLink(result);
@@ -229,6 +229,7 @@ public class LuckgramAccountActivity extends UniversalFragment {
         pendingNonce = null;
         AndroidUtilities.cancelRunOnUIThread(poll);
         if ("linked".equals(request)) {
+            SilentLink.clearCache(currentAccount); // specs#209: linked here, not by SilentLink
             BulletinFactory.of(this).createSimpleBulletin(org.telegram.messenger.R.raw.contact_check, tx.linkedNow()).show();
         } else {
             showText(tx.linkResult(request, status != null ? status.maxDevices : 0));
@@ -238,11 +239,13 @@ public class LuckgramAccountActivity extends UniversalFragment {
 
     private void unlink() {
         busy = true;
-        inFlight = LuckgramAI.getInstance().requestJson("DELETE", "/v1/link", null, new LuckgramAI.Callback<JSONObject>() {
+        inFlight = LuckgramAI.getInstance().requestJson(currentAccount, "DELETE", "/v1/link", null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 org.telegram.luckgram.nearby.NearbyController.onUnlinked(); // 25: the server deleted the nearby card
                 org.telegram.luckgram.square.SquareUi.clearCache(); // 26: link state / profile belong to the linked user
+                // specs#209: Square and Nearby must link again (silently) on their next write.
+                SilentLink.clearCache(currentAccount);
                 busy = false;
                 BulletinFactory.of(LuckgramAccountActivity.this).createSimpleBulletin(org.telegram.messenger.R.raw.done, tx.unlinkedNow()).show();
                 load();

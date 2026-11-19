@@ -116,10 +116,11 @@ public final class NearbyController {
      */
     public static void onLogout(int account) {
         DiscoverBlocks.clearLocal();
-        org.telegram.luckgram.account.SilentLink.clearCache();
+        org.telegram.luckgram.account.SilentLink.clearCache(account);
         if (!isVisible() || LuckgramSettings.getInt(KEY_ACCOUNT, account) != account) return;
         clearLocal();
-        LuckgramAI.getInstance().sendWithCurrentToken("DELETE", "/v1/nearby/me");
+        // specs#209: with the token of the account logging out, not the selected one.
+        LuckgramAI.getInstance().sendWithCurrentToken(account, "DELETE", "/v1/nearby/me");
     }
 
     /** S6 unlink: the server deletes the card itself; only forget it here. */

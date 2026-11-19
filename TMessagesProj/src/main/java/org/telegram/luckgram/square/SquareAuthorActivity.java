@@ -64,7 +64,7 @@ public class SquareAuthorActivity extends UniversalFragment {
     }
 
     private boolean isMe() {
-        return SquareUi.myAuthorId != null && SquareUi.myAuthorId.equals(userId);
+        return SquareUi.myAuthorId() != null && SquareUi.myAuthorId().equals(userId);
     }
 
     @Override

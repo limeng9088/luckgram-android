@@ -159,13 +159,18 @@ public class NearbyActivity extends UniversalFragment {
         connecting = true;
         linked = null;
         update();
-        SilentLink.refresh(() -> {
+        SilentLink.refresh(currentAccount, () -> {
             // The server lost the link (unlinked elsewhere): the card is gone, forget it here too.
-            if (Boolean.FALSE.equals(SilentLink.cached())) NearbyController.onUnlinked();
+            if (Boolean.FALSE.equals(SilentLink.cached(currentAccount))) NearbyController.onUnlinked();
             SilentLink.ensure(currentAccount, ok -> {
                 connecting = false;
                 linked = ok;
                 update();
+                // specs#209: e.g. the Telegram account already has the most devices.
+                String why = ok ? null : SilentLink.failureMessage(currentAccount);
+                if (why != null && getParentActivity() != null) {
+                    BulletinFactory.of(this).createErrorBulletin(why).show();
+                }
                 if (ok) {
                     syncMe();
                     refresh();
@@ -176,7 +181,7 @@ public class NearbyActivity extends UniversalFragment {
 
     /** The server said not_linked: re-link once, then give up with a neutral message. */
     private void onNotLinked() {
-        SilentLink.clearCache();
+        SilentLink.clearCache(currentAccount);
         if (!relinkTried) {
             relinkTried = true;
             connectIfReady();

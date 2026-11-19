@@ -82,7 +82,7 @@ public class LuckgramProActivity extends UniversalFragment {
 
     private void load(Runnable then) {
         if (inFlight != null) inFlight.cancel();
-        inFlight = LuckgramAI.getInstance().requestJson("GET", "/v1/billing/plans", null, new LuckgramAI.Callback<JSONObject>() {
+        inFlight = LuckgramAI.getInstance().requestJson(currentAccount, "GET", "/v1/billing/plans", null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 billing = AccountLogic.parseBilling(result);
@@ -208,7 +208,7 @@ public class LuckgramProActivity extends UniversalFragment {
             body.put("plan", plan.id);
         } catch (Exception ignore) {
         }
-        inFlight = LuckgramAI.getInstance().requestJson("POST", "/v1/billing/checkout", body, new LuckgramAI.Callback<JSONObject>() {
+        inFlight = LuckgramAI.getInstance().requestJson(currentAccount, "POST", "/v1/billing/checkout", body, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 busy = false;

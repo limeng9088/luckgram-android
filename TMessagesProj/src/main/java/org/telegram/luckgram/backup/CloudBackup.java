@@ -142,7 +142,7 @@ public final class CloudBackup {
 
     /** {@code GET /v1/backup}: {@code null} result when there is no backup. Callbacks on the UI thread. */
     public static void fetch(int account, LuckgramAI.Callback<CloudBackupLogic.Meta> callback) {
-        withLink(account, callback, () -> LuckgramAI.getInstance().requestJson("GET", CloudBackupLogic.PATH, null, new LuckgramAI.Callback<JSONObject>() {
+        withLink(account, callback, () -> LuckgramAI.getInstance().requestJson(account, "GET", CloudBackupLogic.PATH, null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 callback.onResult(CloudBackupLogic.parseMeta(result));
@@ -224,7 +224,7 @@ public final class CloudBackup {
                     callback.onError(new LuckgramAIError(LuckgramAIError.INVALID_REQUEST, 0));
                     return;
                 }
-                withLink(account, callback, () -> LuckgramAI.getInstance().requestJson("PUT", CloudBackupLogic.PATH, body, new LuckgramAI.Callback<JSONObject>() {
+                withLink(account, callback, () -> LuckgramAI.getInstance().requestJson(account, "PUT", CloudBackupLogic.PATH, body, new LuckgramAI.Callback<JSONObject>() {
                     @Override
                     public void onResult(JSONObject result) {
                         CloudBackupLogic.Meta meta = CloudBackupLogic.parseMeta(result);
@@ -242,7 +242,7 @@ public final class CloudBackup {
 
     /** {@code DELETE /v1/backup}. */
     public static void delete(int account, LuckgramAI.Callback<Boolean> callback) {
-        withLink(account, callback, () -> LuckgramAI.getInstance().requestJson("DELETE", CloudBackupLogic.PATH, null, new LuckgramAI.Callback<JSONObject>() {
+        withLink(account, callback, () -> LuckgramAI.getInstance().requestJson(account, "DELETE", CloudBackupLogic.PATH, null, new LuckgramAI.Callback<JSONObject>() {
             @Override
             public void onResult(JSONObject result) {
                 callback.onResult(true);

@@ -5,11 +5,13 @@ import android.text.TextUtils;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.telegram.luckgram.account.AccountTokens;
 import org.telegram.luckgram.diag.LuckgramEndpoints;
 import org.telegram.luckgram.diag.LuckgramNet;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildConfig;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -27,6 +29,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -63,7 +67,6 @@ public final class LuckgramAI {
     public static final String TASK_TRANSLATE = "translate";
 
     private static final String KEY_CONSENT = "ai_consent";
-    private static final String KEY_TOKEN = "_device_token";
     private static final String KEY_USE_MOCK = "_ai_use_mock";
 
     // ---------------------------------------------------------------- public types
@@ -145,6 +148,10 @@ public final class LuckgramAI {
         private volatile Closeable connection;
         /** Feature or AI task named in the diagnostic log (specs#72); null if the route says enough. */
         volatile String feature;
+        /** specs#209: whose device token to use; -1 = the selected account. */
+        volatile int account = -1;
+        /** The Telegram user whose token this request uses, fixed at its first attempt. */
+        volatile Long uid;
 
         public void cancel() {
             cancelled = true;
@@ -436,7 +443,8 @@ public final class LuckgramAI {
     });
     private final Transport httpTransport = new HttpTransport();
     private final LuckgramAIMock mockTransport = new LuckgramAIMock();
-    private String token;
+    /** specs#209: device token per Telegram user id (0 = no account logged in). */
+    private final HashMap<Long, String> tokens = new HashMap<>();
 
     private LuckgramAI() {
     }
@@ -454,7 +462,7 @@ public final class LuckgramAI {
     public void setUseMock(boolean useMock) {
         LuckgramSettings.setBool(KEY_USE_MOCK, useMock);
         synchronized (this) {
-            token = null;
+            tokens.clear();
         }
     }
 
@@ -521,17 +529,45 @@ public final class LuckgramAI {
 
     // ---------------------------------------------------------------- local state
 
-    /** Forget the device token (used on logout of the last account and by the debug page). */
+    /** Forget every device token (used on logout of the last account and by the debug page). */
     public void resetLocalState() {
         synchronized (this) {
-            token = null;
+            tokens.clear();
         }
-        LuckgramSecureStore.set(KEY_TOKEN, null);
+        ArrayList<String> keys = new ArrayList<>();
+        for (String k : LuckgramSettings.prefs().getAll().keySet()) {
+            if (AccountTokens.isTokenKey(k)) keys.add(k);
+        }
+        for (String k : keys) {
+            LuckgramSecureStore.set(k, null);
+        }
+        LuckgramSettings.prefs().edit().remove(AccountTokens.MIGRATED_KEY).apply();
         LuckgramSecureStore.deleteKey();
     }
 
+    /** Whether the selected account already has a device token. */
     public synchronized boolean hasDeviceToken() {
-        return token != null || (!isUsingMock() && LuckgramSecureStore.get(KEY_TOKEN) != null);
+        long uid = uidOf(-1);
+        return tokens.get(uid) != null || (!isUsingMock() && LuckgramSecureStore.get(AccountTokens.key(uid)) != null);
+    }
+
+    /** The Telegram user id of {@code account} (-1 = the selected one), 0 when not logged in. */
+    static long uidOf(int account) {
+        int a = account >= 0 ? account : UserConfig.selectedAccount;
+        if (a < 0 || a >= UserConfig.MAX_ACCOUNT_COUNT) return 0;
+        UserConfig uc = UserConfig.getInstance(a);
+        return uc.isClientActivated() ? uc.getClientUserId() : 0;
+    }
+
+    private static long[] loggedInUids() {
+        ArrayList<Long> list = new ArrayList<>();
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            long uid = uidOf(a);
+            if (uid != 0 && !list.contains(uid)) list.add(uid);
+        }
+        long[] out = new long[list.size()];
+        for (int i = 0; i < out.length; i++) out[i] = list.get(i);
+        return out;
     }
 
     // ---------------------------------------------------------------- public API
@@ -551,7 +587,13 @@ public final class LuckgramAI {
      * state is sent. {@code body} may be null. The callback runs on the UI thread.
      */
     public Request requestJson(String method, String path, JSONObject body, Callback<JSONObject> callback) {
+        return requestJson(-1, method, path, body, callback);
+    }
+
+    /** {@link #requestJson(String, String, JSONObject, Callback)} as {@code account} (specs#209). */
+    public Request requestJson(int account, String method, String path, JSONObject body, Callback<JSONObject> callback) {
         Request req = new Request();
+        req.account = account;
         executor.execute(() -> {
             try {
                 byte[] payload = body != null ? body.toString().getBytes(StandardCharsets.UTF_8) : null;
@@ -579,11 +621,13 @@ public final class LuckgramAI {
      * logout). The token and transport are captured before returning, so a {@link #resetLocalState()}
      * right after (logout of the last account) can't make it register a new device instead.
      */
-    public void sendWithCurrentToken(String method, String path) {
+    public void sendWithCurrentToken(int account, String method, String path) {
         final String t;
         final Transport tr = transport();
+        final long uid = uidOf(account);
         synchronized (this) {
-            t = token != null ? token : (isUsingMock() ? null : LuckgramSecureStore.get(KEY_TOKEN));
+            String held = tokens.get(uid);
+            t = held != null ? held : (isUsingMock() ? null : LuckgramSecureStore.get(AccountTokens.key(uid)));
         }
         if (t == null) return;
         executor.execute(() -> {
@@ -1043,10 +1087,11 @@ public final class LuckgramAI {
             HttpResponse res = send(req, method, path, headers, body);
             if (res.status == 401 && attempt == 0) {
                 res.close();
+                long uid = req.uid != null ? req.uid : 0;
                 synchronized (this) {
-                    token = null;
+                    tokens.remove(uid);
                 }
-                LuckgramSecureStore.set(KEY_TOKEN, null);
+                LuckgramSecureStore.set(AccountTokens.key(uid), null);
                 continue;
             }
             return res;
@@ -1081,11 +1126,19 @@ public final class LuckgramAI {
     }
 
     private String ensureToken(Request req) throws Exception {
+        if (req.uid == null) req.uid = uidOf(req.account);
+        final long uid = req.uid;
+        final String key = AccountTokens.key(uid);
         synchronized (this) {
-            if (token != null) return token;
+            String held = tokens.get(uid);
+            if (held != null) return held;
             if (!isUsingMock()) {
-                token = LuckgramSecureStore.get(KEY_TOKEN);
-                if (token != null) return token;
+                held = LuckgramSecureStore.get(key);
+                if (held == null && uid != 0) held = adoptLegacy(uid);
+                if (held != null) {
+                    tokens.put(uid, held);
+                    return held;
+                }
             }
             JSONObject reg = new JSONObject()
                 .put("platform", "android")
@@ -1104,13 +1157,28 @@ public final class LuckgramAI {
                 if (t == null) {
                     throw new ApiException(new LuckgramAIError(LuckgramAIError.UPSTREAM_UNAVAILABLE, res.status));
                 }
-                token = t;
+                tokens.put(uid, t);
                 if (!isUsingMock()) {
-                    LuckgramSecureStore.set(KEY_TOKEN, t);
+                    LuckgramSecureStore.set(key, t);
                 }
                 return t;
             }
         }
+    }
+
+    /**
+     * specs#209 upgrade, decided once: the old single token goes to {@code uid} when it is the only
+     * account logged in; otherwise it stays the no-account token and every account registers its
+     * own. Caller holds the lock.
+     */
+    private String adoptLegacy(long uid) {
+        if (LuckgramSettings.prefs().getBoolean(AccountTokens.MIGRATED_KEY, false)) return null;
+        LuckgramSettings.prefs().edit().putBoolean(AccountTokens.MIGRATED_KEY, true).apply();
+        String legacy = LuckgramSecureStore.get(AccountTokens.LEGACY_KEY);
+        if (legacy == null || !AccountTokens.adoptsLegacy(uid, loggedInUids())) return null;
+        LuckgramSecureStore.set(AccountTokens.key(uid), legacy);
+        LuckgramSecureStore.set(AccountTokens.LEGACY_KEY, null);
+        return legacy;
     }
 
     /**

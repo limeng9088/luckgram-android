@@ -655,7 +655,7 @@ public class SquareActivity extends UniversalFragment {
     static void showPostMenu(BaseFragment f, SquareLogic.Post p, Runnable onDeleted, Runnable onBlocked, Runnable onNotInterested) {
         if (f.getParentActivity() == null) return;
         SquareLogic.Texts tx = SquareUi.tx();
-        boolean mine = SquareLogic.canDeletePost(p, SquareUi.myAuthorId);
+        boolean mine = SquareLogic.canDeletePost(p, SquareUi.myAuthorId());
         ArrayList<CharSequence> labels = new ArrayList<>();
         ArrayList<Runnable> actions = new ArrayList<>();
         if (mine) {
