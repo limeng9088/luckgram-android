@@ -127,9 +127,19 @@ public final class LuckgramAIMock implements LuckgramAI.Transport {
                         failTranscribeAt = 0;
                         return error("quota_exceeded".equals(failTranscribeCode) ? 429 : 503, failTranscribeCode);
                     }
-                    String lang = query.startsWith("language=") ? query.substring(9) : "zh";
+                    String lang = "zh", script = null;
+                    for (String item : query.split("&")) {
+                        int eq = item.indexOf('=');
+                        if (eq <= 0) continue;
+                        String k = item.substring(0, eq), v = item.substring(eq + 1);
+                        if (k.equals("language")) lang = v;
+                        if (k.equals("script")) script = v;
+                    }
                     if (!lang.matches("[a-z]{2}")) return error(400, "invalid_request");
-                    String text = (LuckgramStrings.isChinese() ? "第" + n + "段（" + body.length + " 字节）。" : "Segment " + n + " (" + body.length + " bytes).");
+                    if (script != null && !script.equals("Hans") && !script.equals("Hant")) return error(400, "invalid_request");
+                    // android#139: the server converts a Chinese transcript to ?script=.
+                    String text = "Hant".equals(script) ? "第" + n + "段（" + body.length + " 位元組）。"
+                        : (LuckgramStrings.isChinese() ? "第" + n + "段（" + body.length + " 字节）。" : "Segment " + n + " (" + body.length + " bytes).");
                     return json(200, new JSONObject().put("text", text).put("language", lang).put("duration_seconds", body.length / 32000.0).put("model", "mock"));
                 }
                 case "/v1/me":

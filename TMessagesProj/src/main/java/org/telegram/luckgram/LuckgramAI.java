@@ -951,11 +951,17 @@ public final class LuckgramAI {
             deliverError(callback::onError, new LuckgramAIError(LuckgramAIError.INPUT_TOO_LARGE, 0));
             return req;
         }
-        String path = "/v1/ai/transcribe";
+        StringBuilder query = new StringBuilder();
         // The server accepts ISO-639-1 (2 letters) only; anything else -> let it auto-detect (#49).
         if (language != null && language.matches("[a-z]{2}")) {
-            path += "?language=" + language;
+            query.append("language=").append(language);
         }
+        // android#139: a Chinese transcript in the UI's script (simplified / traditional); none for other UIs.
+        String script = LuckgramStrings.chineseScript();
+        if (script != null) {
+            query.append(query.length() > 0 ? "&" : "").append("script=").append(script);
+        }
+        String path = "/v1/ai/transcribe" + (query.length() > 0 ? "?" + query : "");
         final String finalPath = path;
         withConsent(context, req, callback::onError, () -> {
             Transcription t = new Transcription();
